@@ -6,6 +6,8 @@
 #include <sstream>
 #include <random>
 #include <csignal>
+#include <fstream>
+#include <streambuf>
 
 using namespace httplib;
 using std::cout;
@@ -105,114 +107,25 @@ void handle_sse_stream(const Request& req, Response& res) {
     );
 }
 
-// 处理普通HTTP请求的示例
+// 读取文件内容的辅助函数
+string read_file(const string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return "";
+    }
+    std::string content((std::istreambuf_iterator<char>(file)),
+                       std::istreambuf_iterator<char>());
+    return content;
+}
+
+// 处理根路径请求，返回静态HTML文件
 void handle_root(const Request& req, Response& res) {
-    string html = R"raw(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>SSE Demo</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        #data { 
-            border: 1px solid #ccc; 
-            padding: 20px; 
-            margin: 20px 0; 
-            min-height: 200px;
-            background-color: #f9f9f9;
-        }
-        button { 
-            padding: 10px 20px; 
-            font-size: 16px; 
-            margin: 5px; 
-        }
-        .event { color: blue; font-weight: bold; }
-        .data { color: green; }
-        .error { color: red; }
-    </style>
-</head>
-<body>
-    <h1>Server-Sent Events (SSE) 演示</h1>
-    
-    <div>
-        <button onclick="startSSE()">开始接收数据</button>
-        <button onclick="stopSSE()">停止接收</button>
-    </div>
-    
-    <div id="data">等待数据...</div>
-    
-    <script>
-        let eventSource = null;
-        
-        function startSSE() {
-            if (eventSource) {
-                return;
-            }
-            
-            document.getElementById('data').innerHTML = '正在连接...';
-            
-            // 创建EventSource连接
-            eventSource = new EventSource('/events');
-            
-            // 监听默认消息事件
-            eventSource.onmessage = function(event) {
-                displayData('message', event.data);
-            };
-            
-            // 监听自定义事件
-            eventSource.addEventListener('sensor-data', function(event) {
-                displayData('sensor-data', event.data);
-            });
-            
-            eventSource.addEventListener('end', function(event) {
-                displayData('end', event.data);
-                eventSource.close();
-                eventSource = null;
-            });
-            
-            // 错误处理
-            eventSource.onerror = function(event) {
-                displayData('error', '连接错误或已关闭');
-                if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
-                }
-            };
-        }
-        
-        function stopSSE() {
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-                displayData('info', '已停止接收数据');
-            }
-        }
-        
-        function displayData(type, data) {
-            const div = document.getElementById('data');
-            const time = new Date().toLocaleTimeString();
-            
-            let parsedData = data;
-            try {
-                parsedData = JSON.parse(data);
-                parsedData = JSON.stringify(parsedData, null, 2);
-            } catch (e) {
-                // 如果不是JSON，保持原样
-            }
-            
-            div.innerHTML = `
-                <div>
-                    <span class="event">[${time}] ${type}:</span>
-                    <pre class="data">${parsedData}</pre>
-                </div>
-            ` + div.innerHTML;
-        }
-    </script>
-</body>
-</html>
-)raw";
-    
+    string html = read_file("web/index.html");
+    if (html.empty()) {
+        res.status = 404;
+        res.set_content("File not found", "text/plain");
+        return;
+    }
     res.set_content(html, "text/html");
 }
 
@@ -234,6 +147,53 @@ int main() {
     // 注册路由
     svr.Get("/", handle_root);
     svr.Get("/events", handle_sse_stream);
+    
+    // 静态文件服务 - 提供CSS文件
+    svr.Get("/css/(.*)", [&](const Request& req, Response& res) {
+        string filename = "web/css/" + req.matches[1].str();
+        string content = read_file(filename);
+        if (content.empty()) {
+            res.status = 404;
+            res.set_content("File not found", "text/plain");
+            return;
+        }
+        res.set_content(content, "text/css");
+    });
+    
+    // 静态文件服务 - 提供JS文件
+    svr.Get("/js/(.*)", [&](const Request& req, Response& res) {
+        string filename = "web/js/" + req.matches[1].str();
+        string content = read_file(filename);
+        if (content.empty()) {
+            res.status = 404;
+            res.set_content("File not found", "text/plain");
+            return;
+        }
+        res.set_content(content, "application/javascript");
+    });
+    
+    // 静态文件服务 - 提供图片文件（如果需要）
+    svr.Get("/image/(.*)", [&](const Request& req, Response& res) {
+        string filename = "web/image/" + req.matches[1].str();
+        string content = read_file(filename);
+        if (content.empty()) {
+            res.status = 404;
+            res.set_content("File not found", "text/plain");
+            return;
+        }
+        // 根据文件扩展名设置正确的MIME类型
+        if (filename.find(".png") != string::npos) {
+            res.set_content(content, "image/png");
+        } else if (filename.find(".jpg") != string::npos || filename.find(".jpeg") != string::npos) {
+            res.set_content(content, "image/jpeg");
+        } else if (filename.find(".gif") != string::npos) {
+            res.set_content(content, "image/gif");
+        } else if (filename.find(".svg") != string::npos) {
+            res.set_content(content, "image/svg+xml");
+        } else {
+            res.set_content(content, "application/octet-stream");
+        }
+    });
     
     // 停止服务器的接口
     svr.Get("/stop", [&](const Request& req, Response& res) {
