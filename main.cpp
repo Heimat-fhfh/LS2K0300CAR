@@ -33,6 +33,10 @@ int main() {
     
     ips200_init("/dev/fb0");
     
+    // 显示IP地址
+    display_ip_address(0, 181);
+    printf("IP address displayed on screen.\n");
+    
     // 将web服务分离出来单独运行
     std::thread web_thread(start_web_server);
     web_thread.detach();
@@ -96,7 +100,7 @@ void cleanup()
 void pit_callback()
 {
     imu660ra_get_acc();
-    imu660ra_get_gyro();    
+    imu660ra_get_gyro();
     encoder_left  = encoder_get_count(ENCODER_1);
     encoder_right = encoder_get_count(ENCODER_2);
 }

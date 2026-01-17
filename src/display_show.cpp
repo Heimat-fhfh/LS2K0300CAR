@@ -1,4 +1,10 @@
 #include "display_show.h"
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cstring>
 
 /**
  * @brief 将OpenCV的Mat图像显示到IPS200屏幕上
@@ -44,4 +50,59 @@ void display_dataf(int y,const char dat[],float data,int num1,int num2)
     ips200_show_float(8*(strlen(dat)),16*y,data,num1,num2);
 }
 
+std::string get_local_ip_address() {
+    struct ifaddrs *ifaddr, *ifa;
+    int family;
+    char host[NI_MAXHOST];
+    std::string ip_address = "";
 
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return ip_address;
+    }
+
+    // 遍历所有网络接口
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL)
+            continue;
+
+        family = ifa->ifa_addr->sa_family;
+
+        // 只关注IPv4地址
+        if (family == AF_INET) {
+            // 跳过回环接口
+            if (strcmp(ifa->ifa_name, "lo") == 0)
+                continue;
+
+            // 获取IP地址
+            if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in),
+                            host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0) {
+                // 检查是否是192.168.x.x格式的地址
+                if (strncmp(host, "192.168.", 8) == 0) {
+                    ip_address = host;
+                    break;
+                }
+                // 如果没有找到192.168.x.x，使用第一个非回环IPv4地址
+                if (ip_address.empty()) {
+                    ip_address = host;
+                }
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return ip_address;
+}
+
+void display_ip_address(uint16 x, uint16 y) {
+    std::string ip = get_local_ip_address();
+    if (ip.empty()) {
+        ip = "No IP";
+    }
+    
+    // 构建显示字符串
+    std::string display_str = "IP:" + ip;
+    
+    // 在屏幕上显示
+    ips200_show_string(x, y, display_str.c_str());
+}
