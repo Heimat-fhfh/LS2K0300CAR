@@ -13,7 +13,7 @@ using namespace std;
     Camera_EN 相机使能
     FPS 摄像头帧率
 */
-void CameraInit(cv::VideoCapture& Camera,CameraKind Camera_EN,int FPS);
+void CameraInit(cv::VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,int FPS);
 
 
 /*

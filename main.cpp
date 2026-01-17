@@ -18,6 +18,7 @@
 #include "zf_common_headfile.h"
 #include "display_show.h"
 #include "web_server.h"
+#include "libimage_process.h"
 
 using namespace std;
 using namespace cv;
@@ -66,39 +67,73 @@ int main() {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
     
     VideoCapture Camera;
-    CameraInit(Camera,JSON_FunctionConfigData.Camera_EN,120);
+    CameraInit(Camera,JSON_FunctionConfigData.Camera_EN,320,240,60);
     Function_EN_p -> Game_EN = true;
     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP;
 
     Mat frame;
 
-    
-
-
     while(running && Function_EN_p -> Game_EN == true)
     {
-        Camera.read(frame);
         
-        // while( Function_EN_p -> Loop_Kind_EN == CAMERA_CATCH_LOOP)
-        // {
-        // }
+        while( Function_EN_p -> Loop_Kind_EN == CAMERA_CATCH_LOOP)
+        {
+            Data_Path_p -> JSON_TrackConfigData_v[0].Forward = Data_Path_p -> JSON_TrackConfigData_v[0].Default_Forward;
+            Camera >> Img_Store_p -> Img_Color;
+
+            imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
+            memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
+            imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
+
+            imgProcess.ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
+            displayMatOnIPS200(Img_Store_p->Img_Track);
+
+            // Img_Store_p -> ImgNum++;
+            // Function_EN_p -> Loop_Kind_EN = JUDGE_LOOP;
+        }
 
         // while( Function_EN_p -> Loop_Kind_EN == JUDGE_LOOP )
         // {
+        //     Function_EN_p -> Loop_Kind_EN = judge.TrackKind_Judge(Img_Store_p,Data_Path_p,Function_EN_p);  // 切换至赛道循环
         // }
 
         // while( Function_EN_p -> Loop_Kind_EN == COMMON_TRACK_LOOP )
         // {
+        //     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP;
         // }
 
         // while( Function_EN_p -> Loop_Kind_EN == L_CIRCLE_TRACK_LOOP || Function_EN_p -> Loop_Kind_EN == R_CIRCLE_TRACK_LOOP)
         // {
+        //     switch(Data_Path_p -> Circle_Track_Step)
+        //     {
+        //         case IN_PREPARE:
+        //         {
+        //             CircleTrack_Step_IN_Prepare(Img_Store_p,Data_Path_p);   // 准备入环补线
+        //             break;
+        //         }
+        //         case IN:
+        //         {
+        //             CircleTrack_Step_IN(Img_Store_p,Data_Path_p);   // 入环补线
+        //             break;
+        //         }
+        //         case OUT:
+        //         {
+        //             CircleTrack_Step_OUT(Img_Store_p,Data_Path_p);   // 出环补线
+        //             break;
+        //         }
+        //     }
+        //     imgSearch_l_r(Img_Store_p,Data_Path_p);
+        //     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换至串口发送循环
         // }
         
         // while( Function_EN_p -> Loop_Kind_EN == ACROSS_TRACK_LOOP )
         // {
+        //     AcrossTrack(Img_Store_p,Data_Path_p);
+        //     imgSearch_l_r(Img_Store_p,Data_Path_p);
+        //     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换至串口发送循环
         // }
 
+        // Camera.read(frame);
         // displayMatOnIPS200(frame); 
         // std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

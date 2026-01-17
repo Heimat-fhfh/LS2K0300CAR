@@ -1,7 +1,7 @@
 #pragma once
 
 #define image_w	320	        //图像宽度
-#define img_resize_h    60
+#define img_resize_h    0
 #define image_h	(240-img_resize_h)	//图像高度
 
 #define white_pixel	255
