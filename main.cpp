@@ -19,12 +19,18 @@
 #include "display_show.h"
 #include "web_server.h"
 
+int encoder_left = 0;
+int encoder_right = 0;
+
 int main() {
     
     setbuf(stdout, NULL);
 
     atexit(cleanup);
     signal(SIGINT, sigint_handler);
+    
+    pit_ms_init(10, pit_callback);
+    
     ips200_init("/dev/fb0");
     
     // 将web服务分离出来单独运行
@@ -85,4 +91,12 @@ void sigint_handler(int signum)
 void cleanup()
 {
     printf("程序退出，执行清理操作\n");
+}
+
+void pit_callback()
+{
+    imu660ra_get_acc();
+    imu660ra_get_gyro();    
+    encoder_left  = encoder_get_count(ENCODER_1);
+    encoder_right = encoder_get_count(ENCODER_2);
 }

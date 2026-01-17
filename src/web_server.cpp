@@ -12,6 +12,11 @@
 #include <sys/stat.h>
 #include "json.hpp"
 #include "zf_common_headfile.h"
+#include "zf_device_imu660ra.h"
+
+// 声明外部变量
+extern int encoder_left;
+extern int encoder_right;
 
 #define BEEP "/dev/zf_driver_gpio_beep"
 
@@ -49,54 +54,96 @@ void handle_sse_stream(const httplib::Request& req, httplib::Response& res) {
     // 设置块传输编码（支持持续流式响应）
     res.set_chunked_content_provider("text/event-stream", 
         [&](size_t offset, httplib::DataSink& sink) {
-            // 初始化随机数生成器
-            random_device rd;
-            mt19937 gen(rd());
-            uniform_int_distribution<> temp_dist(20, 35);
-            uniform_int_distribution<> humid_dist(30, 80);
+            // 上一次的传感器数据值，用于检测变化
+            static int16 last_imu660ra_acc_x = 0;
+            static int16 last_imu660ra_acc_y = 0;
+            static int16 last_imu660ra_acc_z = 0;
+            static int16 last_imu660ra_gyro_x = 0;
+            static int16 last_imu660ra_gyro_y = 0;
+            static int16 last_imu660ra_gyro_z = 0;
+            static int last_encoder_left = 0;
+            static int last_encoder_right = 0;
             
-            int count = 0;
-            while (running && count < 100) { // 限制发送100条消息，避免无限循环
-                count++;
+            // 数据发送计数器
+            int data_sent_count = 0;
+            
+            while (running) {
+                // 检查传感器数据是否发生变化
+                bool data_changed = false;
                 
-                // 生成随机数据
-                int temperature = temp_dist(gen);
-                int humidity = humid_dist(gen);
-                
-                // 构建SSE格式的消息
-                stringstream ss;
-                
-                // 事件类型（可选）
-                ss << "event: sensor-data\n";
-                
-                // 数据行
-                ss << "data: {\"temperature\": " << temperature 
-                   << ", \"humidity\": " << humidity 
-                   << ", \"timestamp\": " << time(nullptr) 
-                   << ", \"message\": \"Data #" << count << "\"}\n";
-                
-                // 注释行（可选，可用于保持连接）
-                ss << ": heartbeat\n";
-                
-                // 空行表示消息结束
-                ss << "\n";
-                
-                string message = ss.str();
-                
-                // 发送数据块
-                if (!sink.write(message.c_str(), message.size())) {
-                    cout << "客户端断开连接" << endl;
-                    break;
+                if (imu660ra_acc_x != last_imu660ra_acc_x ||
+                    imu660ra_acc_y != last_imu660ra_acc_y ||
+                    imu660ra_acc_z != last_imu660ra_acc_z ||
+                    imu660ra_gyro_x != last_imu660ra_gyro_x ||
+                    imu660ra_gyro_y != last_imu660ra_gyro_y ||
+                    imu660ra_gyro_z != last_imu660ra_gyro_z ||
+                    encoder_left != last_encoder_left ||
+                    encoder_right != last_encoder_right) {
+                    
+                    data_changed = true;
+                    
+                    // 更新上一次的值
+                    last_imu660ra_acc_x = imu660ra_acc_x;
+                    last_imu660ra_acc_y = imu660ra_acc_y;
+                    last_imu660ra_acc_z = imu660ra_acc_z;
+                    last_imu660ra_gyro_x = imu660ra_gyro_x;
+                    last_imu660ra_gyro_y = imu660ra_gyro_y;
+                    last_imu660ra_gyro_z = imu660ra_gyro_z;
+                    last_encoder_left = encoder_left;
+                    last_encoder_right = encoder_right;
                 }
                 
-                // 等待1秒
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                // 如果数据发生变化，发送SSE消息
+                if (data_changed) {
+                    data_sent_count++;
+                    
+                    // 构建SSE格式的消息
+                    stringstream ss;
+                    
+                    // 事件类型
+                    ss << "event: sensor-data\n";
+                    
+                    // 数据行 - 包含所有传感器数据
+                    ss << "data: {"
+                       << "\"imu660ra_acc_x\": " << imu660ra_acc_x
+                       << ", \"imu660ra_acc_y\": " << imu660ra_acc_y
+                       << ", \"imu660ra_acc_z\": " << imu660ra_acc_z
+                       << ", \"imu660ra_gyro_x\": " << imu660ra_gyro_x
+                       << ", \"imu660ra_gyro_y\": " << imu660ra_gyro_y
+                       << ", \"imu660ra_gyro_z\": " << imu660ra_gyro_z
+                       << ", \"encoder_left\": " << encoder_left
+                       << ", \"encoder_right\": " << encoder_right
+                       << ", \"timestamp\": " << time(nullptr)
+                       << ", \"sequence\": " << data_sent_count
+                       << "}\n";
+                    
+                    // 空行表示消息结束
+                    ss << "\n";
+                    
+                    string message = ss.str();
+                    
+                    // 发送数据块
+                    if (!sink.write(message.c_str(), message.size())) {
+                        cout << "客户端断开连接" << endl;
+                        break;
+                    }
+                    
+                    // 调试输出
+                    if (data_sent_count % 10 == 0) {
+                        cout << "已发送 " << data_sent_count << " 条传感器数据" << endl;
+                    }
+                }
+                
+                // 等待10ms后再次检查数据变化
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             
             // 发送结束消息
-            string end_msg = "event: end\ndata: {\"status\": \"finished\"}\n\n";
+            string end_msg = "event: end\ndata: {\"status\": \"finished\", \"total_sent\": " + std::to_string(data_sent_count) + "}\n\n";
             sink.write(end_msg.c_str(), end_msg.size());
             sink.done();
+            
+            cout << "SSE流结束，总共发送 " << data_sent_count << " 条数据" << endl;
             
             return true;
         }
