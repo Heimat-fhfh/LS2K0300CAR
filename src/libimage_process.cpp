@@ -40,11 +40,17 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int FPS)
 	}
 	else
 	{
-		Camera.set(CAP_PROP_FRAME_WIDTH, 320); //帧宽
-		Camera.set(CAP_PROP_FRAME_HEIGHT, 240);//帧高
-		Camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G'));  // 视频流格式
-		Camera.set(CAP_PROP_FPS, FPS);    // 帧率
+		Camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G')); 
+		Camera.set(CAP_PROP_FRAME_WIDTH, 320);      // 帧宽
+		Camera.set(CAP_PROP_FRAME_HEIGHT, 240);     // 帧高
+		Camera.set(CAP_PROP_FPS, 120);              // 帧率
 		// Camera.set(CAP_PROP_EXPOSURE, -14);	// 曝光度
+		double actualWidth = Camera.get(CAP_PROP_FRAME_WIDTH); 
+		double actualHeight = Camera.get(CAP_PROP_FRAME_HEIGHT); 
+		double actualFps = Camera.get(CAP_PROP_FPS); 
+		printf("摄像头配置信息：\n"); 
+		printf("分辨率：%.0fx%.0f\n", actualWidth, actualHeight); 
+		printf("帧率：%.0f FPS\n", actualFps);
 
 		if (!Camera.isOpened())
 		{

@@ -19,6 +19,25 @@
 #include "display_show.h"
 #include "web_server.h"
 
+using namespace std;
+using namespace cv;
+
+JSON_PIDConfigData  JSON_PIDConfigData_c;
+JSON_PIDConfigData  *JSON_PIDConfigData_p = &JSON_PIDConfigData_c;
+
+Function_EN         Function_EN_c;
+Function_EN         *Function_EN_p = &Function_EN_c;
+
+Data_Path           Data_Path_c;
+Data_Path           *Data_Path_p = &Data_Path_c;
+
+Img_Store           Img_Store_c; 
+Img_Store           *Img_Store_p = &Img_Store_c;
+
+ImgProcess imgProcess;
+Judge judge;
+SYNC Sync;
+
 int encoder_left = 0;
 int encoder_right = 0;
 
@@ -42,27 +61,45 @@ int main() {
     web_thread.detach();
     printf("Web server started successfully.\n");
 
+    Sync.ConfigData_SYNC(Data_Path_p,Function_EN_p,JSON_PIDConfigData_p);
+    JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+    
     VideoCapture Camera;
-    Camera.open("/dev/video0",CAP_V4L2);
-    Camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G')); 
-    Camera.set(CAP_PROP_FRAME_WIDTH, 320);      // 帧宽
-    Camera.set(CAP_PROP_FRAME_HEIGHT, 240);     // 帧高
-    Camera.set(CAP_PROP_FPS, 120);              // 帧率
-
-    double actualWidth = Camera.get(CAP_PROP_FRAME_WIDTH); 
-    double actualHeight = Camera.get(CAP_PROP_FRAME_HEIGHT); 
-    double actualFps = Camera.get(CAP_PROP_FPS); 
-    printf("摄像头配置信息：\n"); 
-    printf("分辨率：%.0fx%.0f\n", actualWidth, actualHeight); 
-    printf("帧率：%.0f FPS\n", actualFps);
+    CameraInit(Camera,JSON_FunctionConfigData.Camera_EN,120);
+    Function_EN_p -> Game_EN = true;
+    Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP;
 
     Mat frame;
 
-    while(running)
+    
+
+
+    while(running && Function_EN_p -> Game_EN == true)
     {
         Camera.read(frame);
-        // displayMatOnIPS200(frame); 
         
+        // while( Function_EN_p -> Loop_Kind_EN == CAMERA_CATCH_LOOP)
+        // {
+        // }
+
+        // while( Function_EN_p -> Loop_Kind_EN == JUDGE_LOOP )
+        // {
+        // }
+
+        // while( Function_EN_p -> Loop_Kind_EN == COMMON_TRACK_LOOP )
+        // {
+        // }
+
+        // while( Function_EN_p -> Loop_Kind_EN == L_CIRCLE_TRACK_LOOP || Function_EN_p -> Loop_Kind_EN == R_CIRCLE_TRACK_LOOP)
+        // {
+        // }
+        
+        // while( Function_EN_p -> Loop_Kind_EN == ACROSS_TRACK_LOOP )
+        // {
+        // }
+
+        // displayMatOnIPS200(frame); 
         // std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
