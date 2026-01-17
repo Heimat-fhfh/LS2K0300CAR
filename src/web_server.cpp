@@ -9,6 +9,7 @@
 #include <csignal>
 #include <fstream>
 #include <streambuf>
+#include <sys/stat.h>
 #include "json.hpp"
 #include "zf_common_headfile.h"
 
@@ -255,7 +256,7 @@ void handle_buzzer_control(const httplib::Request& req, httplib::Response& res) 
         bool state = json_data.at("state").get<bool>();
         
         buzzer_state = state;
-        gpio_set_level(BEEP, state ? 0x0 : 0x1); // 假设低电平开启蜂鸣器
+        gpio_set_level(BEEP, state ? 0x1 : 0x0); // 假设低电平开启蜂鸣器
         cout << "蜂鸣器状态: " << (state ? "开启" : "关闭") << endl;
         
         res.set_content("{\"status\": \"success\", \"buzzer_state\": " + std::to_string(state) + "}", "application/json");
@@ -267,60 +268,121 @@ void handle_buzzer_control(const httplib::Request& req, httplib::Response& res) 
 
 // 获取当前配置文件
 void handle_get_config(const httplib::Request& req, httplib::Response& res) {
-    std::string config_name = req.path_params.at("config_name");
-    std::string filepath = CONFIG_DIR + config_name;
-    
-    if (config_name.find("..") != std::string::npos) {
-        res.status = 400;
-        res.set_content("{\"error\": \"无效的文件路径\"}", "application/json");
-        return;
+    try {
+        // 使用 req.matches[1] 来获取路径参数
+        if (req.matches.size() < 2) {
+            res.status = 400;
+            res.set_content("{\"error\": \"无效的请求路径\"}", "application/json");
+            cout << "错误: 路径参数不匹配" << endl;
+            return;
+        }
+        
+        std::string config_name = req.matches[1].str();
+        std::string filepath = CONFIG_DIR + config_name;
+        cout << "读取配置文件: " << filepath << endl;
+        
+        if (config_name.find("..") != std::string::npos) {
+            res.status = 400;
+            res.set_content("{\"error\": \"无效的文件路径\"}", "application/json");
+            cout << "错误: 路径包含非法字符 '..'" << endl;
+            return;
+        }
+        
+        std::ifstream file(filepath);
+        if (!file.is_open()) {
+            res.status = 404;
+            std::string error_msg = "{\"error\": \"配置文件不存在: " + filepath + "\"}";
+            res.set_content(error_msg, "application/json");
+            cout << "错误: 无法打开文件 " << filepath << endl;
+            
+            // 检查文件是否存在
+            struct stat buffer;
+            if (stat(filepath.c_str(), &buffer) != 0) {
+                cout << "文件不存在: " << filepath << endl;
+            } else {
+                cout << "文件存在但无法打开，可能是权限问题" << endl;
+                cout << "文件权限: " << buffer.st_mode << endl;
+            }
+            return;
+        }
+        
+        std::string content((std::istreambuf_iterator<char>(file)),
+                           std::istreambuf_iterator<char>());
+        
+        // 验证JSON格式
+        try {
+            auto json_data = nlohmann::json::parse(content);
+            cout << "配置文件读取成功，大小: " << content.size() << " 字节" << endl;
+        } catch (const std::exception& e) {
+            cout << "警告: 配置文件包含无效的JSON格式: " << e.what() << endl;
+            // 仍然返回原始内容，让前端处理
+        }
+        
+        res.set_content(content, "application/json");
+        cout << "成功返回配置文件内容" << endl;
+    } catch (const std::exception& e) {
+        res.status = 500;
+        std::string error_msg = "{\"error\": \"服务器内部错误: " + std::string(e.what()) + "\"}";
+        res.set_content(error_msg, "application/json");
+        cout << "handle_get_config 异常: " << e.what() << endl;
+    } catch (...) {
+        res.status = 500;
+        res.set_content("{\"error\": \"未知服务器内部错误\"}", "application/json");
+        cout << "handle_get_config 未知异常" << endl;
     }
-    
-    std::ifstream file(filepath);
-    if (!file.is_open()) {
-        res.status = 404;
-        res.set_content("{\"error\": \"配置文件不存在\"}", "application/json");
-        return;
-    }
-    
-    std::string content((std::istreambuf_iterator<char>(file)),
-                       std::istreambuf_iterator<char>());
-    
-    res.set_content(content, "application/json");
 }
 
 // 保存配置文件
 void handle_save_config(const httplib::Request& req, httplib::Response& res) {
-    std::string config_name = req.path_params.at("config_name");
-    std::string filepath = CONFIG_DIR + config_name;
-    
-    if (config_name.find("..") != std::string::npos) {
-        res.status = 400;
-        res.set_content("{\"error\": \"无效的文件路径\"}", "application/json");
-        return;
-    }
-    
-    // 验证JSON格式
     try {
-        auto json_data = nlohmann::json::parse(req.body);
-        
-        // 写入文件
-        std::ofstream file(filepath);
-        if (!file.is_open()) {
-            res.status = 500;
-            res.set_content("{\"error\": \"无法写入配置文件\"}", "application/json");
+        // 使用 req.matches[1] 来获取路径参数
+        if (req.matches.size() < 2) {
+            res.status = 400;
+            res.set_content("{\"error\": \"无效的请求路径\"}", "application/json");
+            cout << "错误: 路径参数不匹配" << endl;
             return;
         }
         
-        file << json_data.dump(4); // 格式化输出，缩进4个空格
-        file.close();
+        std::string config_name = req.matches[1].str();
+        std::string filepath = CONFIG_DIR + config_name;
         
-        cout << "配置文件已保存: " << filepath << endl;
+        if (config_name.find("..") != std::string::npos) {
+            res.status = 400;
+            res.set_content("{\"error\": \"无效的文件路径\"}", "application/json");
+            return;
+        }
         
-        res.set_content("{\"status\": \"success\", \"file\": \"" + config_name + "\"}", "application/json");
+        // 验证JSON格式
+        try {
+            auto json_data = nlohmann::json::parse(req.body);
+            
+            // 写入文件
+            std::ofstream file(filepath);
+            if (!file.is_open()) {
+                res.status = 500;
+                res.set_content("{\"error\": \"无法写入配置文件\"}", "application/json");
+                return;
+            }
+            
+            file << json_data.dump(4); // 格式化输出，缩进4个空格
+            file.close();
+            
+            cout << "配置文件已保存: " << filepath << endl;
+            
+            res.set_content("{\"status\": \"success\", \"file\": \"" + config_name + "\"}", "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content("{\"error\": \"无效的JSON格式\"}", "application/json");
+        }
     } catch (const std::exception& e) {
-        res.status = 400;
-        res.set_content("{\"error\": \"无效的JSON格式\"}", "application/json");
+        res.status = 500;
+        std::string error_msg = "{\"error\": \"服务器内部错误: " + std::string(e.what()) + "\"}";
+        res.set_content(error_msg, "application/json");
+        cout << "handle_save_config 异常: " << e.what() << endl;
+    } catch (...) {
+        res.status = 500;
+        res.set_content("{\"error\": \"未知服务器内部错误\"}", "application/json");
+        cout << "handle_save_config 未知异常" << endl;
     }
 }
 

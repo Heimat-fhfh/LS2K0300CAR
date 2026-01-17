@@ -6,6 +6,8 @@
     <title>智能车Web控制界面</title>
     <!-- Bootstrap CSS CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js CDN for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .control-panel {
             margin: 20px 0;
@@ -23,10 +25,11 @@
             font-weight: bold;
         }
         .chart-container {
-            height: 300px;
+            height: 400px;
             margin: 20px 0;
             border: 1px solid #ddd;
             border-radius: 4px;
+            position: relative;
         }
         .data-display {
             background-color: #f8f9fa;
@@ -35,6 +38,8 @@
             margin: 10px 0;
             max-height: 200px;
             overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
         }
         .config-editor {
             font-family: 'Courier New', monospace;
@@ -44,6 +49,25 @@
             margin: 2px 0;
             padding: 2px 5px;
             border-left: 3px solid #007bff;
+        }
+        .sensor-checkbox-group {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .color-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-right: 5px;
+            border-radius: 2px;
+        }
+        .btn-hold:active {
+            background-color: #dc3545 !important;
+            border-color: #dc3545 !important;
         }
     </style>
 </head>
@@ -63,7 +87,7 @@
                             <div class="slider-container">
                                 <span class="slider-label">前进/后退功率 (-100 到 100)</span>
                                 <input type="range" class="form-range" id="powerSlider" min="-100" max="100" value="0" 
-                                       oninput="updatePowerValue(this.value)" ontouchmove="sendPowerCommand(this.value)" onmousemove="sendPowerCommand(this.value)">
+                                       oninput="updatePowerValue(this.value)" ontouchmove="sendPowerCommandDebounced(this.value)">
                                 <div class="mt-2">
                                     <span class="badge bg-primary">当前值: <span id="powerValue">0</span></span>
                                 </div>
@@ -75,7 +99,7 @@
                             <div class="slider-container">
                                 <span class="slider-label">转向角度 (0 到 360度)</span>
                                 <input type="range" class="form-range" id="steerSlider" min="0" max="360" value="180" 
-                                       oninput="updateSteerValue(this.value)" ontouchmove="sendSteerCommand(this.value)" onmousemove="sendSteerCommand(this.value)">
+                                       oninput="updateSteerValue(this.value)" ontouchmove="sendSteerCommandDebounced(this.value)">
                                 <div class="mt-2">
                                     <span class="badge bg-success">当前值: <span id="steerValue">180</span>°</span>
                                 </div>
@@ -88,11 +112,12 @@
                             <button class="btn btn-danger btn-lg w-100" onclick="stopCar()">关闭智能车</button>
                         </div>
                         <div class="col-md-3">
-                            <button class="btn btn-warning btn-lg w-100" 
-                                    mousedown="startBuzzer()" 
-                                    mouseup="stopBuzzer()" 
-                                    touchstart="startBuzzer()" 
-                                    touchend="stopBuzzer()">蜂鸣器 (按住开启)</button>
+                            <button class="btn btn-warning btn-lg w-100 btn-hold" 
+                                    id="buzzerBtn"
+                                    onmousedown="startBuzzer()" 
+                                    onmouseup="stopBuzzer()" 
+                                    ontouchstart="startBuzzer()" 
+                                    ontouchend="stopBuzzer()">蜂鸣器 (按住开启)</button>
                         </div>
                         <div class="col-md-3">
                             <button class="btn btn-secondary btn-lg w-100" onclick="startSSE()">开始接收数据</button>
@@ -103,6 +128,7 @@
                     </div>
                 </div>
             </div>
+        </div>
         
         <!-- 数据显示区域 -->
         <div class="row">
@@ -112,51 +138,79 @@
                     <div class="card-header">
                         <h5>传感器数据图表</h5>
                         <div class="row mt-2">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label">显示范围 (秒):</label>
-                                <input type="number" class="form-control form-control-sm" id="displayRange" value="30" min="10" max="300">
+                                <input type="number" class="form-control form-control-sm" id="displayRange" value="30" min="10" max="300" onchange="updateChartSettings()">
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label">显示密度 (点/秒):</label>
-                                <input type="number" class="form-control form-control-sm" id="displayDensity" value="2" min="1" max="10">
+                                <input type="number" class="form-control form-control-sm" id="displayDensity" value="2" min="1" max="10" onchange="updateChartSettings()">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">自动调整Y轴:</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="autoScaleY" checked onchange="updateChartSettings()">
+                                    <label class="form-check-label" for="autoScaleY">启用</label>
+                                </div>
                             </div>
                         </div>
-                        <div class="mt-2">
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="gyroX1" checked onchange="toggleChartData('gyroX1', this.checked)">
-                                <label class="form-check-label" for="gyroX1">陀螺仪X1</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="gyroY1" checked onchange="toggleChartData('gyroY1', this.checked)">
-                                <label class="form-check-label" for="gyroY1">陀螺仪Y1</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="gyroZ1" checked onchange="toggleChartData('gyroZ1', this.checked)">
-                                <label class="form-check-label" for="gyroZ1">陀螺仪Z1</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="encoderLeft" checked onchange="toggleChartData('encoderLeft', this.checked)">
-                                <label class="form-check-label" for="encoderLeft">编码器左</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="encoderRight" checked onchange="toggleChartData('encoderRight', this.checked)">
-                                <label class="form-check-label" for="encoderRight">编码器右</label>
+                        
+                        <div class="sensor-checkbox-group">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>陀螺仪数据:</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="gyroX1" checked onchange="toggleChartData('gyroX1', this.checked)">
+                                        <label class="form-check-label" for="gyroX1"><span class="color-indicator" style="background-color: #FF6384;"></span>陀螺仪X1</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="gyroY1" checked onchange="toggleChartData('gyroY1', this.checked)">
+                                        <label class="form-check-label" for="gyroY1"><span class="color-indicator" style="background-color: #36A2EB;"></span>陀螺仪Y1</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="gyroZ1" checked onchange="toggleChartData('gyroZ1', this.checked)">
+                                        <label class="form-check-label" for="gyroZ1"><span class="color-indicator" style="background-color: #FFCE56;"></span>陀螺仪Z1</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="gyroX2" checked onchange="toggleChartData('gyroX2', this.checked)">
+                                        <label class="form-check-label" for="gyroX2"><span class="color-indicator" style="background-color: #4BC0C0;"></span>陀螺仪X2</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="gyroY2" checked onchange="toggleChartData('gyroY2', this.checked)">
+                                        <label class="form-check-label" for="gyroY2"><span class="color-indicator" style="background-color: #9966FF;"></span>陀螺仪Y2</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="gyroZ2" checked onchange="toggleChartData('gyroZ2', this.checked)">
+                                        <label class="form-check-label" for="gyroZ2"><span class="color-indicator" style="background-color: #FF9F40;"></span>陀螺仪Z2</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>编码器数据:</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="encoderLeft" checked onchange="toggleChartData('encoderLeft', this.checked)">
+                                        <label class="form-check-label" for="encoderLeft"><span class="color-indicator" style="background-color: #C9CBCF;"></span>编码器左</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="encoderRight" checked onchange="toggleChartData('encoderRight', this.checked)">
+                                        <label class="form-check-label" for="encoderRight"><span class="color-indicator" style="background-color: #7F7F7F;"></span>编码器右</label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="chart-container" id="sensorChart">
-                            <!-- 图表容器，这里可以集成Chart.js或其他图表库 -->
-                            <div class="text-center text-muted py-5">传感器数据图表区域</div>
+                        <div class="chart-container">
+                            <canvas id="sensorChart"></canvas>
                         </div>
                         <div class="mt-3">
                             <label class="form-label">当前原始数据:</label>
-                            <div class="data-display config-editor" id="currentRawData">
+                            <div class="data-display" id="currentRawData">
                                 等待数据...
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
             
             <!-- 第二栏：配置文件管理 -->
             <div class="col-md-4">
@@ -167,7 +221,7 @@
                     <div class="card-body">
                         <div class="mb-3">
                             <label class="form-label">选择配置文件:</label>
-                            <select class="form-select" id="configSelect">
+                            <select class="form-select" id="configSelect" onchange="loadConfig()">
                                 <option value="config_0.json">config_0.json</option>
                                 <option value="config_1.json">config_1.json</option>
                                 <option value="config_2.json">config_2.json</option>
@@ -189,9 +243,10 @@
                         </div>
                         
                         <div class="mb-2">
+                            <label class="form-label">上传配置文件:</label>
                             <input type="file" class="form-control" id="configUpload" accept=".json">
                         </div>
-                        <button class="btn btn-info w-10" onclick="uploadConfig()">上传配置文件</button>
+                        <button class="btn btn-info w-100" onclick="uploadConfig()">上传配置文件</button>
                     </div>
                 </div>
             </div>
@@ -210,6 +265,7 @@
                         </div>
                         <div class="mt-2">
                             <button class="btn btn-outline-secondary btn-sm" onclick="clearLogs()">清空日志</button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="exportLogs()">导出日志</button>
                         </div>
                     </div>
                 </div>
@@ -222,7 +278,9 @@
     
     <script>
         let eventSource = null;
+        let sensorChart = null;
         let chartData = {
+            timestamps: [],
             gyroX1: [],
             gyroY1: [],
             gyroZ1: [],
@@ -231,6 +289,30 @@
             gyroZ2: [],
             encoderLeft: [],
             encoderRight: []
+        };
+        
+        // 颜色配置
+        const chartColors = {
+            gyroX1: '#FF6384',
+            gyroY1: '#36A2EB',
+            gyroZ1: '#FFCE56',
+            gyroX2: '#4BC0C0',
+            gyroY2: '#9966FF',
+            gyroZ2: '#FF9F40',
+            encoderLeft: '#C9CBCF',
+            encoderRight: '#7F7F7F'
+        };
+        
+        // 显示状态
+        const displayStates = {
+            gyroX1: true,
+            gyroY1: true,
+            gyroZ1: true,
+            gyroX2: true,
+            gyroY2: true,
+            gyroZ2: true,
+            encoderLeft: true,
+            encoderRight: true
         };
 
         // 更新功率值显示
@@ -243,10 +325,54 @@
             document.getElementById('steerValue').textContent = value;
         }
 
-        // 发送功率命令
+        // 滑块拖动状态
+        let isPowerSliderDragging = false;
+        let isSteerSliderDragging = false;
+        
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // 发送功率命令（带防抖）
+        const sendPowerCommandDebounced = debounce(function(value) {
+            if (isPowerSliderDragging) {
+                console.log('发送功率命令:', value);
+                fetch('/api/power', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ power: parseInt(value) })
+                }).catch(err => console.error('功率命令发送失败:', err));
+            }
+        }, 100); // 100ms防抖
+
+        // 发送转向命令（带防抖）
+        const sendSteerCommandDebounced = debounce(function(value) {
+            if (isSteerSliderDragging) {
+                console.log('发送转向命令:', value);
+                fetch('/api/steer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ angle: parseInt(value) })
+                }).catch(err => console.error('转向命令发送失败:', err));
+            }
+        }, 100); // 100ms防抖
+
+        // 原始发送功率命令（用于change事件）
         function sendPowerCommand(value) {
-            console.log('发送功率命令:', value);
-            // 这里可以发送WebSocket或HTTP请求到后端
+            console.log('发送功率命令（最终）:', value);
             fetch('/api/power', {
                 method: 'POST',
                 headers: {
@@ -256,9 +382,9 @@
             }).catch(err => console.error('功率命令发送失败:', err));
         }
 
-        // 发送转向命令
+        // 原始发送转向命令（用于change事件）
         function sendSteerCommand(value) {
-            console.log('发送转向命令:', value);
+            console.log('发送转向命令（最终）:', value);
             fetch('/api/steer', {
                 method: 'POST',
                 headers: {
@@ -288,6 +414,7 @@
         // 开启蜂鸣器
         function startBuzzer() {
             console.log('开启蜂鸣器');
+            document.getElementById('buzzerBtn').classList.add('active');
             fetch('/api/buzzer', {
                 method: 'POST',
                 headers: {
@@ -305,6 +432,7 @@
         // 关闭蜂鸣器
         function stopBuzzer() {
             console.log('关闭蜂鸣器');
+            document.getElementById('buzzerBtn').classList.remove('active');
             fetch('/api/buzzer', {
                 method: 'POST',
                 headers: {
@@ -395,29 +523,99 @@
         function updateChartData(data) {
             const timestamp = Date.now();
             
+            // 添加时间戳
+            chartData.timestamps.push(timestamp);
+            
+            // 更新传感器数据
             if (data.gyro_x1 !== undefined) {
-                chartData.gyroX1.push({ time: timestamp, value: data.gyro_x1 });
+                chartData.gyroX1.push(data.gyro_x1);
             }
             if (data.gyro_y1 !== undefined) {
-                chartData.gyroY1.push({ time: timestamp, value: data.gyro_y1 });
+                chartData.gyroY1.push(data.gyro_y1);
             }
             if (data.gyro_z1 !== undefined) {
-                chartData.gyroZ1.push({ time: timestamp, value: data.gyro_z1 });
+                chartData.gyroZ1.push(data.gyro_z1);
+            }
+            if (data.gyro_x2 !== undefined) {
+                chartData.gyroX2.push(data.gyro_x2);
+            }
+            if (data.gyro_y2 !== undefined) {
+                chartData.gyroY2.push(data.gyro_y2);
+            }
+            if (data.gyro_z2 !== undefined) {
+                chartData.gyroZ2.push(data.gyro_z2);
             }
             if (data.encoder_left !== undefined) {
-                chartData.encoderLeft.push({ time: timestamp, value: data.encoder_left });
+                chartData.encoderLeft.push(data.encoder_left);
             }
             if (data.encoder_right !== undefined) {
-                chartData.encoderRight.push({ time: timestamp, value: data.encoder_right });
+                chartData.encoderRight.push(data.encoder_right);
             }
             
             // 限制数据量，只保留最近的数据
             const displayRange = parseInt(document.getElementById('displayRange').value) * 1000; // 转换为毫秒
             const cutoffTime = timestamp - displayRange;
             
-            Object.keys(chartData).forEach(key => {
-                chartData[key] = chartData[key].filter(point => point.time > cutoffTime);
-            });
+            // 找到第一个大于cutoffTime的时间戳索引
+            let cutoffIndex = 0;
+            for (let i = 0; i < chartData.timestamps.length; i++) {
+                if (chartData.timestamps[i] > cutoffTime) {
+                    cutoffIndex = i;
+                    break;
+                }
+            }
+            
+            // 裁剪数据
+            if (cutoffIndex > 0) {
+                chartData.timestamps = chartData.timestamps.slice(cutoffIndex);
+                chartData.gyroX1 = chartData.gyroX1.slice(cutoffIndex);
+                chartData.gyroY1 = chartData.gyroY1.slice(cutoffIndex);
+                chartData.gyroZ1 = chartData.gyroZ1.slice(cutoffIndex);
+                chartData.gyroX2 = chartData.gyroX2.slice(cutoffIndex);
+                chartData.gyroY2 = chartData.gyroY2.slice(cutoffIndex);
+                chartData.gyroZ2 = chartData.gyroZ2.slice(cutoffIndex);
+                chartData.encoderLeft = chartData.encoderLeft.slice(cutoffIndex);
+                chartData.encoderRight = chartData.encoderRight.slice(cutoffIndex);
+            }
+            
+            // 根据显示密度进行采样
+            const density = parseInt(document.getElementById('displayDensity').value);
+            if (density > 0 && chartData.timestamps.length > density * (displayRange / 1000)) {
+                const sampleInterval = Math.floor(chartData.timestamps.length / (density * (displayRange / 1000)));
+                if (sampleInterval > 1) {
+                    const sampledTimestamps = [];
+                    const sampledGyroX1 = [];
+                    const sampledGyroY1 = [];
+                    const sampledGyroZ1 = [];
+                    const sampledGyroX2 = [];
+                    const sampledGyroY2 = [];
+                    const sampledGyroZ2 = [];
+                    const sampledEncoderLeft = [];
+                    const sampledEncoderRight = [];
+                    
+                    for (let i = 0; i < chartData.timestamps.length; i += sampleInterval) {
+                        sampledTimestamps.push(chartData.timestamps[i]);
+                        sampledGyroX1.push(chartData.gyroX1[i]);
+                        sampledGyroY1.push(chartData.gyroY1[i]);
+                        sampledGyroZ1.push(chartData.gyroZ1[i]);
+                        sampledGyroX2.push(chartData.gyroX2[i]);
+                        sampledGyroY2.push(chartData.gyroY2[i]);
+                        sampledGyroZ2.push(chartData.gyroZ2[i]);
+                        sampledEncoderLeft.push(chartData.encoderLeft[i]);
+                        sampledEncoderRight.push(chartData.encoderRight[i]);
+                    }
+                    
+                    chartData.timestamps = sampledTimestamps;
+                    chartData.gyroX1 = sampledGyroX1;
+                    chartData.gyroY1 = sampledGyroY1;
+                    chartData.gyroZ1 = sampledGyroZ1;
+                    chartData.gyroX2 = sampledGyroX2;
+                    chartData.gyroY2 = sampledGyroY2;
+                    chartData.gyroZ2 = sampledGyroZ2;
+                    chartData.encoderLeft = sampledEncoderLeft;
+                    chartData.encoderRight = sampledEncoderRight;
+                }
+            }
             
             // 更新图表显示
             renderChart();
@@ -425,16 +623,190 @@
 
         // 渲染图表
         function renderChart() {
-            // 这里可以集成Chart.js或其他图表库来渲染实际图表
-            // 暂时显示文本说明
-            const chartContainer = document.getElementById('sensorChart');
-            chartContainer.innerHTML = '<div class="text-center text-muted py-5">图表渲染区域<br>实际实现中将显示实时数据图表</div>';
+            const ctx = document.getElementById('sensorChart').getContext('2d');
+            
+            // 准备数据集
+            const datasets = [];
+            
+            if (displayStates.gyroX1 && chartData.gyroX1.length > 0) {
+                datasets.push({
+                    label: '陀螺仪X1',
+                    data: chartData.gyroX1,
+                    borderColor: chartColors.gyroX1,
+                    backgroundColor: chartColors.gyroX1 + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.gyroY1 && chartData.gyroY1.length > 0) {
+                datasets.push({
+                    label: '陀螺仪Y1',
+                    data: chartData.gyroY1,
+                    borderColor: chartColors.gyroY1,
+                    backgroundColor: chartColors.gyroY1 + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.gyroZ1 && chartData.gyroZ1.length > 0) {
+                datasets.push({
+                    label: '陀螺仪Z1',
+                    data: chartData.gyroZ1,
+                    borderColor: chartColors.gyroZ1,
+                    backgroundColor: chartColors.gyroZ1 + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.gyroX2 && chartData.gyroX2.length > 0) {
+                datasets.push({
+                    label: '陀螺仪X2',
+                    data: chartData.gyroX2,
+                    borderColor: chartColors.gyroX2,
+                    backgroundColor: chartColors.gyroX2 + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.gyroY2 && chartData.gyroY2.length > 0) {
+                datasets.push({
+                    label: '陀螺仪Y2',
+                    data: chartData.gyroY2,
+                    borderColor: chartColors.gyroY2,
+                    backgroundColor: chartColors.gyroY2 + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.gyroZ2 && chartData.gyroZ2.length > 0) {
+                datasets.push({
+                    label: '陀螺仪Z2',
+                    data: chartData.gyroZ2,
+                    borderColor: chartColors.gyroZ2,
+                    backgroundColor: chartColors.gyroZ2 + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.encoderLeft && chartData.encoderLeft.length > 0) {
+                datasets.push({
+                    label: '编码器左',
+                    data: chartData.encoderLeft,
+                    borderColor: chartColors.encoderLeft,
+                    backgroundColor: chartColors.encoderLeft + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            if (displayStates.encoderRight && chartData.encoderRight.length > 0) {
+                datasets.push({
+                    label: '编码器右',
+                    data: chartData.encoderRight,
+                    borderColor: chartColors.encoderRight,
+                    backgroundColor: chartColors.encoderRight + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            // 创建或更新图表
+            if (!sensorChart) {
+                sensorChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.timestamps.map(t => new Date(t).toLocaleTimeString()),
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '时间'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '数值'
+                                },
+                                beginAtZero: false
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'nearest'
+                        }
+                    }
+                });
+            } else {
+                sensorChart.data.labels = chartData.timestamps.map(t => new Date(t).toLocaleTimeString());
+                sensorChart.data.datasets = datasets;
+                sensorChart.update('none');
+            }
+            
+            // 自动调整Y轴范围
+            if (document.getElementById('autoScaleY').checked) {
+                let minVal = Infinity;
+                let maxVal = -Infinity;
+                
+                datasets.forEach(dataset => {
+                    if (dataset.data.length > 0) {
+                        const datasetMin = Math.min(...dataset.data);
+                        const datasetMax = Math.max(...dataset.data);
+                        minVal = Math.min(minVal, datasetMin);
+                        maxVal = Math.max(maxVal, datasetMax);
+                    }
+                });
+                
+                if (minVal !== Infinity && maxVal !== -Infinity) {
+                    const padding = (maxVal - minVal) * 0.1;
+                    sensorChart.options.scales.y.min = minVal - padding;
+                    sensorChart.options.scales.y.max = maxVal + padding;
+                    sensorChart.update();
+                }
+            }
         }
 
         // 切换图表数据显示
         function toggleChartData(key, visible) {
-            console.log(`切换图表数据 ${key}: ${visible}`);
-            // 在实际实现中，这里会控制图表的显示/隐藏
+            displayStates[key] = visible;
+            if (sensorChart) {
+                renderChart();
+            }
+        }
+
+        // 更新图表设置
+        function updateChartSettings() {
+            if (sensorChart) {
+                renderChart();
+            }
         }
 
         // 加载配置文件
@@ -551,6 +923,27 @@
             document.getElementById('logDisplay').innerHTML = '<div class="log-entry text-muted">日志已清空</div>';
         }
 
+        // 导出日志
+        function exportLogs() {
+            const logEntries = document.querySelectorAll('#logDisplay .log-entry');
+            let logText = '智能车系统日志\n' + '='.repeat(50) + '\n\n';
+            
+            logEntries.forEach(entry => {
+                logText += entry.textContent + '\n';
+            });
+            
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `smartcar_logs_${new Date().toISOString().slice(0, 10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            addLog('日志已导出');
+        }
+
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             // 加载默认配置
@@ -563,13 +956,57 @@
             const powerSlider = document.getElementById('powerSlider');
             const steerSlider = document.getElementById('steerSlider');
             
+            // 功率滑块事件
+            powerSlider.addEventListener('mousedown', function() {
+                isPowerSliderDragging = true;
+            });
+            
+            powerSlider.addEventListener('mouseup', function() {
+                isPowerSliderDragging = false;
+                // 鼠标抬起时发送最终值
+                sendPowerCommand(this.value);
+            });
+            
             powerSlider.addEventListener('change', function() {
                 sendPowerCommand(this.value);
+            });
+            
+            // 转向滑块事件
+            steerSlider.addEventListener('mousedown', function() {
+                isSteerSliderDragging = true;
+            });
+            
+            steerSlider.addEventListener('mouseup', function() {
+                isSteerSliderDragging = false;
+                // 鼠标抬起时发送最终值
+                sendSteerCommand(this.value);
             });
             
             steerSlider.addEventListener('change', function() {
                 sendSteerCommand(this.value);
             });
+            
+            // 触摸事件支持
+            powerSlider.addEventListener('touchstart', function() {
+                isPowerSliderDragging = true;
+            });
+            
+            powerSlider.addEventListener('touchend', function() {
+                isPowerSliderDragging = false;
+                sendPowerCommand(this.value);
+            });
+            
+            steerSlider.addEventListener('touchstart', function() {
+                isSteerSliderDragging = true;
+            });
+            
+            steerSlider.addEventListener('touchend', function() {
+                isSteerSliderDragging = false;
+                sendSteerCommand(this.value);
+            });
+            
+            // 初始化图表
+            renderChart();
         });
 
         // 页面卸载时关闭SSE连接
