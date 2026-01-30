@@ -4,6 +4,11 @@ cmake_minimum_required(VERSION 3.16)    # 限制最低CMake版本
 set(CMAKE_C_COMPILER /opt/loongarch-gnu-toolchain/bin/loongarch64-linux-gnu-gcc)
 set(CMAKE_CXX_COMPILER /opt/loongarch-gnu-toolchain/bin/loongarch64-linux-gnu-g++)
 
+# 设置C++标准为C++17（支持filesystem）
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # 项目名称
 project(main)
 
@@ -22,6 +27,11 @@ set(OPENCV_IMGPROC /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_i
 set(OPENCV_HIGHGUI /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_highgui.so)
 set(OPENCV_VIDEOIO /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_videoio.so)
 set(OPENCV_IMGCODECS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_imgcodecs.so)
+set(OPENCV_DNN /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_dnn.so)
+
+
+
+
 # find_library(OPENCV_CORE      opencv_core      PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
 # find_library(OPENCV_IMGPROC   opencv_imgproc   PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
 # find_library(OPENCV_HIGHGUI   opencv_highgui   PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
@@ -50,8 +60,17 @@ add_subdirectory(third_party/cpp-httplib-master)
 add_executable(main main.cpp ${SRC} ${TEST})
 
 # 连接OpenCV动态库
-target_link_libraries(main PUBLIC ${OPENCV_CORE} ${OPENCV_IMGPROC} ${OPENCV_HIGHGUI} ${OPENCV_VIDEOIO} ${OPENCV_IMGCODECS})
+target_link_libraries(main PUBLIC 
+    ${OPENCV_CORE} 
+    ${OPENCV_IMGPROC} 
+    ${OPENCV_HIGHGUI} 
+    ${OPENCV_VIDEOIO} 
+    ${OPENCV_IMGCODECS} 
+    ${OPENCV_DNN}
+    )
 # 连接第三方web库cpp-httplib
 target_link_libraries(main PUBLIC httplib::httplib)
 # 连接多线程pthread库
 target_link_libraries(main PUBLIC pthread)
+# 连接C++17 filesystem库（对于某些编译器可能需要）
+target_link_libraries(main PUBLIC stdc++fs)

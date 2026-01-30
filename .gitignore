@@ -4,3 +4,5 @@ document/
 ls2k0300_linux_4.19/
 opencv_4_10_build/
 third_party/
+train_data/
+onnxruntime/

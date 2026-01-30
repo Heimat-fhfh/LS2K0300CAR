@@ -34,6 +34,9 @@
 #include "zf_driver_encoder.h"
 #include "zf_driver_file.h"
 
+int encoder_left = 0;
+int encoder_right = 0;
+
 int16 encoder_get_count(const char *path)
 {
     int16 dat;

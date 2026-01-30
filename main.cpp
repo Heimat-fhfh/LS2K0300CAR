@@ -1,178 +1,99 @@
+// Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#include <chrono>
-#include <cmath>
 #include <iostream>
-#include <iomanip>
-#include <math.h>		
-#include <stdlib.h>
-#include <thread>
-#include <atomic>
-#include "base.h"
-#include "common_system.h"
-#include "common_program.h"
-#include "register.h"
-#include "stdio.h"
-#include "zf_common_headfile.h"
-#include "display_show.h"
-#include "web_server.h"
-#include "libimage_process.h"
+#include <vector>
+#include <getopt.h>
+
+#include <opencv2/opencv.hpp>
+
+#include "inference.h"
 
 using namespace std;
 using namespace cv;
 
-JSON_PIDConfigData  JSON_PIDConfigData_c;
-JSON_PIDConfigData  *JSON_PIDConfigData_p = &JSON_PIDConfigData_c;
+int main(int argc, char **argv)
+{
+    std::string projectBasePath = "/home/fhfh/Work/LS2K0300CAR/third_party/ultralytics"; // Set your ultralytics base path
 
-Function_EN         Function_EN_c;
-Function_EN         *Function_EN_p = &Function_EN_c;
+    bool runOnGPU = false;
 
-Data_Path           Data_Path_c;
-Data_Path           *Data_Path_p = &Data_Path_c;
+    //
+    // Pass in either:
+    //
+    // "yolov8s.onnx" or "yolov5s.onnx"
+    //
+    // To run Inference with yolov8/yolov5 (ONNX)
+    //
 
-Img_Store           Img_Store_c; 
-Img_Store           *Img_Store_p = &Img_Store_c;
+    // Note that in this example the classes are hard-coded and 'classes.txt' is a place holder.
+    // Inference inf("/home/fhfh/Work/LS2K0300CAR/third_party/ultralytics/yolo26n.onnx", cv::Size(160, 160), "classes.txt", runOnGPU);
+    // Inference inf(projectBasePath + "/yolov8s.onnx", cv::Size(640, 640), "classes.txt", runOnGPU);
+    cout << "Loading model..." << std::endl;
+    Inference inf("yolo/upload/model/v8V3.onnx", cv::Size(96, 96), "classes.txt", runOnGPU);
+    cout << "Model loaded." << std::endl;
 
-ImgProcess imgProcess;
-Judge judge;
-SYNC Sync;
-
-int encoder_left = 0;
-int encoder_right = 0;
-
-int main() {
+    std::vector<std::string> imageNames;
+    imageNames.push_back("yolo/upload/pictures/dagger_001.jpg");
+    cout << "Added image path." << std::endl;
+    imageNames.push_back("yolo/upload/pictures/explosive_001.jpg");
+    cout << "Added image path." << std::endl;
+    imageNames.push_back("yolo/upload/pictures/first_aid_kit_001.jpg");
+    cout << "Added image path." << std::endl;
+    // imageNames.push_back(projectBasePath + "/ultralytics/assets/bus.jpg");
+    // imageNames.push_back(projectBasePath + "/ultralytics/assets/zidane.jpg");
+    // imageNames.push_back(projectBasePath + "/ultralytics/assets/firearms_001.jpg");
+    // imageNames.push_back("/home/fhfh/Work/LS2K0300CAR/yolo/explosive_001.jpg");
+    // imageNames.push_back("/home/fhfh/Work/LS2K0300CAR/yolo/dagger_001.jpg");
+    // imageNames.push_back("/home/fhfh/Work/LS2K0300CAR/yolo/first_aid_kit_001.jpg");
     
-    setbuf(stdout, NULL);
-
-    atexit(cleanup);
-    signal(SIGINT, sigint_handler);
-    
-    pit_ms_init(10, pit_callback);
-    
-    ips200_init("/dev/fb0");
-    
-    // 显示IP地址
-    display_ip_address(0, 181);
-    printf("IP address displayed on screen.\n");
-    
-    // 将web服务分离出来单独运行
-    std::thread web_thread(start_web_server);
-    web_thread.detach();
-    printf("Web server started successfully.\n");
-
-    Sync.ConfigData_SYNC(Data_Path_p,Function_EN_p,JSON_PIDConfigData_p);
-    JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
-    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    
-    VideoCapture Camera;
-    CameraInit(Camera,JSON_FunctionConfigData.Camera_EN,320,240,60);
-    Function_EN_p -> Game_EN = true;
-    Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP;
-
-    Mat frame;
-
-    while(running && Function_EN_p -> Game_EN == true)
+    for (int i = 0; i < imageNames.size(); ++i)
     {
-        
-        while( Function_EN_p -> Loop_Kind_EN == CAMERA_CATCH_LOOP)
-        {
-            Data_Path_p -> JSON_TrackConfigData_v[0].Forward = Data_Path_p -> JSON_TrackConfigData_v[0].Default_Forward;
-            Camera >> Img_Store_p -> Img_Color;
+        cv::Mat frame = cv::imread(imageNames[i]);
 
-            imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
-            memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
-            imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
-
-            imgProcess.ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
-            displayMatOnIPS200(Img_Store_p->Img_Track);
-
-            // Img_Store_p -> ImgNum++;
-            // Function_EN_p -> Loop_Kind_EN = JUDGE_LOOP;
+        cout << "read image" << std::endl;
+        if (frame.empty()) {
+            std::cerr << "Error: Could not load image" << std::endl;
+            return 1;
         }
 
-        // while( Function_EN_p -> Loop_Kind_EN == JUDGE_LOOP )
-        // {
-        //     Function_EN_p -> Loop_Kind_EN = judge.TrackKind_Judge(Img_Store_p,Data_Path_p,Function_EN_p);  // 切换至赛道循环
-        // }
+        // Inference starts here...
+        std::vector<Detection> output = inf.runInference(frame);
+        if (!output.empty()) {
+            auto &r = output[0];
+            std::string txt = r.className + " " + std::to_string(r.confidence).substr(0, 5);
+            cv::putText(frame, txt, cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0,255,0), 2);
+        }
 
-        // while( Function_EN_p -> Loop_Kind_EN == COMMON_TRACK_LOOP )
-        // {
-        //     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP;
-        // }
+        // int detections = output.size();
+        // std::cout << "Number of detections:" << detections << std::endl;
 
-        // while( Function_EN_p -> Loop_Kind_EN == L_CIRCLE_TRACK_LOOP || Function_EN_p -> Loop_Kind_EN == R_CIRCLE_TRACK_LOOP)
+        // for (int i = 0; i < detections; ++i)
         // {
-        //     switch(Data_Path_p -> Circle_Track_Step)
-        //     {
-        //         case IN_PREPARE:
-        //         {
-        //             CircleTrack_Step_IN_Prepare(Img_Store_p,Data_Path_p);   // 准备入环补线
-        //             break;
-        //         }
-        //         case IN:
-        //         {
-        //             CircleTrack_Step_IN(Img_Store_p,Data_Path_p);   // 入环补线
-        //             break;
-        //         }
-        //         case OUT:
-        //         {
-        //             CircleTrack_Step_OUT(Img_Store_p,Data_Path_p);   // 出环补线
-        //             break;
-        //         }
-        //     }
-        //     imgSearch_l_r(Img_Store_p,Data_Path_p);
-        //     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换至串口发送循环
-        // }
-        
-        // while( Function_EN_p -> Loop_Kind_EN == ACROSS_TRACK_LOOP )
-        // {
-        //     AcrossTrack(Img_Store_p,Data_Path_p);
-        //     imgSearch_l_r(Img_Store_p,Data_Path_p);
-        //     Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换至串口发送循环
-        // }
+        //     Detection detection = output[i];
 
-        // Camera.read(frame);
-        // displayMatOnIPS200(frame); 
-        // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        //     cv::Rect box = detection.box;
+        //     cv::Scalar color = detection.color;
+
+        //     // Detection box
+        //     cv::rectangle(frame, box, color, 2);
+
+        //     // Detection box text
+        //     std::string classString = detection.className + ' ' + std::to_string(detection.confidence).substr(0, 4);
+        //     cv::Size textSize = cv::getTextSize(classString, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
+        //     cv::Rect textBox(box.x, box.y - 40, textSize.width + 10, textSize.height + 20);
+
+        //     cv::rectangle(frame, textBox, color, cv::FILLED);
+        //     cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
+        // }
+        // Inference ends here...
+
+        // This is only for preview purposes
+        float scale = 0.8;
+        cv::resize(frame, frame, cv::Size(frame.cols*scale, frame.rows*scale));
+        // cv::imshow("Inference", frame);
+        // cv::waitKey(-1);
+        std::string outputFileName = "output/output_" + std::to_string(i) + ".jpg";
+        cv::imwrite(outputFileName, frame);
+        std::cout << "Saved result to " << outputFileName << std::endl;
     }
-    
-    Camera.release();
-    
-    printf("Web服务已停止，主线程退出\n");
-    // fflush(stdout);
-    
-    return 0;
-}
-
-void sigint_handler(int signum) 
-{
-    printf("收到Ctrl+C，程序即将退出\n");
-    
-    // 设置运行标志为false，让主循环退出
-    running = false;
-    
-    // 停止web服务器
-    if (g_server) {
-        g_server->stop();
-    }
-    
-    // 给一点时间让线程清理
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
-    exit(0);
-}
-
-void cleanup()
-{
-    printf("程序退出，执行清理操作\n");
-}
-
-void pit_callback()
-{
-    imu660ra_get_acc();
-    imu660ra_get_gyro();
-    encoder_left  = encoder_get_count(ENCODER_1);
-    encoder_right = encoder_get_count(ENCODER_2);
 }

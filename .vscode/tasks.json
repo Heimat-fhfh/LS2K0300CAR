@@ -6,9 +6,11 @@
             "type": "shell",
             "command": "g++",
             "args": [
-                "-std=c++11",
+                "-std=c++17",
                 "-I",
                 "${fileDirname}/include/",
+                "-I",
+                "${fileDirname}/third_party/cpp-httplib-master",
                 "-g",
                 "${file}",
                 "-g",
