@@ -1,41 +1,40 @@
 {
-    "version": "2.0.0",
     "tasks": [
         {
-            "label": "g++ build",
-            "type": "shell",
-            "command": "g++",
-            "args": [
-                "-std=c++11",
-                "-I",
-                "${fileDirname}/include/",
-                "-g",
-                "${file}",
-                "-g",
-                "${fileDirname}/src/*.cpp",
-                "-o",
-                "${fileDirname}/${fileBasenameNoExtension}",
-                "`pkg-config","--libs","--cflags","opencv4`",
-            ],
-            "options": {
-                "cwd": "${fileDirname}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": "build",
-            "detail": "compiler: /usr/bin/g++"
-        },
-        {
-            "type": "shell",
-            "label": "C/C++: g++ 生成活动文件",
-            "command": "/usr/bin/g++",
+            "type": "cppbuild",
+            "label": "C/C++: g++.exe 生成活动文件",
+            "command": "D:\\Work\\project\\msys64\\mingw64\\bin\\g++.exe",
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "${fileDirname}\\bin\\${fileBasenameNoExtension}.exe",
+                "-I", "D:/Work/project/LS2K0300CAR/include",
+                "-I", "D:/Work/project/opencv-4.10.0/win_build/install/include",
+                "-I", "D:/Work/project/opencv-4.10.0/win_build/install/include/opencv2",
+                // OpenCV 库路径
+                "-L", "D:/Work/project/opencv-4.10.0/win_build/install/x64/mingw/lib",
+                // 标准 C++ 库
+                "-std=c++17",
+                "-O2",
+                "-march=native",
+                // 所有 OpenCV 库
+                "-lopencv_calib3d4100",
+                "-lopencv_core4100",
+                "-lopencv_dnn4100",
+                "-lopencv_features2d4100",
+                "-lopencv_flann4100",
+                "-lopencv_gapi4100",
+                "-lopencv_highgui4100",
+                "-lopencv_imgcodecs4100",
+                "-lopencv_imgproc4100",
+                "-lopencv_ml4100",
+                "-lopencv_objdetect4100",
+                "-lopencv_photo4100",
+                "-lopencv_stitching4100",
+                "-lopencv_video4100",
+                "-lopencv_videoio4100"
             ],
             "options": {
                 "cwd": "${fileDirname}"
@@ -49,5 +48,6 @@
             },
             "detail": "调试器生成的任务。"
         }
-    ]
+    ],
+    "version": "2.0.0"
 }

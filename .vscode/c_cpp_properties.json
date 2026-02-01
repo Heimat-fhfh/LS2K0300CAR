@@ -1,21 +1,26 @@
 {
     "configurations": [
         {
-            "name": "Linux",
+            "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/include/",
-                "/usr/local/include/**",
-                "/home/fhfh/Work/LS2K0300CAR/ls2k0300_linux_4.19/include/**",
-                "/home/fhfh/Work/LS2K0300CAR/ls2k0300_linux_4.19/arch/loongarch/include/**",
-                "/home/fhfh/Work/LS2K0300CAR/ls2k0300_linux_4.19/arch/loongarch/include/generated/**",
-                "/home/fhfh/Work/LS2K0300CAR/third_party/**"
+                "${workspaceFolder}/include/**",
+                "${workspaceFolder}/src/**",
+                
+                "D:/Work/project/opencv-4.10.0/win_build/install/include",
+                "D:/Work/project/opencv-4.10.0/win_build/install/include/opencv2",
+                "D:/Work/project/opencv-4.10.0/include",
+                "D:/Work/project/opencv-4.10.0/modules/**/include",
+                
+                // MinGW 标准库路径
+                "D:/Work/project/msys64/mingw64/include",
+                "D:/Work/project/msys64/mingw64/lib/gcc/x86_64-w64-mingw32/15.2.0/include"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/g++",
+            "compilerPath": "g++",
             "cStandard": "c11",
             "cppStandard": "c++11",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "windows-gcc-x64"
         }
     ],
     "version": 4
