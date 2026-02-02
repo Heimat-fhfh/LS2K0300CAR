@@ -6,3 +6,5 @@ opencv_4_10_build/
 third_party/
 train_data/
 onnxruntime/
+yolo/upload/pictures/**
+yolo/upload/model/**

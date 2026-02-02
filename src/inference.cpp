@@ -27,7 +27,7 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
 
     // Preprocess
     cv::Mat blob;
-    cv::dnn::blobFromImage(modelInput, blob, 1.0 / 255.0, modelShape, cv::Scalar(), false, false);
+    cv::dnn::blobFromImage(modelInput, blob, 1.0 / 255.0, modelShape, cv::Scalar(), true, false);
     net.setInput(blob);
 
     // Forward

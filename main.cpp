@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <getopt.h>
+#include <filesystem>
 
 #include <opencv2/opencv.hpp>
 
@@ -10,6 +11,7 @@
 
 using namespace std;
 using namespace cv;
+namespace fs = std::filesystem;
 
 int main(int argc, char **argv)
 {
@@ -28,29 +30,32 @@ int main(int argc, char **argv)
     // Note that in this example the classes are hard-coded and 'classes.txt' is a place holder.
     // Inference inf("/home/fhfh/Work/LS2K0300CAR/third_party/ultralytics/yolo26n.onnx", cv::Size(160, 160), "classes.txt", runOnGPU);
     // Inference inf(projectBasePath + "/yolov8s.onnx", cv::Size(640, 640), "classes.txt", runOnGPU);
-    cout << "Loading model..." << std::endl;
+    std::cout << "Loading model..." << std::endl;
     Inference inf("yolo/upload/model/v8V3.onnx", cv::Size(96, 96), "classes.txt", runOnGPU);
-    cout << "Model loaded." << std::endl;
+    std::cout << "Model loaded." << std::endl;
 
     std::vector<std::string> imageNames;
-    imageNames.push_back("yolo/upload/pictures/dagger_001.jpg");
-    cout << "Added image path." << std::endl;
-    imageNames.push_back("yolo/upload/pictures/explosive_001.jpg");
-    cout << "Added image path." << std::endl;
-    imageNames.push_back("yolo/upload/pictures/first_aid_kit_001.jpg");
-    cout << "Added image path." << std::endl;
-    // imageNames.push_back(projectBasePath + "/ultralytics/assets/bus.jpg");
-    // imageNames.push_back(projectBasePath + "/ultralytics/assets/zidane.jpg");
-    // imageNames.push_back(projectBasePath + "/ultralytics/assets/firearms_001.jpg");
-    // imageNames.push_back("/home/fhfh/Work/LS2K0300CAR/yolo/explosive_001.jpg");
-    // imageNames.push_back("/home/fhfh/Work/LS2K0300CAR/yolo/dagger_001.jpg");
-    // imageNames.push_back("/home/fhfh/Work/LS2K0300CAR/yolo/first_aid_kit_001.jpg");
+    std::string folder = "yolo/upload/pictures";
+
+    for (const auto& entry : fs::directory_iterator(folder)) {
+        if (entry.is_regular_file()) {
+            std::string path = entry.path().string();
+
+            // 可选：只添加常见图片格式
+            std::string ext = entry.path().extension().string();
+            if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp") {
+                imageNames.push_back(path);
+                std::cout << "Added image path: " << path << std::endl;
+            }
+        }
+    }
+
     
     for (int i = 0; i < imageNames.size(); ++i)
     {
         cv::Mat frame = cv::imread(imageNames[i]);
 
-        cout << "read image" << std::endl;
+        std::cout << "read image" << std::endl;
         if (frame.empty()) {
             std::cerr << "Error: Could not load image" << std::endl;
             return 1;
