@@ -1,104 +1,76 @@
-// Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-
+#include "rate_control.hpp"
+#include <atomic>
+#include <csignal>
 #include <iostream>
-#include <vector>
-#include <getopt.h>
-#include <filesystem>
 
-#include <opencv2/opencv.hpp>
+using namespace rate_control;
 
-#include "inference.h"
+static std::atomic<bool> g_stop{false};
 
-using namespace std;
-using namespace cv;
-namespace fs = std::filesystem;
+static void on_sigint(int) {
+    g_stop.store(true);
+}
 
-int main(int argc, char **argv)
-{
-    std::string projectBasePath = "/home/fhfh/Work/LS2K0300CAR/third_party/ultralytics"; // Set your ultralytics base path
+int main() {
+    std::signal(SIGINT, on_sigint);
 
-    bool runOnGPU = false;
+    Scheduler sch;
 
-    //
-    // Pass in either:
-    //
-    // "yolov8s.onnx" or "yolov5s.onnx"
-    //
-    // To run Inference with yolov8/yolov5 (ONNX)
-    //
+    // 假装这些是你的业务函数（建议短小、非阻塞）
+    sch.add_task("motor_control_200hz", 200.0, [](){
+        // 电机PWM/闭环控制（高频）
+        // TODO: write_motor_pwm();
+    }, MissPolicy::CatchUp);
 
-    // Note that in this example the classes are hard-coded and 'classes.txt' is a place holder.
-    // Inference inf("/home/fhfh/Work/LS2K0300CAR/third_party/ultralytics/yolo26n.onnx", cv::Size(160, 160), "classes.txt", runOnGPU);
-    // Inference inf(projectBasePath + "/yolov8s.onnx", cv::Size(640, 640), "classes.txt", runOnGPU);
-    std::cout << "Loading model..." << std::endl;
-    Inference inf("yolo/upload/model/v8V3.onnx", cv::Size(96, 96), "classes.txt", runOnGPU);
-    std::cout << "Model loaded." << std::endl;
+    sch.add_task("sensor_100hz", 100.0, [](){
+        // IMU/里程计/超声/ToF等
+        // TODO: read_sensors();
+    }, MissPolicy::CatchUp);
 
-    std::vector<std::string> imageNames;
-    std::string folder = "yolo/upload/pictures";
+    sch.add_task("image_read_30hz", 30.0, [](){
+        // 摄像头取帧（尽量用非阻塞/双缓冲）
+        // TODO: camera_grab();
+    }, MissPolicy::Skip); // 取帧更适合 Skip：落后就丢帧，保证“新鲜度”
 
-    for (const auto& entry : fs::directory_iterator(folder)) {
-        if (entry.is_regular_file()) {
-            std::string path = entry.path().string();
+    sch.add_task("perception_15hz", 15.0, [](){
+        // 目标识别/语义分割等
+        // TODO: run_inference();
+    }, MissPolicy::Skip); // 感知任务也常用 Skip，避免补课导致延迟越来越大
 
-            // 可选：只添加常见图片格式
-            std::string ext = entry.path().extension().string();
-            if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp") {
-                imageNames.push_back(path);
-                std::cout << "Added image path: " << path << std::endl;
-            }
+    sch.add_task("path_detect_20hz", 20.0, [](){
+        // 车道线/路径检测
+        // TODO: detect_path();
+    }, MissPolicy::CatchUp);
+
+    sch.add_task("display_10hz", 10.0, [](){
+        // UI/OSD/串口屏等
+        // TODO: render_display();
+    }, MissPolicy::Skip);
+
+    sch.add_task("upload_1hz", 1.0, [](){
+        // 上传遥测数据/日志
+        // TODO: upload_telemetry();
+    }, MissPolicy::Skip);
+
+    // 每2秒打印一次统计信息（不建议太频繁打印，影响实时性）
+    Rate print_rate(0.5, MissPolicy::Skip);
+    print_rate.reset();
+
+    std::cout << "Smartcar scheduler running. Press Ctrl+C to stop.\n";
+
+    sch.add_task("stats_printer_0.5hz", 0.5, [&](){
+        std::cout << "\n--- Stats ---\n";
+        for (const auto& t : sch.tasks()) {
+            std::cout << t.name
+                      << " cycles=" << t.stats.cycles
+                      << " overruns=" << t.stats.overruns
+                      << " max_late_ns=" << t.stats.max_late_ns
+                      << "\n";
         }
-    }
+    }, MissPolicy::Skip);
 
-    
-    for (int i = 0; i < imageNames.size(); ++i)
-    {
-        cv::Mat frame = cv::imread(imageNames[i]);
+    sch.run([](){ return g_stop.load(); });
 
-        std::cout << "read image" << std::endl;
-        if (frame.empty()) {
-            std::cerr << "Error: Could not load image" << std::endl;
-            return 1;
-        }
-
-        // Inference starts here...
-        std::vector<Detection> output = inf.runInference(frame);
-        if (!output.empty()) {
-            auto &r = output[0];
-            std::string txt = r.className + " " + std::to_string(r.confidence).substr(0, 5);
-            cv::putText(frame, txt, cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0,255,0), 2);
-        }
-
-        // int detections = output.size();
-        // std::cout << "Number of detections:" << detections << std::endl;
-
-        // for (int i = 0; i < detections; ++i)
-        // {
-        //     Detection detection = output[i];
-
-        //     cv::Rect box = detection.box;
-        //     cv::Scalar color = detection.color;
-
-        //     // Detection box
-        //     cv::rectangle(frame, box, color, 2);
-
-        //     // Detection box text
-        //     std::string classString = detection.className + ' ' + std::to_string(detection.confidence).substr(0, 4);
-        //     cv::Size textSize = cv::getTextSize(classString, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
-        //     cv::Rect textBox(box.x, box.y - 40, textSize.width + 10, textSize.height + 20);
-
-        //     cv::rectangle(frame, textBox, color, cv::FILLED);
-        //     cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
-        // }
-        // Inference ends here...
-
-        // This is only for preview purposes
-        float scale = 0.8;
-        cv::resize(frame, frame, cv::Size(frame.cols*scale, frame.rows*scale));
-        // cv::imshow("Inference", frame);
-        // cv::waitKey(-1);
-        std::string outputFileName = "output/output_" + std::to_string(i) + ".jpg";
-        cv::imwrite(outputFileName, frame);
-        std::cout << "Saved result to " << outputFileName << std::endl;
-    }
+    std::cout << "Stopped.\n";
+    return 0;
 }
