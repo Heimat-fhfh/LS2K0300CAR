@@ -32,7 +32,6 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 			break; 
 		}    // 演示视频
         case VIDEO_0:{ Camera.open("/dev/video0",CAP_V4L2); break; }  // 摄像头video0
-        case VIDEO_1:{ Camera.open("/dev/video1",CAP_V4L2); break; }  // 摄像头video1
     }
 
 	if (Camera_EN == DEMO_VIDEO){
@@ -148,27 +147,14 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
 void ImgProcess::ImgPrepare(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
 	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    (Img_Store_p -> Img_Track) = (Img_Store_p -> Img_Color).clone();
-	cvtColor((Img_Store_p -> Img_Color) , (Img_Store_p -> Img_Gray) , COLOR_BGR2GRAY);  // 彩色图像灰度化
-	// blur((Img_Store_p -> Img_Gray) , (Img_Store_p -> Img_Gray) , Size(18,18) , Point(-1,-1));	// 均值滤波	
-	threshold((Img_Store_p -> Img_Gray) , (Img_Store_p -> Img_OTSU) , 0 , 255 , THRESH_BINARY | THRESH_OTSU);   //灰度图像二值化
-	ImgProcess::ImgSobel((Img_Store_p -> Img_OTSU));	//Sobel算子处理
-	threshold((Img_Store_p -> Img_OTSU) , (Img_Store_p -> Img_OTSU) , 0 , 255 , THRESH_BINARY | THRESH_OTSU);  //灰度图像二值化
-
-	// ImgProcess::ImgSharpen((Img_Store_p -> Img_OTSU),5);
-	for(int i = 0;i <= JSON_TrackConfigData.DilateErode_Factor[0];i++)
-	{
-		dilate((Img_Store_p -> Img_OTSU),(Img_Store_p -> Img_OTSU),(Img_Store_p -> Dilate_Kernel));
-	}
-	for(int i = 0;i <= JSON_TrackConfigData.DilateErode_Factor[0];i++)
-	{
-		erode((Img_Store_p -> Img_OTSU),(Img_Store_p -> Img_OTSU),(Img_Store_p -> Erode_Kernel));
-	}
+	
 	// 加白框防止八邻域寻线出错
-	line((Img_Store_p -> Img_OTSU),Point(0,0),Point(319,0),Scalar(255),3);
-	line((Img_Store_p -> Img_OTSU),Point(319,0),Point(319,239),Scalar(255),3);
-	line((Img_Store_p -> Img_OTSU),Point(319,239),Point(0,239),Scalar(255),3);
-	line((Img_Store_p -> Img_OTSU),Point(0,239),Point(0,0),Scalar(255),3);
+	int border_thickness = 3;
+	rectangle(Img_Store_p->Img_OTSU, 
+			  Point(border_thickness, border_thickness),                     // 左上角
+			  Point(CAMERA_W - border_thickness - 1, CAMERA_H - border_thickness - 1), // 右下角
+			  Scalar(255),  // 白色
+			  border_thickness);
 }
 
 
@@ -514,27 +500,6 @@ void ImgProcess::ImgReferenceLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 	line(Img_Store_p->Img_Track,Point(0,Data_Path_p->findrow),Point(Img_Store_p->Img_Track.cols-1,Data_Path_p->findrow),Scalar(0,255,0),1);	// 前瞻点线
 }
 
-
-/*
-	ImgChannel说明
-	图像通道提取
-*/
-Mat ImgProcess::ImgChannel(Mat Img,RGB_Channel RGB_Channel)
-{
-	vector<Mat> Channel;
-	Mat RGB_Img;
-	split(Img,Channel);
-	switch(RGB_Channel)
-	{
-		case R_Channel:{ Channel[0] = Scalar(0); Channel[1] = Scalar(0); break;}
-		case G_Channel:{ Channel[0] = Scalar(0); Channel[2] = Scalar(0); break;}
-		case B_Channel:{ Channel[1] = Scalar(0); Channel[2] = Scalar(0); break;}
-	}
-
-	merge(Channel,RGB_Img);
-
-	return RGB_Img;
-}
 
 void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {

@@ -63,7 +63,42 @@
         "cinttypes": "cpp",
         "forward_list": "cpp",
         "valarray": "cpp"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+        "**/document": false,
+        "**/third_party": false
+    },
+    "C_Cpp.default.intelliSenseMode": "gcc-x64",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.default.cStandard": "c11",
+    "C_Cpp.files.exclude": {
+        "**/.vscode": true,
+        "**/.vs": true,
+        "**/document": true,
+        "**/third_party": true,
+        "**/build":true,
+        "**/ls2k0300_linux_4.19":true,
+        "**/yolo":true,
+        "**/web":true,
+        "**/train_data":true,
+        "**/test":true,
+        "**/opencv_4_10_build/bin":true,
+        "**/opencv_4_10_build/lib":true,
+        "**/opencv_4_10_build/share":true,
+        "**/config":true,
+        "**/.rubbish":true,
     }
+    
 //     ,
 //     "code-runner.executorMap": {
 //     "cpp": "cd $dir && g++ $fileName -o $fileNameWithoutExt -I '头文件路径' && $dir$fileNameWithoutExt",

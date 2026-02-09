@@ -1,5 +1,8 @@
 #pragma once
 
+#define CAMERA_W 320
+#define CAMERA_H 240
+
 #define image_w	320	        //图像宽度
 #define img_resize_h    0
 #define image_h	(240-img_resize_h)	//图像高度
@@ -23,8 +26,6 @@ typedef unsigned          char uint8;
 typedef unsigned short     int uint16;
 typedef unsigned           int uint32;
 
-#define CAMERA_H  image_h
-#define CAMERA_W  image_w
 #define OUT_H  image_h
 #define OUT_W  image_w
 

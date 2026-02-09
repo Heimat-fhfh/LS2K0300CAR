@@ -575,8 +575,6 @@ bool changetimes = 0;
 */
 void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSON_PIDConfigData *JSON_PIDConfigData_p)
 {
-    Function_EN_p -> JSON_FunctionConfigData_v.clear();
-    Data_Path_p -> JSON_TrackConfigData_v.clear();
     JSON_FunctionConfigData JSON_FunctionConfigData;
     JSON_TrackConfigData JSON_TrackConfigData;
 
@@ -640,9 +638,6 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_PIDConfigData_p->anglespeedpid.Dlimit = ConfigData.at("ANGLE_DL");
     JSON_PIDConfigData_p->anglespeedpid.Reslimit = ConfigData.at("ANGLE_RESL");
 
-    JSON_FunctionConfigData.imgshownum = ConfigData.at("IMG_SHOW_NUM");    // 获取图像显示帧数
-    JSON_FunctionConfigData.cap_exposure = ConfigData.at("CAP_EXPOSURE");    // 设置摄像头曝光
-    JSON_FunctionConfigData.exposure_auto = ConfigData.at("EXPOSURE_AUTO");    // 设置摄像头自动曝光，1为手动曝光；0.25为自动曝光
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数
     JSON_FunctionConfigData.Camera_EN = CameraKind(ConfigData.at("CAMERA_EN"));   // 获取摄像头使能参数
@@ -675,38 +670,11 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_TrackConfigData.CommonMotorSpeed[1] = ConfigData.at("LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED"); // 小角度弯道电机速度
     JSON_TrackConfigData.CommonMotorSpeed[2] = ConfigData.at("BIG_ANGLE_BEND_TRACK_MOTOR_SPEED"); // 大角度弯道电机速度
     JSON_TrackConfigData.CommonMotorSpeed[3] = ConfigData.at("ACROSS_TRACK_MOTOR_SPEED"); // 十字赛道电机速度
-    JSON_TrackConfigData.CommonMotorSpeed[4] = ConfigData.at("CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE"); // 圆环赛道电机速度
-    JSON_TrackConfigData.CommonMotorSpeed[5] = ConfigData.at("CIRCLE_TRACK_MOTOR_SPEED_INSIDE"); // 圆环赛道电机速度
+    JSON_TrackConfigData.CommonMotorSpeed[4] = ConfigData.at("CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE"); // 圆环外赛道电机速度
+    JSON_TrackConfigData.CommonMotorSpeed[5] = ConfigData.at("CIRCLE_TRACK_MOTOR_SPEED_INSIDE"); // 圆环内赛道电机速度
     JSON_TrackConfigData.BridgeZoneMotorSpeed = ConfigData.at("BRIDGE_ZONE_MOTOR_SPEED"); // 桥梁区域电机速度
-    JSON_TrackConfigData.DangerZoneMotorSpeed = ConfigData.at("DANGER_ZONE_MOTOR_SPEED");   // 危险区域电机速度
-    JSON_TrackConfigData.RescueZoneMotorSpeed = ConfigData.at("RESCUE_ZONE_MOTOR_SPEED");   // 救援区域电机速度 
     JSON_TrackConfigData.CrosswalkZoneMotorSpeed = ConfigData.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE"); // 斑马线区域准备停车电机速度
     JSON_TrackConfigData.Circle_In_Prepare_Time = ConfigData.at("CIRCLE_IN_PREPARE_TIME");  // 准备入环限定时间
-
-    JSON_TrackConfigData.DilateErode_Factor[0] = ConfigData.at("DILATE_FACTOR");  // 获取图形学膨胀系数
-    JSON_TrackConfigData.DilateErode_Factor[1] = ConfigData.at("ERODE_FACTOR");  // 获取图形学腐蚀系数
-    JSON_TrackConfigData.Filter_Factor =ConfigData.at("FILTER_FACTOR"); // 获取路径线滤波强度系数
-    
-    JSON_TrackConfigData.DangerTime = ConfigData.at("DANGER_TIME");  // 获取进入危险区域的时间
-    JSON_TrackConfigData.BridgeTime = ConfigData.at("BRIDGE_TIME");   // 获取进入桥梁区域的时间
-    JSON_TrackConfigData.RescueTime = ConfigData.at("RESCUE_TIME"); // 获取救援区进入车库前准备时间上限
-    JSON_TrackConfigData.CrosswalkStopTime = ConfigData.at("CROSSWALK_STOP_TIME");   // 获取进入斑马线区域后停车的时间
-    JSON_TrackConfigData.RescueGarageTime = ConfigData.at("RESCUE_GARAGE_TIME");   // 获取救援区域过标志后与开始判断进车库时机的时间间隔 
-    JSON_TrackConfigData.RescueZoneConeAvgY = ConfigData.at("RESCUE_ZONE_CONE_AVG_Y"); // 获取救援区域锥桶平均高度阈值
-    JSON_TrackConfigData.Crosswalk_Y = ConfigData.at("CROSSWALK_IDENTIFY_Y");   // 获取斑马线识别纵坐标阈值
-    JSON_TrackConfigData.Bomb_Y = ConfigData.at("BOMB_IDENTIFY_Y");   // 获取爆炸物识别纵坐标阈值
-    JSON_TrackConfigData.Bridge_Y = ConfigData.at("BRIDGE_IDENTIFY_Y");   // 获取桥识别纵坐标阈值
-    JSON_TrackConfigData.Rescue_Y = ConfigData.at("RESCUE_IDENTIFY_Y");   // 获取救援区域标识牌识别纵坐标阈值 
-    JSON_TrackConfigData.Danger_Zone_Barrier_Y = ConfigData.at("DANGER_ZONE_BARRIER_Y");    // 获取危险区域障碍物准备避障高度
-    JSON_TrackConfigData.Danger_Zone_Barrier_Servor_Angle_Factor[0] = ConfigData.at("DANGER_ZONE_CONE_SERVOR_ANGLE_FACTOR");    // 获取危险区域锥桶准备避障舵机角度倍率系数 
-    JSON_TrackConfigData.Danger_Zone_Barrier_Servor_Angle_Factor[1] = ConfigData.at("DANGER_ZONE_BLOCK_SERVOR_ANGLE_FACTOR");    // 获取危险区域锥桶准备避障舵机角度倍率系数 
-    JSON_TrackConfigData.DangerZone_Cone_Radius = ConfigData.at("DANGER_ZONE_CONE_RADIUS");   // 危险区域锥桶补线圆圈半径
-    JSON_TrackConfigData.DangerZone_Block_Radius = ConfigData.at("DANGER_ZONE_BLOCK_RADIUS");   // 危险区域路障补线圆圈半径
-    JSON_TrackConfigData.DangerZoneForward = ConfigData.at("DANGER_ZONE_FORWARD");  // 危险区域前瞻值获取
-    JSON_TrackConfigData.BridgeZoneForward = ConfigData.at("BRIDGE_ZONE_FORWARD");  // 桥梁区域前瞻值获取
-
-    Function_EN_p -> JSON_FunctionConfigData_v.push_back(JSON_FunctionConfigData);
-    Data_Path_p -> JSON_TrackConfigData_v.push_back(JSON_TrackConfigData);
 
     cout << "<---------------------JSON参数获取成功--------------------->" << endl;
 }

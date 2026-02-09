@@ -6,10 +6,6 @@
 #ifndef _LIBDATA_STORE_H_
 #define _LIBDATA_STORE_H_
 
-// 串口接收初始化的调试参数
-#define Game_EN_Default 1   // 调试参数
-
-#define BAUDRATE 115200 // 串口波特率
 #define PI 3.1415926    // 圆周率
 
 /*
@@ -19,18 +15,7 @@ typedef enum CameraKind
 {
     DEMO_VIDEO = 0, // 演示视频
     VIDEO_0 = 1,  // USB摄像头1
-    VIDEO_1 = 2,  // USB摄像头2
 }CameraKind;
-
-/*
-    图像通道
-*/
-typedef enum RGB_Channel
-{
-    R_Channel = 0,  // 红色通道
-    G_Channel = 1,  // 绿色通道
-    B_Channel = 2   // 蓝色通道
-}RGB_Channel;
 
 /*
     主函数循环类型(状态机)
@@ -116,10 +101,6 @@ typedef struct JSON_FunctionConfigData
 */
 typedef struct JSON_TrackConfigData
 {
-    
-
-
-
     int Forward;    // 前瞻点
     int Default_Forward;    // 默认前瞻点，用于前瞻点初始化
     int Path_Search_Start;  // 寻路径起始点
@@ -134,29 +115,10 @@ typedef struct JSON_TrackConfigData
     int BendPointIdentifyAngle[2] = {0};    // 边线弯点识别角度
     int BendPointVectorDistance = 0;   // 边线弯点向量距离
     int CommonMotorSpeed[6] = {0};    // 电机速度：0.直道 1.小角度弯道 2.大角度弯道 3.十字赛道 4.圆环赛道(外) 5.圆环赛道(内)
-    int DilateErode_Factor[2] = {0};    // 图形学膨胀腐蚀系数
-    float Filter_Factor = 0;  // 路径线滤波强度系数
     int BridgeZoneMotorSpeed = 0;   // 桥梁区域电机速度
-    int DangerZoneMotorSpeed = 0;   // 危险区域电机速度
-    int RescueZoneMotorSpeed = 0;   // 救援区域电机速度
     int CrosswalkZoneMotorSpeed = 0;    // 斑马线区域电机准备停车速度
     int Circle_In_Prepare_Time = 0;    // 准备入环限定时间
-    int DangerTime = 0; // 进入危险区域的时间
-    int BridgeTime = 0; // 进入桥梁区域的时间
-    int RescueTime = 0; // 救援区进入车库前准备时间上限
-    int CrosswalkStopTime = 0;  // 进入斑马线区域停车的时间
-    int RescueGarageTime = 0;   // 获取救援区域过标志后与开始判断进车库时机的时间间隔
-    int RescueZoneConeAvgY = 0;  // 救援区域锥桶平均高度阈值
-    int Crosswalk_Y = 0;    // 斑马线识别纵坐标阈值
-    int Bomb_Y = 0; // 爆炸物识别纵坐标阈值
-    int Bridge_Y = 0;   // 桥识别纵坐标阈值
-    int Rescue_Y = 0;   // 救援区域识别标识牌纵坐标阈值
-    int Danger_Zone_Barrier_Y = 0;  // 危险区域障碍物准备避障纵坐标阈
-    float Danger_Zone_Barrier_Servor_Angle_Factor[2];  // 危险区域障碍物避障舵机角度倍率 
-    int DangerZone_Cone_Radius = 0; // 危险区域锥桶避障补线半径
-    int DangerZone_Block_Radius = 0; // 危险区域路障避障补线半径
-    int DangerZoneForward = 0;  // 危险区域前瞻值
-    int BridgeZoneForward = 0; // 桥梁区域前瞻值
+
 }JSON_TrackConfigData;
 
 struct InversePerspectiveMap {

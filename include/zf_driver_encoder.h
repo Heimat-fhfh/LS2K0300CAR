@@ -34,9 +34,6 @@
 #ifndef _zf_driver_encoder_h
 #define _zf_driver_encoder_h
 
-extern int encoder_left;
-extern int encoder_right;
-
 #include "zf_common_typedef.h"
 
 int16 encoder_get_count(const char *path);

@@ -5,6 +5,7 @@
 #define _LIBIMAGE_PROCESS_H_
 
 using namespace std;
+
 /*
     CameraInit说明
     摄像头初始化
@@ -177,15 +178,6 @@ class ImgProcess
             Data_Path_p 路径相关数据指针
         */
         void ImgReferenceLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
-
-
-        /*
-            图像通道提取
-            @参数说明
-            Img 传入需提取通道的图像
-            RGB_Channel 传入需提取的通道
-        */
-        cv::Mat ImgChannel(cv::Mat Img,RGB_Channel RGB_Channel);
 };
 
 #endif

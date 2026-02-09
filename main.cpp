@@ -1,76 +1,79 @@
-#include "rate_control.hpp"
-#include <atomic>
-#include <csignal>
-#include <iostream>
+#include "main.hpp"
 
-using namespace rate_control;
+using namespace std;
+using namespace cv;
 
-static std::atomic<bool> g_stop{false};
+IMUDevice imu;
 
-static void on_sigint(int) {
-    g_stop.store(true);
-}
 
 int main() {
-    std::signal(SIGINT, on_sigint);
+    if (main_init_task() == 1) { 
+        cout << "初始化成功" << endl; 
+    } else { 
+        cout << "初始化失败" << endl; return -1; 
+    }
+    // VideoCapture Camera; CameraInit(Camera,CameraKind::VIDEO_0,320,240,60);
+    
 
-    Scheduler sch;
 
-    // 假装这些是你的业务函数（建议短小、非阻塞）
-    sch.add_task("motor_control_200hz", 200.0, [](){
-        // 电机PWM/闭环控制（高频）
-        // TODO: write_motor_pwm();
-    }, MissPolicy::CatchUp);
-
-    sch.add_task("sensor_100hz", 100.0, [](){
-        // IMU/里程计/超声/ToF等
-        // TODO: read_sensors();
-    }, MissPolicy::CatchUp);
-
-    sch.add_task("image_read_30hz", 30.0, [](){
-        // 摄像头取帧（尽量用非阻塞/双缓冲）
-        // TODO: camera_grab();
-    }, MissPolicy::Skip); // 取帧更适合 Skip：落后就丢帧，保证“新鲜度”
-
-    sch.add_task("perception_15hz", 15.0, [](){
-        // 目标识别/语义分割等
-        // TODO: run_inference();
-    }, MissPolicy::Skip); // 感知任务也常用 Skip，避免补课导致延迟越来越大
-
-    sch.add_task("path_detect_20hz", 20.0, [](){
-        // 车道线/路径检测
-        // TODO: detect_path();
-    }, MissPolicy::CatchUp);
-
-    sch.add_task("display_10hz", 10.0, [](){
-        // UI/OSD/串口屏等
-        // TODO: render_display();
-    }, MissPolicy::Skip);
-
-    sch.add_task("upload_1hz", 1.0, [](){
-        // 上传遥测数据/日志
-        // TODO: upload_telemetry();
-    }, MissPolicy::Skip);
-
-    // 每2秒打印一次统计信息（不建议太频繁打印，影响实时性）
-    Rate print_rate(0.5, MissPolicy::Skip);
-    print_rate.reset();
-
-    std::cout << "Smartcar scheduler running. Press Ctrl+C to stop.\n";
-
-    sch.add_task("stats_printer_0.5hz", 0.5, [&](){
-        std::cout << "\n--- Stats ---\n";
-        for (const auto& t : sch.tasks()) {
-            std::cout << t.name
-                      << " cycles=" << t.stats.cycles
-                      << " overruns=" << t.stats.overruns
-                      << " max_late_ns=" << t.stats.max_late_ns
-                      << "\n";
-        }
-    }, MissPolicy::Skip);
-
-    sch.run([](){ return g_stop.load(); });
-
-    std::cout << "Stopped.\n";
+    // Camera.release();
     return 0;
+}
+
+void sigint_handler(int signum) 
+{
+    printf("收到Ctrl+C，程序即将退出\n");
+    
+    exit(0);
+}
+
+void cleanup()
+{
+    printf("程序退出，执行清理操作\n");
+}
+
+int main_init_task()
+{
+    // 任务初始化代码
+    atexit(cleanup);
+    signal(SIGINT, sigint_handler);
+    setbuf(stdout, NULL);
+    ips200_init("/dev/fb0");
+    
+    // 显示IP地址
+    display_ip_address(0, 181);
+    printf("IP address displayed on screen.\n");
+
+    if (!imu.initialize()) {
+        printf("Failed to initialize IMU device\n");
+        return -1;
+    }
+
+    imu_device_type_t type = imu.get_device_type();
+    printf("IMU Device Type: %d\n", type);
+
+    for (int i = 0; i < 10; i++) {
+        // 更新所有数据
+        if (imu.update_all_data()) {
+            // 获取完整数据
+            const imu_raw_data_t& data = imu.get_raw_data();
+            
+            printf("Sample %d:\n", i + 1);
+            printf("  Acc: X=%6d, Y=%6d, Z=%6d\n", data.acc_x, data.acc_y, data.acc_z);
+            printf("  Gyro: X=%6d, Y=%6d, Z=%6d\n", data.gyro_x, data.gyro_y, data.gyro_z);
+            
+            printf("\n");
+        }
+        
+        // 延时100ms
+        usleep(100000);
+    }
+
+    return 1;
+}
+
+void pit_callback()
+{
+    encoder_get_count(ENCODER_1);
+    encoder_get_count(ENCODER_2);
 }
