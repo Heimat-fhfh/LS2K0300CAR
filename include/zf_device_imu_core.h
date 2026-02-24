@@ -1,5 +1,7 @@
 // 1.0 zf_device_imu_core.h - 优化版本
 
+// imu数据更新频率约为500hz
+
 #ifndef _ZF_DEVICE_IMU_CORE_H_
 #define _ZF_DEVICE_IMU_CORE_H_
 

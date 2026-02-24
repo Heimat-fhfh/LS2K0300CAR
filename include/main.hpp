@@ -3,14 +3,18 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <chrono>
+
+#include <atomic>
 #include <cmath>
-#include <iostream>
+#include <chrono>
+#include <csignal>
+#include <cstdlib>
 #include <iomanip>
+#include <iostream>
 #include <math.h>		
 #include <stdlib.h>
 #include <thread>
-#include <atomic>
+
 #include "base.h"
 #include "common_system.h"
 #include "common_program.h"
@@ -27,6 +31,8 @@
 #include "myacross.h"
 #include "display_show.h"
 
+#include "encoder.hpp"
+#include "DualMotorController.h"
 
 #define SERVO_MOTOR1_PWM        "/dev/zf_device_pwm_servo"
 

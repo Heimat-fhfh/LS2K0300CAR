@@ -102,7 +102,7 @@ int main_init_task()
         
         // 示例4：转弯
         std::cout << "右转..." << std::endl;
-        motors->setSpeeds(0.4f, 0.2f);  // 左轮40%，右轮20%
+        motors->setSpeeds(0.8f, 0.8f);  // 左轮40%，右轮20%
         usleep(1500000);
         
     } catch (const std::exception& e) {
@@ -131,7 +131,9 @@ int main_init_task()
                 int16_t right_value = encoder_right.readCount();
                 
                 std::cout << "Encoder values - Left: " << left_value 
+                         << " (" << std::dec << static_cast<int>(left_value) << ")"
                          << ", Right: " << right_value 
+                         << " (" << std::dec << static_cast<int>(right_value) << ")"
                          << std::endl;
                 
             } catch (const EncoderException& e) {
