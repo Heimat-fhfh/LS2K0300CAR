@@ -8,7 +8,7 @@ using namespace std::chrono;
 IMUDevice imu;
 std::unique_ptr<DualMotorController> motors;
 Encoder encoder_left("/dev/zf_encoder_1");
-Encoder encoder_right("/dev/zf_encoder_2");
+Encoder encoder_right("/dev/zf_encoder_2", true); // 右轮编码器取反
 
 int main() {
     if (main_init_task() == EXIT_SUCCESS) { 
@@ -102,8 +102,8 @@ int main_init_task()
         
         // 示例4：转弯
         std::cout << "右转..." << std::endl;
-        motors->setSpeeds(0.4f, 0.2f);  // 左轮40%，右轮20%
-        usleep(1500000);
+        motors->setSpeeds(0.3f, 0.3f);
+        usleep(2000000);
         
     } catch (const std::exception& e) {
         std::cerr << "错误: " << e.what() << std::endl;
@@ -125,14 +125,20 @@ int main_init_task()
                   << "  Right: " << encoder_right.devicePath() << "\n\n";
         
         // 主循环 - 直接读取两个编码器
+        std::cout << "Conversion factor: " << encoder_left.conversionFactor() << std::endl;
         for (int i = 0; i < 3; i++) {
             try {
-                int16_t left_value = encoder_left.readCount();
-                int16_t right_value = encoder_right.readCount();
+                // int16_t left_value = encoder_left.readCount();
+                // int16_t right_value = encoder_right.readCount();
                 
-                std::cout << "Encoder values - Left: " << left_value 
-                         << ", Right: " << right_value 
-                         << std::endl;
+                // std::cout << "Encoder values - Left: " << left_value 
+                //          << ", Right: " << right_value 
+                //          << std::endl;
+            
+                // 直接读取速度值(m/s)
+                auto left_speed = encoder_left.readSpeed();
+                auto right_speed = encoder_right.readSpeed();
+                std::cout << "Speed - Left: " << left_speed << " m/s, Right: " << right_speed << " m/s" << std::endl;
                 
             } catch (const EncoderException& e) {
                 std::cerr << "Read error: " << e.what() << std::endl;
