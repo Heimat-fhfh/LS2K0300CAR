@@ -1,6 +1,6 @@
 #include "common_system.h"
 #include "common_program.h"
-#include "PID.h"
+#include "PID.hpp"
 #include "AAAdefine.h"
 
 #ifndef _LIBDATA_STORE_H_
@@ -64,14 +64,6 @@ typedef enum CircleTrackStep
 */
 typedef struct JSON_PIDConfigData
 {
-    PID motorpid;
-    
-    PID anglespeedpid;
-
-    PID servopid;
-
-    PID pixelpid;
-
     int speedl;
     int speedr;
 

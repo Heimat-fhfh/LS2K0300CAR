@@ -606,38 +606,6 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_PIDConfigData_p->speedl = ConfigData.at("SPEED_L");    // 获取电机低速
     JSON_PIDConfigData_p->speedr = ConfigData.at("SPEED_R");    // 获取电机高速
 
-    JSON_PIDConfigData_p->motorpid.Kp = ConfigData.at("MOTOR_KP");
-    JSON_PIDConfigData_p->motorpid.Ki = ConfigData.at("MOTOR_KI");
-    JSON_PIDConfigData_p->motorpid.Kd = ConfigData.at("MOTOR_KD");
-    JSON_PIDConfigData_p->motorpid.Plimit = ConfigData.at("MOTOR_PL");
-    JSON_PIDConfigData_p->motorpid.Ilimit = ConfigData.at("MOTOR_IL");
-    JSON_PIDConfigData_p->motorpid.Dlimit = ConfigData.at("MOTOR_DL");
-    JSON_PIDConfigData_p->motorpid.Reslimit = ConfigData.at("MOTOR_RESL");
-
-    JSON_PIDConfigData_p->pixelpid.Kp = ConfigData.at("PIXEL_KP");
-    JSON_PIDConfigData_p->pixelpid.Ki = ConfigData.at("PIXEL_KI");
-    JSON_PIDConfigData_p->pixelpid.Kd = ConfigData.at("PIXEL_KD");
-    JSON_PIDConfigData_p->pixelpid.Plimit = ConfigData.at("PIXEL_PL");
-    JSON_PIDConfigData_p->pixelpid.Ilimit = ConfigData.at("PIXEL_IL");
-    JSON_PIDConfigData_p->pixelpid.Dlimit = ConfigData.at("PIXEL_DL");
-    JSON_PIDConfigData_p->pixelpid.Reslimit = ConfigData.at("PIXEL_RESL");
-
-    JSON_PIDConfigData_p->servopid.Kp = ConfigData.at("SERVO_KP");
-    JSON_PIDConfigData_p->servopid.Ki = ConfigData.at("SERVO_KI");
-    JSON_PIDConfigData_p->servopid.Kd = ConfigData.at("SERVO_KD");
-    JSON_PIDConfigData_p->servopid.Plimit = ConfigData.at("SERVO_PL");
-    JSON_PIDConfigData_p->servopid.Ilimit = ConfigData.at("SERVO_IL");
-    JSON_PIDConfigData_p->servopid.Dlimit = ConfigData.at("SERVO_DL");
-    JSON_PIDConfigData_p->servopid.Reslimit = ConfigData.at("SERVO_RESL");
-
-    JSON_PIDConfigData_p->anglespeedpid.Kp = ConfigData.at("ANGLE_KP");
-    JSON_PIDConfigData_p->anglespeedpid.Ki = ConfigData.at("ANGLE_KI");
-    JSON_PIDConfigData_p->anglespeedpid.Kd = ConfigData.at("ANGLE_KD");
-    JSON_PIDConfigData_p->anglespeedpid.Plimit = ConfigData.at("ANGLE_PL");
-    JSON_PIDConfigData_p->anglespeedpid.Ilimit = ConfigData.at("ANGLE_IL");
-    JSON_PIDConfigData_p->anglespeedpid.Dlimit = ConfigData.at("ANGLE_DL");
-    JSON_PIDConfigData_p->anglespeedpid.Reslimit = ConfigData.at("ANGLE_RESL");
-
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数
     JSON_FunctionConfigData.Camera_EN = CameraKind(ConfigData.at("CAMERA_EN"));   // 获取摄像头使能参数
