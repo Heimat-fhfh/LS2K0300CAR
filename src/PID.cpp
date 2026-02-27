@@ -2,6 +2,9 @@
 
 #include "PID.hpp"
 #include <cmath>
+#include <iostream>
+
+using namespace std;
 
 
 namespace Control {
@@ -112,6 +115,7 @@ double PID::calculate(double setpoint, double feedback, double dt) {
     
     // 计算总输出
     double output = pTerm + iTerm + dTerm;
+    // cout << "PID Debug - P: " << pTerm << ", I: " << iTerm << ", D: " << dTerm << ", Output before clamp: " << output << endl;
     clampValue(output, m_params.limitOutput);
     
     // 更新状态

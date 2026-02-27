@@ -44,6 +44,10 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <cerrno>
 
 #include "stdio.h"
 #include "stdint.h"

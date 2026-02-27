@@ -201,7 +201,7 @@ int motor_control_task()
     motors->setMaxDutyLimits(50.0f);
     
     // 控制参数
-    double targetSpeed = 1.0;
+    double targetSpeed = 3.0;
     const double controlPeriod = 0.01;
     
     // 监控变量

@@ -20,6 +20,7 @@
 #include "common_program.h"
 #include "stdio.h"
 #include "zf_common_headfile.h"
+#include "zf_driver_udp.hpp"
 
 #include "libimage_process.h"
 #include "libdata_process.h"
@@ -33,6 +34,7 @@
 
 #include "encoder.hpp"
 #include "DualMotorController.h"
+
 
 #define SERVO_MOTOR1_PWM        "/dev/zf_device_pwm_servo"
 
@@ -53,6 +55,10 @@
 #define SWITCH_0    "/dev/zf_driver_gpio_switch_0"
 #define SWITCH_1    "/dev/zf_driver_gpio_switch_1"
 
+// 另外一端的IP地址
+#define SERVER_IP "192.168.1.137"
+// 端口号
+#define PORT 8086
 
 // 定义主板上舵机频率  请务必注意范围 50-300
 // 如果要修改，需要直接修改设备树。
@@ -63,6 +69,8 @@
 
 #define SERVO_MOTOR_DUTY(x)         ((float)PWM_DUTY_MAX/(1000.0/(float)SERVO_MOTOR_FREQ)*(0.5+(float)(x)/90.0))
 
+void send_udp_data(const char* channelName, const float* dataArray, uint32 dataCount);
+int motor_control_task();
 void pit_callback(void);
 void sigint_handler(int signum);
 void cleanup();
