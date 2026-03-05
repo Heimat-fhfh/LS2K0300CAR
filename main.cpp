@@ -120,16 +120,16 @@ int main_init_task()
     }
 
     //=================================== MOTOR_TEST ===================================
+    motorTask->start();
     try {
-        motorTask->start();
-        motorTask->setTargetSpeed(1.0, 1.0);
+        motorTask->setTargetSpeed(0.3, 0.3);
         std::this_thread::sleep_for(std::chrono::seconds(3));
-        motorTask->setTargetSpeed(-1.0, -1.0);
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        motorTask->setTargetSpeed(3.0, 3.0);
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        motorTask->setTargetSpeed(-3.0, -3.0);
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        // motorTask->setTargetSpeed(-1.0, -1.0);
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
+        // motorTask->setTargetSpeed(3.0, 3.0);
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
+        // motorTask->setTargetSpeed(-3.0, -3.0);
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
         
     } catch (const std::exception& e) {
         std::cerr << "错误: " << e.what() << std::endl;
@@ -143,38 +143,38 @@ int main_init_task()
         motorTask->enableAngularVelocityControl(true);
         
         // 设置基础速度
-        motorTask->setBaseSpeed(0.5);  // 0.5 m/s 基础速度
+        motorTask->setBaseSpeed(0.0);  // 0.5 m/s 基础速度
         
         // 测试1：顺时针旋转（正角速度）
         printf("\nTest 1: Clockwise rotation (+90°/s)\n");
-        motorTask->setTargetAngularVelocity(90.0);  // 90°/s 顺时针
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        motorTask->setTargetAngularVelocity(30.0);  // 90°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(30));
         
-        // 测试2：逆时针旋转（负角速度）
-        printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
-        motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        // // 测试2：逆时针旋转（负角速度）
+        // printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
+        // motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
+        // std::this_thread::sleep_for(std::chrono::seconds(5));
         
-        // 测试3：快速旋转
-        printf("\nTest 3: Fast rotation (+180°/s)\n");
-        motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        // // 测试3：快速旋转
+        // printf("\nTest 3: Fast rotation (+180°/s)\n");
+        // motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
         
-        // 测试4：慢速旋转
-        printf("\nTest 4: Slow rotation (+45°/s)\n");
-        motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
-        std::this_thread::sleep_for(std::chrono::seconds(4));
+        // // 测试4：慢速旋转
+        // printf("\nTest 4: Slow rotation (+45°/s)\n");
+        // motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
+        // std::this_thread::sleep_for(std::chrono::seconds(4));
         
-        // 测试5：停止旋转，只保持基础速度
-        printf("\nTest 5: Straight line (0°/s)\n");
-        motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        // // 测试5：停止旋转，只保持基础速度
+        // printf("\nTest 5: Straight line (0°/s)\n");
+        // motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
         
-        // 测试6：改变基础速度
-        printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
-        motorTask->setBaseSpeed(0.3);  // 降低基础速度
-        motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
-        std::this_thread::sleep_for(std::chrono::seconds(4));
+        // // 测试6：改变基础速度
+        // printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
+        // motorTask->setBaseSpeed(0.3);  // 降低基础速度
+        // motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
+        // std::this_thread::sleep_for(std::chrono::seconds(4));
         
         // 禁用角速度控制
         motorTask->enableAngularVelocityControl(false);

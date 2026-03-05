@@ -41,15 +41,20 @@ MotorControlTask::MotorControlTask(
     }
     
     // 初始化角速度PID参数
-    angularVelocityParams.Kp = 0.1;
-    angularVelocityParams.Ki = 0.05;
-    angularVelocityParams.Kd = 0.01;
-    angularVelocityParams.limitP = 2.0;
-    angularVelocityParams.limitI = 1.0;
-    angularVelocityParams.limitD = 0.5;
-    angularVelocityParams.limitIMin = -1.0;
-    angularVelocityParams.limitOutput = 2.0;
-    angularVelocityParams.enableAntiWindup = true;
+    angularVelocityParams.Kp = 0.65;      // 适中的反应速度
+    angularVelocityParams.Ki = 0.25;      // 较温和的误差消除
+    angularVelocityParams.Kd = 0.015;     // 微弱的阻尼，防止超调
+    
+    angularVelocityParams.limitP = 40.0;  // 允许比例项产生较大的修正
+    angularVelocityParams.limitI = 15.0;  // 限制积分项，防止严重超调
+    angularVelocityParams.limitD = 10.0;  // 限制微分震荡
+    
+    // 总输出限幅：
+    // 如果偏差很大，允许 PID 在目标值基础上最多补偿 ±50°/s
+    angularVelocityParams.limitOutput = 50.0; 
+    
+    angularVelocityParams.limitIMin = -15.0;
+    angularVelocityParams.enableAntiWindup = true; // 必须开启
 }
 
 MotorControlTask::MotorControlTask(
@@ -90,15 +95,20 @@ MotorControlTask::MotorControlTask(
     }
     
     // 初始化角速度PID参数
-    angularVelocityParams.Kp = 0.1;
-    angularVelocityParams.Ki = 0.05;
-    angularVelocityParams.Kd = 0.01;
-    angularVelocityParams.limitP = 2.0;
-    angularVelocityParams.limitI = 1.0;
-    angularVelocityParams.limitD = 0.5;
-    angularVelocityParams.limitIMin = -1.0;
-    angularVelocityParams.limitOutput = 2.0;
-    angularVelocityParams.enableAntiWindup = true;
+    angularVelocityParams.Kp = 0.2;      // 适中的反应速度
+    angularVelocityParams.Ki = 0.05;      // 较温和的误差消除
+    angularVelocityParams.Kd = 0.0;     // 微弱的阻尼，防止超调
+    
+    angularVelocityParams.limitP = 40.0;  // 允许比例项产生较大的修正
+    angularVelocityParams.limitI = 15.0;  // 限制积分项，防止严重超调
+    angularVelocityParams.limitD = 10.0;  // 限制微分震荡
+    
+    // 总输出限幅：
+    // 如果偏差很大，允许 PID 在目标值基础上最多补偿 ±50°/s
+    angularVelocityParams.limitOutput = 30.0; 
+    
+    angularVelocityParams.limitIMin = -15.0;
+    angularVelocityParams.enableAntiWindup = true; // 必须开启
 }
 
 MotorControlTask::~MotorControlTask() {
@@ -304,6 +314,7 @@ void MotorControlTask::run() {
                 // 角速度PID控制
                 double angularVelocityError = targetAngVel - actualAngularVelocity;
                 double angularControlOutput = angularVelocityPID.calculate(targetAngVel, actualAngularVelocity, controlPeriod);
+                printf("%.2f,%.2f,%.2f\n",actualAngularVelocity,angularVelocityError,angularControlOutput);
                 
                 // 将角速度控制输出转换为速度差
                 // 注意：angularControlOutput是角速度误差的修正量（°/s）
