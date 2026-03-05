@@ -45,7 +45,7 @@ int main_init_task()
     // 任务初始化代码
     atexit(cleanup);
     signal(SIGINT, sigint_handler);
-    // setbuf(stdout, NULL);
+    setbuf(stdout, NULL);
     ips200_init("/dev/fb0");
     
     // 显示IP地址
@@ -142,10 +142,8 @@ int main_init_task()
         // 启用角速度控制
         motorTask->enableAngularVelocityControl(true);
         
-        // 设置基础速度（百分比）
-        // 注意：现在setBaseSpeed期望的是百分比（±1.0），不是m/s
-        // 0.5 m/s 对应 0.5/3.0 = 0.167 百分比（假设最大速度3.0 m/s）
-        motorTask->setBaseSpeed(0.5 / 3.0);  // 约16.7% 基础速度
+        // 设置基础速度
+        motorTask->setBaseSpeed(0.5);  // 0.5 m/s 基础速度
         
         // 测试1：顺时针旋转（正角速度）
         printf("\nTest 1: Clockwise rotation (+90°/s)\n");
@@ -174,7 +172,7 @@ int main_init_task()
         
         // 测试6：改变基础速度
         printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
-        motorTask->setBaseSpeed(0.3 / 3.0);  // 降低基础速度到10%
+        motorTask->setBaseSpeed(0.3);  // 降低基础速度
         motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
         std::this_thread::sleep_for(std::chrono::seconds(4));
         

@@ -25,8 +25,6 @@ MotorControlTask::MotorControlTask(
     , imu(nullptr)
     , wheelbase(0.158)      // 默认轮距15.8cm = 0.158m
     , wheelRadius(0.0325)   // 默认车轮半径3.25cm = 0.0325m
-    , maxActualSpeed(3.0)   // 默认最大实际速度3.0 m/s（约10.8 km/h）
-    , maxAngularSpeed(360.0) // 默认最大角速度360°/s（每秒一圈）
     , controlPeriod(controlPeriod)
     , running(false)
     , taskError(false)
@@ -76,8 +74,6 @@ MotorControlTask::MotorControlTask(
     , imu(imu)
     , wheelbase(0.158)      // 默认轮距15.8cm = 0.158m
     , wheelRadius(0.0325)   // 默认车轮半径3.25cm = 0.0325m
-    , maxActualSpeed(3.0)   // 默认最大实际速度3.0 m/s（约10.8 km/h）
-    , maxAngularSpeed(360.0) // 默认最大角速度360°/s（每秒一圈）
     , controlPeriod(controlPeriod)
     , running(false)
     , taskError(false)
@@ -316,18 +312,8 @@ void MotorControlTask::run() {
                 // 单位转换：°/s -> rad/s
                 double correctedAngularVelocityRad = degToRad(correctedAngularVelocity);
                 
-                // 将基础速度从m/s转换为百分比
-                double basePercent = encoderSpeedToPercent(currentBaseSpeed);
-                
-                // 将角速度从°/s转换为百分比
-                double angularPercent = angularSpeedToPercent(correctedAngularVelocity);
-                
-                // 运动学分解：计算左右轮目标速度（百分比空间）
-                auto [leftPercent, rightPercent] = kinematicsDecompositionPercent(basePercent, angularPercent);
-                
-                // 将百分比转换回m/s（用于显示）
-                double leftTarget = percentToActualSpeed(leftPercent);
-                double rightTarget = percentToActualSpeed(rightPercent);
+                // 运动学分解：计算左右轮目标速度
+                auto [leftTarget, rightTarget] = kinematicsDecomposition(currentBaseSpeed, correctedAngularVelocityRad);
                 
                 // 更新目标速度
                 currentLeftTarget = leftTarget;
@@ -497,52 +483,21 @@ bool MotorControlTask::isValidAngularVelocity(double angularVelocity) const {
            angularVelocity >= -1000.0 && angularVelocity <= 1000.0;
 }
 
+std::pair<double, double> MotorControlTask::kinematicsDecomposition(double baseSpeed, double angularVelocityRad) const {
+    // 计算速度差：Δv = ω * L / 2
+    double deltaV = angularVelocityRad * wheelbase / 2.0;
+    
+    // 计算左右轮速度
+    double leftSpeed = baseSpeed - deltaV;
+    double rightSpeed = baseSpeed + deltaV;
+    
+    return {leftSpeed, rightSpeed};
+}
+
 double MotorControlTask::degToRad(double deg) const {
     return deg * M_PI / 180.0;
 }
 
 double MotorControlTask::radToDeg(double rad) const {
     return rad * 180.0 / M_PI;
-}
-
-// ==================== 新增函数实现 ====================
-
-std::pair<double, double> MotorControlTask::kinematicsDecompositionPercent(double basePercent, double angularPercent) const {
-    // 简单差速算法：左轮 = 基础 - 角速度，右轮 = 基础 + 角速度
-    double leftPercent = basePercent - angularPercent;
-    double rightPercent = basePercent + angularPercent;
-    
-    // 限幅处理
-    leftPercent = clampPercent(leftPercent);
-    rightPercent = clampPercent(rightPercent);
-    
-    return {leftPercent, rightPercent};
-}
-
-double MotorControlTask::angularSpeedToPercent(double degPerSec) const {
-    // 角速度(°/s) → 百分比(±1.0)
-    // 360°/s 对应 100% 速度差
-    return degPerSec / maxAngularSpeed;
-}
-
-double MotorControlTask::percentToAngularSpeed(double percent) const {
-    // 百分比(±1.0) → 角速度(°/s)
-    return percent * maxAngularSpeed;
-}
-
-double MotorControlTask::encoderSpeedToPercent(double speedMps) const {
-    // 编码器速度(m/s) → 百分比(±1.0)
-    return speedMps / maxActualSpeed;
-}
-
-double MotorControlTask::percentToActualSpeed(double percent) const {
-    // 百分比(±1.0) → 实际速度(m/s)
-    return percent * maxActualSpeed;
-}
-
-double MotorControlTask::clampPercent(double value) const {
-    // 限幅到 ±1.0 范围内
-    if (value > 1.0) return 1.0;
-    if (value < -1.0) return -1.0;
-    return value;
 }

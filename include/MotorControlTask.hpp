@@ -124,14 +124,14 @@ public:
     bool isAngularVelocityControlEnabled() const;
     
     /**
-     * @brief 设置基础速度（角速度控制的基础速度）
-     * @param baseSpeed 基础速度百分比（±1.0）
+     * @brief 设置基础线速度（角速度控制的基础速度）
+     * @param baseSpeed 基础线速度（m/s）
      */
     void setBaseSpeed(double baseSpeed);
     
     /**
-     * @brief 获取当前基础速度
-     * @return 当前基础速度百分比（±1.0）
+     * @brief 获取当前基础线速度
+     * @return 当前基础线速度（m/s）
      */
     double getBaseSpeed() const;
     
@@ -156,29 +156,14 @@ private:
     // 角速度有效性检查
     bool isValidAngularVelocity(double angularVelocity) const;
     
-    // 运动学分解：将基础速度和角速度转换为左右轮速度（百分比空间）
-    std::pair<double, double> kinematicsDecompositionPercent(double basePercent, double angularPercent) const;
+    // 运动学分解：将基础速度和角速度转换为左右轮速度
+    std::pair<double, double> kinematicsDecomposition(double baseSpeed, double angularVelocityRad) const;
     
     // 单位转换：度/秒 转 弧度/秒
     double degToRad(double deg) const;
     
     // 单位转换：弧度/秒 转 度/秒
     double radToDeg(double rad) const;
-    
-    // 角速度到百分比的转换
-    double angularSpeedToPercent(double degPerSec) const;
-    
-    // 百分比到角速度的转换
-    double percentToAngularSpeed(double percent) const;
-    
-    // 编码器速度到百分比的转换
-    double encoderSpeedToPercent(double speedMps) const;
-    
-    // 百分比到实际速度的转换
-    double percentToActualSpeed(double percent) const;
-    
-    // 限幅函数
-    double clampPercent(double value) const;
 
 private:
     // 原子变量存储目标速度（左右轮独立）
@@ -206,10 +191,6 @@ private:
     // 车辆参数
     double wheelbase;                               // 轮距（米）
     double wheelRadius;                             // 车轮半径（米）
-    
-    // 速度转换参数
-    double maxActualSpeed;                          // 最大实际速度（m/s），用于速度转换
-    double maxAngularSpeed;                         // 最大角速度（°/s），用于角速度转换
     
     // 控制周期
     const double controlPeriod;
