@@ -3,24 +3,25 @@
 using namespace std;
 using namespace cv;
 using namespace std::chrono;
+using namespace std::this_thread;
 
-zf_driver_udp udp_dev;
+
+
 IMUDevice imu;
 std::unique_ptr<DualMotorController> motors;
 Encoder encoder_left("/dev/zf_encoder_1");
 Encoder encoder_right("/dev/zf_encoder_2", true); // 右轮编码器取反
+Control::PID::Parameters leftParams,rightParams;
+std::unique_ptr<MotorControlTask> motorTask;
 
 int main() {
-    if (main_init_task() == EXIT_SUCCESS) { 
-        cout << "初始化成功" << endl; 
-    } else { 
-        cout << "初始化失败" << endl; return EXIT_FAILURE; 
-    }
-    motor_control_task();
+    argument_config();
+    if (main_init_task() == EXIT_SUCCESS) { cout << "初始化成功" << endl; } else { cout << "初始化失败" << endl; return EXIT_FAILURE; }
     // VideoCapture Camera; CameraInit(Camera,CameraKind::VIDEO_0,320,240,120);
+
+
+
     
-
-
     // Camera.release();
     return 0;
 }
@@ -38,12 +39,13 @@ void cleanup()
     printf("程序退出，执行清理操作\n");
 }
 
+
 int main_init_task()
 {
     // 任务初始化代码
     atexit(cleanup);
     signal(SIGINT, sigint_handler);
-    setbuf(stdout, NULL);
+    // setbuf(stdout, NULL);
     ips200_init("/dev/fb0");
     
     // 显示IP地址
@@ -67,6 +69,33 @@ int main_init_task()
 
     imu_device_type_t type = imu.get_device_type();
     printf("IMU Device Type: %d\n", type);
+
+    // 示例：测量零漂
+    printf("\n=== Zero Drift Calibration Example ===\n");
+    if (imu.measure_zero_drift()) {
+        printf("Zero drift calibration successful!\n");
+        printf("Bias values stored in IMU device.\n");
+        
+        // 示例：获取补偿后的数据
+        printf("\n=== Compensated Data Example ===\n");
+        for (int i = 0; i < 3; i++) {
+            if (imu.update_all_data()) {
+                imu.apply_zero_drift_compensation();
+                const imu_unit_data_t& raw_data = imu.get_unit_data();
+                const imu_unit_data_t& comp_data = imu.get_compensated_unit_data();
+                
+                printf("Sample %d:\n", i + 1);
+                printf("  Raw Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n", 
+                       raw_data.gyro_x, raw_data.gyro_y, raw_data.gyro_z);
+                printf("  Comp Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n", 
+                       comp_data.gyro_x, comp_data.gyro_y, comp_data.gyro_z);
+                printf("\n");
+            }
+            sleep_for(milliseconds(100));
+        }
+    } else {
+        printf("Zero drift calibration failed or skipped.\n");
+    }
     
     for (int i = 0; i < 3; i++) {
         // 更新所有数据
@@ -74,51 +103,88 @@ int main_init_task()
         if (imu.update_all_data()) {
             // 获取完整数据
             const imu_raw_data_t& data = imu.get_raw_data();
+            const imu_unit_data_t& unit_data = imu.get_unit_data();
 
             auto end_time = steady_clock::now();
             auto duration = duration_cast<microseconds>(end_time - start_time);
             printf("Sample %d took %ld microseconds\n", i + 1, duration.count());
 
             printf("Sample %d:\n", i + 1);
-            printf("  Acc: X=%6d, Y=%6d, Z=%6d\n", data.acc_x, data.acc_y, data.acc_z);
-            printf("  Gyro: X=%6d, Y=%6d, Z=%6d\n", data.gyro_x, data.gyro_y, data.gyro_z);
+            printf("  Acc: X=%6d(%.2fg), Y=%6d(%.2fg), Z=%6d(%.2fg)\n", data.acc_x, unit_data.acc_x, data.acc_y, unit_data.acc_y, data.acc_z, unit_data.acc_z);
+            printf("  Gyro: X=%6d(%.2f°/s), Y=%6d(%.2f°/s), Z=%6d(%.2f°/s)\n", data.gyro_x, unit_data.gyro_x, data.gyro_y, unit_data.gyro_y, data.gyro_z, unit_data.gyro_z);
             
             printf("\n");
+
+            sleep_for(milliseconds(20));
         }
     }
 
     //=================================== MOTOR_TEST ===================================
     try {
-        cout << "初始化双电机控制器..." << endl;
-        // 创建双电机控制器
-        motors = std::make_unique<DualMotorController>();
-        
-        // 设置最大占空比限制为30%
-        motors->setMaxDutyLimits(30.0f);
-        
-        // 示例1：向前移动
-        std::cout << "向前移动..." << std::endl;
-        motors->setSpeeds(0.5f, 0.5f);  // 50%速度向前
-        usleep(500000);
-        
-        // 示例2：停止
-        std::cout << "停止..." << std::endl;
-        motors->stopAll();
-        usleep(500000);
-        
-        // 示例3：向后移动
-        std::cout << "向后移动..." << std::endl;
-        motors->setSpeeds(-0.3f, -0.3f);  // 30%速度向后
-        usleep(500000);
-        
-        // 示例4：转弯
-        std::cout << "直行..." << std::endl;
-        motors->setSpeeds(0.3f, 0.3f);
-        usleep(500000);
+        motorTask->start();
+        motorTask->setTargetSpeed(1.0, 1.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        motorTask->setTargetSpeed(-1.0, -1.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        motorTask->setTargetSpeed(3.0, 3.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        motorTask->setTargetSpeed(-3.0, -3.0);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
         
     } catch (const std::exception& e) {
         std::cerr << "错误: " << e.what() << std::endl;
         return EXIT_FAILURE;
+    }
+
+    //=================================== ANGULAR_VELOCITY_CONTROL_TEST ===================================
+    printf("\n=== Angular Velocity Control Test ===\n");
+    try {
+        // 启用角速度控制
+        motorTask->enableAngularVelocityControl(true);
+        
+        // 设置基础速度（百分比）
+        // 注意：现在setBaseSpeed期望的是百分比（±1.0），不是m/s
+        // 0.5 m/s 对应 0.5/3.0 = 0.167 百分比（假设最大速度3.0 m/s）
+        motorTask->setBaseSpeed(0.5 / 3.0);  // 约16.7% 基础速度
+        
+        // 测试1：顺时针旋转（正角速度）
+        printf("\nTest 1: Clockwise rotation (+90°/s)\n");
+        motorTask->setTargetAngularVelocity(90.0);  // 90°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        
+        // 测试2：逆时针旋转（负角速度）
+        printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
+        motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        
+        // 测试3：快速旋转
+        printf("\nTest 3: Fast rotation (+180°/s)\n");
+        motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        
+        // 测试4：慢速旋转
+        printf("\nTest 4: Slow rotation (+45°/s)\n");
+        motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(4));
+        
+        // 测试5：停止旋转，只保持基础速度
+        printf("\nTest 5: Straight line (0°/s)\n");
+        motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        
+        // 测试6：改变基础速度
+        printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
+        motorTask->setBaseSpeed(0.3 / 3.0);  // 降低基础速度到10%
+        motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(4));
+        
+        // 禁用角速度控制
+        motorTask->enableAngularVelocityControl(false);
+        printf("\nAngular velocity control test completed.\n");
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Angular velocity control test error: " << e.what() << std::endl;
+        motorTask->enableAngularVelocityControl(false);
     }
 
     //================================== ENCODER_TEST ==================================
@@ -165,122 +231,14 @@ int main_init_task()
     }
 
     std::cout << "自检完成..." << std::endl;
-    motors->stopAll();
+    motorTask->stop();
 
     return EXIT_SUCCESS;
 }
 
 int motor_control_task()
 {
-    // PID控制器状态枚举
-    enum class ControlState {
-        INIT,           // 初始化
-        RUNNING,        // 运行中
-        ERROR,          // 错误状态
-        STOPPED         // 停止
-    };
-    
-    ControlState state = ControlState::INIT;
-    
-    // 创建PID控制器
-    Control::PID::Parameters params;
-    params.Kp = 0.3;           // 比之前稍大一点，提供足够响应
-    params.Ki = 0.1;           // 中等积分，消除静差
-    params.Kd = 0.0;            // 依然保持为0，除非有特殊需求
-    params.limitP = 1.0;        // 比例项限幅（通常不需要限制）
-    params.limitI = 0.8;        // **减小积分限幅**，防止积分饱和过冲
-    params.limitD = 0.0;        // 保留
-    params.limitIMin = -0.8;    // **减小负积分限幅**，保持对称
-    params.limitOutput = 1.0;   // 总输出限幅 ±100%
-    params.enableAntiWindup = true;  // 保持开启
-
-    
-    Control::PID speedPID(params);
-    
-    // 设置电机限制
-    motors->setMaxDutyLimits(50.0f);
-    
-    // 控制参数
-    double targetSpeed = 1.0;
-    const double controlPeriod = 0.01;
-    
-    // 监控变量
-    int errorCount = 0;
-    const int maxErrorCount = 10;
-    double lastValidSpeed = 0.0;
-    
-    printf("Motor speed control initialized. Target: %.2f m/s\n", targetSpeed);
-    state = ControlState::RUNNING;
-    
-    while (state != ControlState::STOPPED) {
-        try {
-            // 读取当前速度
-            double currentSpeed = encoder_left.readSpeed();
-            
-            // 速度值有效性检查
-            if (std::isnan(currentSpeed) || std::isinf(currentSpeed) || currentSpeed < -10.0 || currentSpeed > 10.0) {
-                errorCount++;
-                printf("Warning: Invalid speed reading: %.3f (error %d/%d)\n", 
-                       currentSpeed, errorCount, maxErrorCount);
-                currentSpeed = lastValidSpeed;  // 使用上次有效值
-                
-                if (errorCount >= maxErrorCount) {
-                    printf("ERROR: Too many invalid speed readings. Stopping motor.\n");
-                    motors->setSpeeds(0.0f, 0.0f);
-                    state = ControlState::ERROR;
-                    break;
-                }
-            } else {
-                errorCount = 0;
-                lastValidSpeed = currentSpeed;
-            }
-            
-            // PID计算
-            double controlOutput = speedPID.calculate(targetSpeed, currentSpeed, controlPeriod);
-            
-            // 应用控制输出
-            motors->setSpeeds(static_cast<float>(controlOutput), 0.0f);  // 只控制左轮，右轮保持不动
-            
-            // 周期性状态输出（每秒一次）
-            static int cycleCount = 0;
-            if (++cycleCount >= static_cast<int>(1.0 / controlPeriod)) {
-                printf("Status - Target:%.3f, Current:%.3f, Output:%.3f, Error:%.3f\n",
-                       targetSpeed, currentSpeed, controlOutput, 
-                       targetSpeed - currentSpeed);
-                
-                // UDP发送PID状态数据
-
-                std::array<float, 5> data = {
-                (float)targetSpeed,
-                (float)currentSpeed,
-                (float)controlOutput,
-                (float)speedPID.getError(),
-                (float)speedPID.getIntegral()
-                };
-
-                send_udp_data("motor_status", data.data(), data.size());
-
-                cycleCount = 0;
-            }
-            
-        } catch (const std::exception& e) {
-            printf("Exception in control loop: %s\n", e.what());
-            motors->setSpeeds(0.0f, 0.0f);
-            state = ControlState::ERROR;
-            break;
-        }
-        
-        // 等待下一个控制周期
-        usleep(controlPeriod * 100000);
-    }
-    
-    // 错误处理
-    if (state == ControlState::ERROR) {
-        printf("Motor control task terminated due to errors.\n");
-        return -1;
-    }
-    
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int posture_control_task()
@@ -313,48 +271,32 @@ int posture_control_task()
     return 1;
 }
 
-void send_udp_data(const char* channelName, const float* dataArray, uint32 dataCount) {
-    // 定义发送缓冲区，根据最大可能需求设置大小
-    // 计算公式：通道名称长度 + 冒号 + 每个数据最多15字符(含小数点) + 逗号 + 换行符 + 结束符
-    uint8 send_buf[256];  
-    int len = 0;
-    int offset = 0;
-    
-    // 1. 添加通道名称和冒号
-    if (channelName != NULL && strlen(channelName) > 0) {
-        offset += snprintf((char*)send_buf, sizeof(send_buf), "%s:", channelName);
-    }
-    
-    // 2. 循环添加所有数据
-    for (uint32 i = 0; i < dataCount; i++) {
-        if (i == 0) {
-            // 第一个数据，前面不加逗号
-            offset += snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, 
-                              "%.3f", dataArray[i]);
-        } else {
-            // 后续数据，前面加逗号
-            offset += snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, 
-                              ",%.3f", dataArray[i]);
-        }
-        
-        // 检查缓冲区是否溢出
-        if (offset >= sizeof(send_buf) - 2) {
-            // 缓冲区快满了，强制添加换行符后退出
-            snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, "\n");
-            break;
-        }
-    }
-    
-    // 3. 添加换行符（如果还没有添加的话）
-    if (offset < sizeof(send_buf) - 1 && send_buf[offset-1] != '\n') {
-        offset += snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, "\n");
-    }
-    
-    // 4. 发送数据
-    len = offset;
-    if (len > 0 && len < sizeof(send_buf)) {
-        udp_dev.send_data(send_buf, (uint32)len);
-    }
+void argument_config(void)
+{
+    motors = std::make_unique<DualMotorController>();
+
+    leftParams.Kp = 0.3;
+    leftParams.Ki = 0.5;
+    leftParams.Kd = 0.0;
+    leftParams.limitP = 1.0;
+    leftParams.limitI = 1.0;
+    leftParams.limitD = 0.0;
+    leftParams.limitIMin = -0.8;
+    leftParams.limitOutput = 1.0;
+    leftParams.enableAntiWindup = true;
+
+    rightParams = leftParams;
+
+    // 使用带IMU的构造函数创建电机控制任务
+    motorTask = std::make_unique<MotorControlTask>(
+            leftParams,
+            rightParams,
+            motors.get(),
+            &encoder_left,
+            &encoder_right,
+            &imu,           // 传入IMU设备指针
+            0.01            // 10ms控制周期
+        );
 }
 
 void pit_callback()

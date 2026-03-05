@@ -137,3 +137,49 @@ uint32 zf_driver_udp::read_data(uint8 *buff, uint32 length)
 
     return str_len;
 }
+
+zf_driver_udp udp_dev;
+
+void send_udp_data(const char* channelName, const float* dataArray, uint32 dataCount) {
+    // 定义发送缓冲区，根据最大可能需求设置大小
+    // 计算公式：通道名称长度 + 冒号 + 每个数据最多15字符(含小数点) + 逗号 + 换行符 + 结束符
+    uint8 send_buf[256];  
+    int len = 0;
+    int offset = 0;
+    
+    // 1. 添加通道名称和冒号
+    if (channelName != NULL && strlen(channelName) > 0) {
+        offset += snprintf((char*)send_buf, sizeof(send_buf), "%s:", channelName);
+    }
+    
+    // 2. 循环添加所有数据
+    for (uint32 i = 0; i < dataCount; i++) {
+        if (i == 0) {
+            // 第一个数据，前面不加逗号
+            offset += snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, 
+                              "%.3f", dataArray[i]);
+        } else {
+            // 后续数据，前面加逗号
+            offset += snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, 
+                              ",%.3f", dataArray[i]);
+        }
+        
+        // 检查缓冲区是否溢出
+        if (offset >= sizeof(send_buf) - 2) {
+            // 缓冲区快满了，强制添加换行符后退出
+            snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, "\n");
+            break;
+        }
+    }
+    
+    // 3. 添加换行符（如果还没有添加的话）
+    if (offset < sizeof(send_buf) - 1 && send_buf[offset-1] != '\n') {
+        offset += snprintf((char*)send_buf + offset, sizeof(send_buf) - offset, "\n");
+    }
+    
+    // 4. 发送数据
+    len = offset;
+    if (len > 0 && len < sizeof(send_buf)) {
+        udp_dev.send_data(send_buf, (uint32)len);
+    }
+}

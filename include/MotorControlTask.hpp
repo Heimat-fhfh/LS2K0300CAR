@@ -11,14 +11,13 @@
 #include "encoder.hpp"
 #include "DualMotorController.h"
 #include "PID.hpp"
-
-// UDP发送函数的声明（假设已有）
-void send_udp_data(const char* topic, const float* data, size_t size);
+#include "zf_driver_udp.hpp"
+#include "zf_device_imu_core.h"
 
 class MotorControlTask {
 public:
     /**
-     * @brief 构造函数
+     * @brief 构造函数（不带IMU）
      * @param leftParams 左轮PID参数
      * @param rightParams 右轮PID参数
      * @param motors 电机控制对象指针
@@ -32,6 +31,26 @@ public:
         DualMotorController* motors,
         Encoder* leftEncoder,
         Encoder* rightEncoder,
+        double controlPeriod = 0.01
+    );
+    
+    /**
+     * @brief 构造函数（带IMU）
+     * @param leftParams 左轮PID参数
+     * @param rightParams 右轮PID参数
+     * @param motors 电机控制对象指针
+     * @param leftEncoder 左编码器指针
+     * @param rightEncoder 右编码器指针
+     * @param imu IMU设备指针（用于角速度控制）
+     * @param controlPeriod 控制周期（秒）
+     */
+    MotorControlTask(
+        const Control::PID::Parameters& leftParams,
+        const Control::PID::Parameters& rightParams,
+        DualMotorController* motors,
+        Encoder* leftEncoder,
+        Encoder* rightEncoder,
+        IMUDevice* imu,
         double controlPeriod = 0.01
     );
     
@@ -77,6 +96,56 @@ public:
     
     // 设置实时优先级（可选）
     void setRealtimePriority(int priority = 50, int policy = SCHED_FIFO);
+    
+    // ==================== 角速度控制相关方法 ====================
+    
+    /**
+     * @brief 设置目标角速度
+     * @param angularVelocity 目标角速度（°/s）
+     */
+    void setTargetAngularVelocity(double angularVelocity);
+    
+    /**
+     * @brief 获取当前目标角速度
+     * @return 当前目标角速度（°/s）
+     */
+    double getTargetAngularVelocity() const;
+    
+    /**
+     * @brief 启用角速度控制
+     * @param enable 是否启用角速度控制
+     */
+    void enableAngularVelocityControl(bool enable = true);
+    
+    /**
+     * @brief 检查角速度控制是否启用
+     * @return 角速度控制是否启用
+     */
+    bool isAngularVelocityControlEnabled() const;
+    
+    /**
+     * @brief 设置基础速度（角速度控制的基础速度）
+     * @param baseSpeed 基础速度百分比（±1.0）
+     */
+    void setBaseSpeed(double baseSpeed);
+    
+    /**
+     * @brief 获取当前基础速度
+     * @return 当前基础速度百分比（±1.0）
+     */
+    double getBaseSpeed() const;
+    
+    /**
+     * @brief 设置轮距（用于角速度计算）
+     * @param wheelbase 轮距（米）
+     */
+    void setWheelbase(double wheelbase);
+    
+    /**
+     * @brief 设置车轮半径（用于速度计算）
+     * @param wheelRadius 车轮半径（米）
+     */
+    void setWheelRadius(double wheelRadius);
 
 private:
     void run();
@@ -84,19 +153,63 @@ private:
     // 速度有效性检查
     bool isValidSpeed(double speed) const;
     
+    // 角速度有效性检查
+    bool isValidAngularVelocity(double angularVelocity) const;
+    
+    // 运动学分解：将基础速度和角速度转换为左右轮速度（百分比空间）
+    std::pair<double, double> kinematicsDecompositionPercent(double basePercent, double angularPercent) const;
+    
+    // 单位转换：度/秒 转 弧度/秒
+    double degToRad(double deg) const;
+    
+    // 单位转换：弧度/秒 转 度/秒
+    double radToDeg(double rad) const;
+    
+    // 角速度到百分比的转换
+    double angularSpeedToPercent(double degPerSec) const;
+    
+    // 百分比到角速度的转换
+    double percentToAngularSpeed(double percent) const;
+    
+    // 编码器速度到百分比的转换
+    double encoderSpeedToPercent(double speedMps) const;
+    
+    // 百分比到实际速度的转换
+    double percentToActualSpeed(double percent) const;
+    
+    // 限幅函数
+    double clampPercent(double value) const;
+
 private:
     // 原子变量存储目标速度（左右轮独立）
     std::atomic<double> leftTargetSpeed;
     std::atomic<double> rightTargetSpeed;
     
+    // 角速度控制相关原子变量
+    std::atomic<double> targetAngularVelocity;      // 目标角速度（°/s）
+    std::atomic<double> baseSpeed;                  // 基础线速度（m/s）
+    std::atomic<bool> angularVelocityControlEnabled; // 角速度控制是否启用
+    
     // PID参数（非原子，初始化后不变）
     const Control::PID::Parameters leftParams;
     const Control::PID::Parameters rightParams;
+    
+    // 角速度PID参数
+    Control::PID::Parameters angularVelocityParams;
     
     // 外部对象指针
     DualMotorController* motors;
     Encoder* leftEncoder;
     Encoder* rightEncoder;
+    IMUDevice* imu;                                 // IMU设备指针（可为空）
+    
+    // 车辆参数
+    double wheelbase;                               // 轮距（米）
+    double wheelRadius;                             // 车轮半径（米）
+    
+    // 速度转换参数
+    double maxActualSpeed;                          // 最大实际速度（m/s），用于速度转换
+    double maxAngularSpeed;                         // 最大角速度（°/s），用于角速度转换
     
     // 控制周期
     const double controlPeriod;

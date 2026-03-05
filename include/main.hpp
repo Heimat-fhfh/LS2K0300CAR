@@ -34,6 +34,7 @@
 
 #include "encoder.hpp"
 #include "DualMotorController.h"
+#include "MotorControlTask.hpp"
 
 
 #define SERVO_MOTOR1_PWM        "/dev/zf_device_pwm_servo"
@@ -56,7 +57,7 @@
 #define SWITCH_1    "/dev/zf_driver_gpio_switch_1"
 
 // 另外一端的IP地址
-#define SERVER_IP "192.168.1.137"
+#define SERVER_IP "10.190.47.138"
 // 端口号
 #define PORT 8086
 
@@ -69,7 +70,7 @@
 
 #define SERVO_MOTOR_DUTY(x)         ((float)PWM_DUTY_MAX/(1000.0/(float)SERVO_MOTOR_FREQ)*(0.5+(float)(x)/90.0))
 
-void send_udp_data(const char* channelName, const float* dataArray, uint32 dataCount);
+void argument_config(void);
 int motor_control_task();
 void pit_callback(void);
 void sigint_handler(int signum);

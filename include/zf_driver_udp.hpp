@@ -103,4 +103,9 @@ public:
 
 };
 
+
+extern zf_driver_udp udp_dev;
+
+void send_udp_data(const char* channelName, const float* dataArray, uint32 dataCount);
+
 #endif

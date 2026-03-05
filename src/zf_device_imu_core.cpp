@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <cmath>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cerrno>
@@ -18,10 +19,14 @@
 //-------------------------------------------------------------------------------------------------------------------
 IMUDevice::IMUDevice() 
     : device_type_(IMU_DEV_NO_FIND), 
-      is_initialized_(false)
+      is_initialized_(false),
+      zero_drift_bias_x_(0.0f),
+      zero_drift_bias_y_(0.0f),
+      zero_drift_bias_z_(0.0f)
 {
     // 初始化传感器数据结构
     memset(&raw_data_, 0, sizeof(raw_data_));
+    memset(&compensated_unit_data_, 0, sizeof(compensated_unit_data_));
     
     // 初始化文件句柄数组为无效值
     for (int i = 0; i < 9; ++i) {
@@ -189,15 +194,20 @@ bool IMUDevice::update_all_data()
     
     // 读取加速度数据
     raw_data_.acc_x = read_sensor_data(SENSOR_ACC_X);
+    unit_data_.acc_x = raw_data_.acc_x / 4096.0f;
     raw_data_.acc_y = read_sensor_data(SENSOR_ACC_Y);
+    unit_data_.acc_y = raw_data_.acc_y / 4096.0f;
     raw_data_.acc_z = read_sensor_data(SENSOR_ACC_Z);
+    unit_data_.acc_z = raw_data_.acc_z / 4096.0f;
     
     // 读取陀螺仪数据
     raw_data_.gyro_x = read_sensor_data(SENSOR_GYRO_X);
+    unit_data_.gyro_x = raw_data_.gyro_x / 16.4f;
     raw_data_.gyro_y = read_sensor_data(SENSOR_GYRO_Y);
+    unit_data_.gyro_y = raw_data_.gyro_y / 16.4f;
     raw_data_.gyro_z = read_sensor_data(SENSOR_GYRO_Z);
-    
-    
+    unit_data_.gyro_z = raw_data_.gyro_z / 16.4f;
+
     return true;
 }
 
@@ -226,6 +236,16 @@ const imu_raw_data_t& IMUDevice::get_raw_data() const
 }
 
 //-------------------------------------------------------------------------------------------------------------------
+// 获取带单位的数据
+// 加速度=原始数据/4096，单位为g
+// 陀螺仪=原始数据/16.4，单位为°/s
+//-------------------------------------------------------------------------------------------------------------------
+const imu_unit_data_t& IMUDevice::get_unit_data() const
+{
+    return unit_data_;
+}
+
+//-------------------------------------------------------------------------------------------------------------------
 // 单个传感器数据获取方法
 //-------------------------------------------------------------------------------------------------------------------
 int16_t IMUDevice::get_acc_x() const { return raw_data_.acc_x; }
@@ -237,3 +257,126 @@ int16_t IMUDevice::get_gyro_z() const { return raw_data_.gyro_z; }
 int16_t IMUDevice::get_mag_x() const { return raw_data_.mag_x; }
 int16_t IMUDevice::get_mag_y() const { return raw_data_.mag_y; }
 int16_t IMUDevice::get_mag_z() const { return raw_data_.mag_z; }
+
+//-------------------------------------------------------------------------------------------------------------------
+// 零漂测量函数
+//-------------------------------------------------------------------------------------------------------------------
+bool IMUDevice::measure_zero_drift()
+{
+    float bias_x, bias_y, bias_z;
+    if (!is_initialized_) {
+        printf("IMU device not initialized!\n");
+        return false;
+    }
+
+    const int sample_count = 200 * 3;   // 3秒
+    int valid_count = 0;
+
+    double sum_x = 0, sum_y = 0, sum_z = 0;
+    double sum_sq_x = 0, sum_sq_y = 0, sum_sq_z = 0;
+
+    printf("Zero drift calibration start...\n");
+    printf("Please keep the robot completely STILL!\n");
+
+    for(int i = 0; i < sample_count; i++)
+    {
+        if(!update_all_data())
+            continue;
+
+        const imu_unit_data_t& unit = get_unit_data();
+
+        // 判断是否接近静止（简单判断法）
+        if (fabs(unit.gyro_x) > 5 ||
+            fabs(unit.gyro_y) > 5 ||
+            fabs(unit.gyro_z) > 5)
+        {
+            printf("Motion detected! Calibration failed.\n");
+            return false;
+        }
+
+        sum_x += unit.gyro_x;
+        sum_y += unit.gyro_y;
+        sum_z += unit.gyro_z;
+
+        sum_sq_x += unit.gyro_x * unit.gyro_x;
+        sum_sq_y += unit.gyro_y * unit.gyro_y;
+        sum_sq_z += unit.gyro_z * unit.gyro_z;
+
+        valid_count++;
+
+        usleep(5000);  // 200Hz
+    }
+
+    if(valid_count < sample_count * 0.9)
+    {
+        printf("Not enough valid samples!\n");
+        return false;
+    }
+
+    bias_x = sum_x / valid_count;
+    bias_y = sum_y / valid_count;
+    bias_z = sum_z / valid_count;
+
+    double var_z = sum_sq_z / valid_count - bias_z * bias_z;
+
+    printf("\n===== Zero Drift Result =====\n");
+    printf("Bias X: %.6f °/s\n", bias_x);
+    printf("Bias Y: %.6f °/s\n", bias_y);
+    printf("Bias Z: %.6f °/s\n", bias_z);
+    printf("Z variance: %.6f\n", var_z);
+
+    if(var_z > 0.5)
+    {
+        printf("Warning: IMU noise too large!\n");
+        return false;
+    }
+
+    // 设置零漂偏置
+    set_zero_drift_bias(bias_x, bias_y, bias_z);
+
+    printf("Calibration success.\n\n");
+    return true;
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 设置零漂偏置
+//-------------------------------------------------------------------------------------------------------------------
+void IMUDevice::set_zero_drift_bias(float bias_x, float bias_y, float bias_z)
+{
+    zero_drift_bias_x_ = bias_x;
+    zero_drift_bias_y_ = bias_y;
+    zero_drift_bias_z_ = bias_z;
+    
+    printf("Zero drift bias set: X=%.6f, Y=%.6f, Z=%.6f °/s\n", 
+           zero_drift_bias_x_, zero_drift_bias_y_, zero_drift_bias_z_);
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 应用零漂补偿
+//-------------------------------------------------------------------------------------------------------------------
+void IMUDevice::apply_zero_drift_compensation()
+{
+    // 复制原始单位数据
+    compensated_unit_data_ = unit_data_;
+    
+    // 应用零漂补偿（只补偿陀螺仪数据）
+    compensated_unit_data_.gyro_x = unit_data_.gyro_x - zero_drift_bias_x_;
+    compensated_unit_data_.gyro_y = unit_data_.gyro_y - zero_drift_bias_y_;
+    compensated_unit_data_.gyro_z = unit_data_.gyro_z - zero_drift_bias_z_;
+    
+    // 加速度和磁力计数据保持不变
+    compensated_unit_data_.acc_x = unit_data_.acc_x;
+    compensated_unit_data_.acc_y = unit_data_.acc_y;
+    compensated_unit_data_.acc_z = unit_data_.acc_z;
+    compensated_unit_data_.mag_x = unit_data_.mag_x;
+    compensated_unit_data_.mag_y = unit_data_.mag_y;
+    compensated_unit_data_.mag_z = unit_data_.mag_z;
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 获取补偿后的数据
+//-------------------------------------------------------------------------------------------------------------------
+const imu_unit_data_t& IMUDevice::get_compensated_unit_data() const
+{
+    return compensated_unit_data_;
+}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export IP="192.168.1.136"
+export IP="172.25.21.247"
 
 cd build
 make -j4

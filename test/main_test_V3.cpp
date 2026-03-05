@@ -201,7 +201,7 @@ int motor_control_task()
     motors->setMaxDutyLimits(50.0f);
     
     // 控制参数
-    double targetSpeed = 3.0;
+    double targetSpeed = 1.0;
     const double controlPeriod = 0.01;
     
     // 监控变量
@@ -215,14 +215,15 @@ int motor_control_task()
     while (state != ControlState::STOPPED) {
         try {
             // 读取当前速度
-            double currentSpeed = encoder_left.readSpeed();
+            double leftSpeed = encoder_left.readSpeed();
+            double rightSpeed = encoder_right.readSpeed();
             
             // 速度值有效性检查
-            if (std::isnan(currentSpeed) || std::isinf(currentSpeed) || currentSpeed < -10.0 || currentSpeed > 10.0) {
+            if (std::isnan(leftSpeed) || std::isinf(leftSpeed) || leftSpeed < -10.0 || leftSpeed > 10.0) {
                 errorCount++;
                 printf("Warning: Invalid speed reading: %.3f (error %d/%d)\n", 
-                       currentSpeed, errorCount, maxErrorCount);
-                currentSpeed = lastValidSpeed;  // 使用上次有效值
+                       leftSpeed, errorCount, maxErrorCount);
+                leftSpeed = lastValidSpeed;  // 使用上次有效值
                 
                 if (errorCount >= maxErrorCount) {
                     printf("ERROR: Too many invalid speed readings. Stopping motor.\n");
@@ -232,27 +233,28 @@ int motor_control_task()
                 }
             } else {
                 errorCount = 0;
-                lastValidSpeed = currentSpeed;
+                lastValidSpeed = leftSpeed;
             }
             
             // PID计算
-            double controlOutput = speedPID.calculate(targetSpeed, currentSpeed, controlPeriod);
-            
+            double controlOutput = speedPID.calculate(targetSpeed, leftSpeed, controlPeriod);
+            double rightControlOutput = speedPID.calculate(targetSpeed, rightSpeed, controlPeriod);
+
             // 应用控制输出
-            motors->setSpeeds(static_cast<float>(controlOutput), 0.0f);  // 只控制左轮，右轮保持不动
+            motors->setSpeeds(static_cast<float>(controlOutput), static_cast<float>(rightControlOutput));  // 控制左右轮
             
             // 周期性状态输出（每秒一次）
             static int cycleCount = 0;
             if (++cycleCount >= static_cast<int>(1.0 / controlPeriod)) {
-                printf("Status - Target:%.3f, Current:%.3f, Output:%.3f, Error:%.3f\n",
-                       targetSpeed, currentSpeed, controlOutput, 
-                       targetSpeed - currentSpeed);
+                printf("Status - Target:%.3f, Left:%.3f, Right:%.3f, Output:%.3f, Error:%.3f\n",
+                       targetSpeed, leftSpeed, rightSpeed, controlOutput, 
+                       targetSpeed - leftSpeed);
                 
                 // UDP发送PID状态数据
 
                 std::array<float, 5> data = {
                 (float)targetSpeed,
-                (float)currentSpeed,
+                (float)leftSpeed,
                 (float)controlOutput,
                 (float)speedPID.getError(),
                 (float)speedPID.getIntegral()

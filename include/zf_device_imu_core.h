@@ -36,6 +36,24 @@ typedef struct
 } imu_raw_data_t;
 
 //===================================================================================================================
+// IMU传感器数据结构体
+//===================================================================================================================
+typedef struct
+{
+    float acc_x;      // 加速度X轴，单位g
+    float acc_y;      // 加速度Y轴，单位g
+    float acc_z;      // 加速度Z轴，单位g
+    float gyro_x;     // 陀螺仪X轴，单位°/s
+    float gyro_y;     // 陀螺仪Y轴，单位°/s
+    float gyro_z;     // 陀螺仪Z轴，单位°/s
+    float mag_x;      // 磁力计X轴，单位mG
+    float mag_y;      // 磁力计Y轴，单位mG
+    float mag_z;      // 磁力计Z轴，单位mG
+
+} imu_unit_data_t;
+
+
+//===================================================================================================================
 // IMU设备类
 //===================================================================================================================
 class IMUDevice
@@ -44,7 +62,14 @@ private:
     // 私有成员变量
     imu_device_type_t device_type_;     // 设备类型
     imu_raw_data_t raw_data_;          // 原始数据
+    imu_unit_data_t unit_data_;        // 带单位的数据
+    imu_unit_data_t compensated_unit_data_; // 零漂补偿后的数据
     bool is_initialized_;              // 初始化标志
+    
+    // 零漂偏置
+    float zero_drift_bias_x_;          // X轴零漂偏置
+    float zero_drift_bias_y_;          // Y轴零漂偏置
+    float zero_drift_bias_z_;          // Z轴零漂偏置
     
     // 文件句柄（使用数组简化管理）
     int sensor_fds_[9];                // 9个传感器文件句柄
@@ -100,7 +125,9 @@ public:
     // 数据读取接口
     bool update_all_data();                     // 更新所有数据
     const imu_raw_data_t& get_raw_data() const; // 获取原始数据
-    
+    const imu_unit_data_t& get_unit_data() const;       // 获取带单位的数据
+
+
     // 单个数据读取（可选）
     int16_t get_acc_x() const;
     int16_t get_acc_y() const;
@@ -111,6 +138,12 @@ public:
     int16_t get_mag_x() const;
     int16_t get_mag_y() const;
     int16_t get_mag_z() const;
+
+    // 零漂测量和补偿功能
+    bool measure_zero_drift();
+    void set_zero_drift_bias(float bias_x, float bias_y, float bias_z);
+    void apply_zero_drift_compensation();
+    const imu_unit_data_t& get_compensated_unit_data() const;
 };
 
 #endif // _ZF_DEVICE_IMU_CORE_H_

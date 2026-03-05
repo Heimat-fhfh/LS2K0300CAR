@@ -95,6 +95,28 @@
         "**/opencv_4_10_build/share":true,
         "**/config":true,
         "**/.rubbish":true,
+    },
+    
+    // clangd configuration for IntelliSense in web-based VSCode
+    "clangd.path": "/usr/bin/clangd",
+    "clangd.arguments": [
+        "--background-index",
+        "--clang-tidy",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu",
+        "--pch-storage=memory",
+        "--log=verbose",
+        "--pretty"
+    ],
+    "clangd.onConfigChanged": "restart",
+    "clangd.detectExtensionConflicts": true,
+    
+    // Enable clangd as the language server for C/C++
+    "[cpp]": {
+        "editor.semanticHighlighting.enabled": true
+    },
+    "[c]": {
+        "editor.semanticHighlighting.enabled": true
     }
     
 //     ,
