@@ -198,7 +198,7 @@ bool IMUDevice::update_all_data()
     raw_data_.acc_y = read_sensor_data(SENSOR_ACC_Y);
     unit_data_.acc_y = raw_data_.acc_y / 4096.0f;
     raw_data_.acc_z = read_sensor_data(SENSOR_ACC_Z);
-    unit_data_.acc_z = -raw_data_.acc_z / 4096.0f;
+    unit_data_.acc_z = raw_data_.acc_z / 4096.0f;
     
     // 读取陀螺仪数据
     raw_data_.gyro_x = read_sensor_data(SENSOR_GYRO_X);
@@ -206,7 +206,7 @@ bool IMUDevice::update_all_data()
     raw_data_.gyro_y = read_sensor_data(SENSOR_GYRO_Y);
     unit_data_.gyro_y = raw_data_.gyro_y / 16.4f;
     raw_data_.gyro_z = read_sensor_data(SENSOR_GYRO_Z);
-    unit_data_.gyro_z = -raw_data_.gyro_z / 16.4f;
+    unit_data_.gyro_z = raw_data_.gyro_z / 16.4f;
 
     return true;
 }

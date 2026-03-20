@@ -71,31 +71,32 @@ int main_init_task()
     printf("IMU Device Type: %d\n", type);
 
     // 示例：测量零漂
-    printf("\n=== Zero Drift Calibration Example ===\n");
-    if (imu.measure_zero_drift()) {
-        printf("Zero drift calibration successful!\n");
-        printf("Bias values stored in IMU device.\n");
+    // printf("\n=== Zero Drift Calibration Example ===\n");
+    // if (imu.measure_zero_drift()) {
+    //     printf("Zero drift calibration successful!\n");
+    //     std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待1秒，确保数据稳定
+    //     printf("Bias values stored in IMU device.\n");
         
-        // 示例：获取补偿后的数据
-        printf("\n=== Compensated Data Example ===\n");
-        for (int i = 0; i < 3; i++) {
-            if (imu.update_all_data()) {
-                imu.apply_zero_drift_compensation();
-                const imu_unit_data_t& raw_data = imu.get_unit_data();
-                const imu_unit_data_t& comp_data = imu.get_compensated_unit_data();
+    //     // 示例：获取补偿后的数据
+    //     printf("\n=== Compensated Data Example ===\n");
+    //     for (int i = 0; i < 3; i++) {
+    //         if (imu.update_all_data()) {
+    //             imu.apply_zero_drift_compensation();
+    //             const imu_unit_data_t& raw_data = imu.get_unit_data();
+    //             const imu_unit_data_t& comp_data = imu.get_compensated_unit_data();
                 
-                printf("Sample %d:\n", i + 1);
-                printf("  Raw Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n", 
-                       raw_data.gyro_x, raw_data.gyro_y, raw_data.gyro_z);
-                printf("  Comp Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n", 
-                       comp_data.gyro_x, comp_data.gyro_y, comp_data.gyro_z);
-                printf("\n");
-            }
-            sleep_for(milliseconds(100));
-        }
-    } else {
-        printf("Zero drift calibration failed or skipped.\n");
-    }
+    //             printf("Sample %d:\n", i + 1);
+    //             printf("  Raw Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n", 
+    //                    raw_data.gyro_x, raw_data.gyro_y, raw_data.gyro_z);
+    //             printf("  Comp Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n", 
+    //                    comp_data.gyro_x, comp_data.gyro_y, comp_data.gyro_z);
+    //             printf("\n");
+    //         }
+    //         sleep_for(milliseconds(100));
+    //     }
+    // } else {
+    //     printf("Zero drift calibration failed or skipped.\n");
+    // }
     
     for (int i = 0; i < 3; i++) {
         // 更新所有数据
@@ -121,15 +122,50 @@ int main_init_task()
 
     //=================================== MOTOR_TEST ===================================
     motorTask->start();
+    motorTask->enableRampLimiting(true);
+    motorTask->setRampLimits(0.8, 0.2);  // 设置较小的加速度限制
     try {
-        motorTask->setTargetSpeed(0.3, 0.3);
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        // motorTask->setTargetSpeed(-1.0, -1.0);
-        // std::this_thread::sleep_for(std::chrono::seconds(3));
-        // motorTask->setTargetSpeed(3.0, 3.0);
-        // std::this_thread::sleep_for(std::chrono::seconds(3));
-        // motorTask->setTargetSpeed(-3.0, -3.0);
-        // std::this_thread::sleep_for(std::chrono::seconds(3));
+        // 测试1：无斜坡限制的基本测试
+        printf("\n=== 测试1：无斜坡限制的基本测试 ===\n");
+        motorTask->setTargetSpeed(1, 2);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(2, 4);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(4, 4);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(3, 3);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(1, 1);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(4, 4);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(0, 0);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(4, 4);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(1, 1);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(-2, -2);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        motorTask->setTargetSpeed(0, 0);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        
+        // 禁用斜坡限制
+        motorTask->enableRampLimiting(false);
+        printf("\n斜坡限制测试完成\n");
+        
+        // motorTask->stop();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         
     } catch (const std::exception& e) {
         std::cerr << "错误: " << e.what() << std::endl;
@@ -137,53 +173,53 @@ int main_init_task()
     }
 
     //=================================== ANGULAR_VELOCITY_CONTROL_TEST ===================================
-    printf("\n=== Angular Velocity Control Test ===\n");
-    try {
-        // 启用角速度控制
-        motorTask->enableAngularVelocityControl(true);
+    // printf("\n=== Angular Velocity Control Test ===\n");
+    // try {
+    //     // 启用角速度控制
+    //     // motorTask->enableAngularVelocityControl(true);
         
-        // 设置基础速度
-        motorTask->setBaseSpeed(0.0);  // 0.5 m/s 基础速度
+    //     // 设置基础速度
+    //     // motorTask->setBaseSpeed(1.0);  // 1.0 m/s 基础速度
         
-        // 测试1：顺时针旋转（正角速度）
-        printf("\nTest 1: Clockwise rotation (+90°/s)\n");
-        motorTask->setTargetAngularVelocity(30.0);  // 90°/s 顺时针
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+    //     // 测试1：顺时针旋转（正角速度）
+    //     // printf("\nTest 1: Clockwise rotation (+90°/s)\n");
+    //     // motorTask->setTargetAngularVelocity(60.0);  // 90°/s 顺时针
+    //     // std::this_thread::sleep_for(std::chrono::seconds(30));
         
-        // // 测试2：逆时针旋转（负角速度）
-        // printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
-        // motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
-        // std::this_thread::sleep_for(std::chrono::seconds(5));
+    //     // // 测试2：逆时针旋转（负角速度）
+    //     // printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
+    //     // motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
+    //     // std::this_thread::sleep_for(std::chrono::seconds(5));
         
-        // // 测试3：快速旋转
-        // printf("\nTest 3: Fast rotation (+180°/s)\n");
-        // motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
-        // std::this_thread::sleep_for(std::chrono::seconds(3));
+    //     // // 测试3：快速旋转
+    //     // printf("\nTest 3: Fast rotation (+180°/s)\n");
+    //     // motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
+    //     // std::this_thread::sleep_for(std::chrono::seconds(3));
         
-        // // 测试4：慢速旋转
-        // printf("\nTest 4: Slow rotation (+45°/s)\n");
-        // motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
-        // std::this_thread::sleep_for(std::chrono::seconds(4));
+    //     // // 测试4：慢速旋转
+    //     // printf("\nTest 4: Slow rotation (+45°/s)\n");
+    //     // motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
+    //     // std::this_thread::sleep_for(std::chrono::seconds(4));
         
-        // // 测试5：停止旋转，只保持基础速度
-        // printf("\nTest 5: Straight line (0°/s)\n");
-        // motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
-        // std::this_thread::sleep_for(std::chrono::seconds(3));
+    //     // // 测试5：停止旋转，只保持基础速度
+    //     // printf("\nTest 5: Straight line (0°/s)\n");
+    //     // motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
+    //     // std::this_thread::sleep_for(std::chrono::seconds(3));
         
-        // // 测试6：改变基础速度
-        // printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
-        // motorTask->setBaseSpeed(0.3);  // 降低基础速度
-        // motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
-        // std::this_thread::sleep_for(std::chrono::seconds(4));
+    //     // // 测试6：改变基础速度
+    //     // printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
+    //     // motorTask->setBaseSpeed(0.3);  // 降低基础速度
+    //     // motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
+    //     // std::this_thread::sleep_for(std::chrono::seconds(4));
         
-        // 禁用角速度控制
-        motorTask->enableAngularVelocityControl(false);
-        printf("\nAngular velocity control test completed.\n");
+    //     // 禁用角速度控制
+    //     motorTask->enableAngularVelocityControl(false);
+    //     printf("\nAngular velocity control test completed.\n");
         
-    } catch (const std::exception& e) {
-        std::cerr << "Angular velocity control test error: " << e.what() << std::endl;
-        motorTask->enableAngularVelocityControl(false);
-    }
+    // } catch (const std::exception& e) {
+    //     std::cerr << "Angular velocity control test error: " << e.what() << std::endl;
+    //     motorTask->enableAngularVelocityControl(false);
+    // }
 
     //================================== ENCODER_TEST ==================================
     try {
@@ -273,14 +309,14 @@ void argument_config(void)
 {
     motors = std::make_unique<DualMotorController>();
 
-    leftParams.Kp = 0.3;
-    leftParams.Ki = 0.5;
+    leftParams.Kp = 1.0;
+    leftParams.Ki = 0.4;
     leftParams.Kd = 0.0;
-    leftParams.limitP = 1.0;
-    leftParams.limitI = 1.0;
+    leftParams.limitP = 0.9;
+    leftParams.limitI = 0.7;
     leftParams.limitD = 0.0;
-    leftParams.limitIMin = -0.8;
-    leftParams.limitOutput = 1.0;
+    leftParams.limitIMin = -0.7;
+    leftParams.limitOutput = 0.7;
     leftParams.enableAntiWindup = true;
 
     rightParams = leftParams;

@@ -17,6 +17,7 @@ MotorControlTask::MotorControlTask(
     , targetAngularVelocity(0.0)
     , baseSpeed(0.0)
     , angularVelocityControlEnabled(false)
+    , rampLimitingEnabled(false)          // 默认禁用斜坡限制
     , leftParams(leftParams)
     , rightParams(rightParams)
     , motors(motors)
@@ -30,7 +31,11 @@ MotorControlTask::MotorControlTask(
     , taskError(false)
     , workerThread(nullptr)
     , rtPriority(50)
-    , rtPolicy(SCHED_FIFO) {
+    , rtPolicy(SCHED_FIFO)
+    , leftRampLimiter(0.5, 0.5)          // 默认加速度=0.5，减速度=0.5
+    , rightRampLimiter(0.5, 0.5)         // 默认加速度=0.5，减速度=0.5
+    , lastLeftOutput_(0.0)
+    , lastRightOutput_(0.0) {
     
     if (!motors || !leftEncoder || !rightEncoder) {
         throw std::invalid_argument("MotorControlTask: Null pointer provided");
@@ -71,6 +76,7 @@ MotorControlTask::MotorControlTask(
     , targetAngularVelocity(0.0)
     , baseSpeed(0.0)
     , angularVelocityControlEnabled(false)
+    , rampLimitingEnabled(false)          // 默认禁用斜坡限制
     , leftParams(leftParams)
     , rightParams(rightParams)
     , motors(motors)
@@ -84,7 +90,11 @@ MotorControlTask::MotorControlTask(
     , taskError(false)
     , workerThread(nullptr)
     , rtPriority(50)
-    , rtPolicy(SCHED_FIFO) {
+    , rtPolicy(SCHED_FIFO)
+    , leftRampLimiter(0.5, 0.5)          // 默认加速度=0.5，减速度=0.5
+    , rightRampLimiter(0.5, 0.5)         // 默认加速度=0.5，减速度=0.5
+    , lastLeftOutput_(0.0)
+    , lastRightOutput_(0.0) {
     
     if (!motors || !leftEncoder || !rightEncoder) {
         throw std::invalid_argument("MotorControlTask: Null pointer provided");
@@ -204,9 +214,11 @@ void MotorControlTask::run() {
     ControlState state = ControlState::INIT;
     
     // 创建左右轮PID控制器
-    Control::PID leftPID(leftParams);
-    Control::PID rightPID(rightParams);
-    
+    // Control::PIDWithDeadband leftPID(leftParams, 0.2);
+    // Control::PIDWithDeadband rightPID(rightParams, 0.2);
+    Control::PID leftPID(leftParams);leftPID.setIntegral(0.2); // 设置初始积分值，帮助快速响应
+    Control::PID rightPID(rightParams);rightPID.setIntegral(0.2); // 设置初始积分值，帮助快速响应
+
     // 创建角速度PID控制器（如果需要）
     Control::PID angularVelocityPID(angularVelocityParams);
     
@@ -314,7 +326,6 @@ void MotorControlTask::run() {
                 // 角速度PID控制
                 double angularVelocityError = targetAngVel - actualAngularVelocity;
                 double angularControlOutput = angularVelocityPID.calculate(targetAngVel, actualAngularVelocity, controlPeriod);
-                printf("%.2f,%.2f,%.2f\n",actualAngularVelocity,angularVelocityError,angularControlOutput);
                 
                 // 将角速度控制输出转换为速度差
                 // 注意：angularControlOutput是角速度误差的修正量（°/s）
@@ -329,6 +340,7 @@ void MotorControlTask::run() {
                 // 更新目标速度
                 currentLeftTarget = leftTarget;
                 currentRightTarget = rightTarget;
+                printf("%.2f,%.2f,%.2f,%.2f,%.2f",actualAngularVelocity,angularVelocityError,angularControlOutput,leftTarget,rightTarget);
                 
                 // 更新原子变量（用于显示）
                 leftTargetSpeed.store(leftTarget);
@@ -336,68 +348,42 @@ void MotorControlTask::run() {
             }
             
             // PID计算
-            double leftOutput = leftPID.calculate(currentLeftTarget, leftSpeed, controlPeriod);
-            double rightOutput = rightPID.calculate(currentRightTarget, rightSpeed, controlPeriod);
+            double leftOutput = leftPID.calculate(currentLeftTarget, leftSpeed);
+            double rightOutput = rightPID.calculate(currentRightTarget, rightSpeed);
+
+            // 应用斜坡限制（如果启用）
+            bool rampEnabled = rampLimitingEnabled.load();
+            if (rampEnabled) {
+                leftOutput = leftRampLimiter.apply(leftOutput, lastLeftOutput_, controlPeriod);
+                rightOutput = rightRampLimiter.apply(rightOutput, lastRightOutput_, controlPeriod);
+                lastLeftOutput_ = leftOutput;
+                lastRightOutput_ = rightOutput;
+            }
+
+            printf(",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",currentLeftTarget,currentRightTarget,leftSpeed,rightSpeed,leftOutput,rightOutput);
             
+            // 添加斜坡状态输出
+            if (rampEnabled) {
+                printf(",RAMP");
+            } else {
+                printf(",NORAMP");
+            }
+            printf("\n");
+            
+            std::array<float, 12> data = {
+                (float)currentLeftTarget,           // 0
+                (float)currentRightTarget,          // 1
+                (float)leftSpeed,                   // 2
+                (float)rightSpeed,                  // 3
+                (float)leftOutput,                  // 4
+                (float)rightOutput,                 // 5
+                (float)leftPID.getIntegral(),       // 6
+                (float)rightPID.getIntegral(),      // 7
+            };
+            send_udp_data("status", data.data(), data.size());
+
             // 应用控制输出
             motors->setSpeeds(static_cast<float>(leftOutput), static_cast<float>(rightOutput));
-            
-            // 周期性状态输出（每秒一次）
-            static int cycleCount = 0;
-            if (++cycleCount >= static_cast<int>(1.0 / controlPeriod)) {
-                bool angularControlEnabled = angularVelocityControlEnabled.load();
-                
-                if (angularControlEnabled && imu != nullptr) {
-                    double targetAngVel = targetAngularVelocity.load();
-                    double currentBaseSpeed = baseSpeed.load();
-                    
-                    printf("Status - Base:%.3f m/s, AngTarget:%.3f °/s | "
-                           "Left: Target=%.3f, Current=%.3f, Output=%.3f | "
-                           "Right: Target=%.3f, Current=%.3f, Output=%.3f\n",
-                           currentBaseSpeed, targetAngVel,
-                           currentLeftTarget, leftSpeed, leftOutput,
-                           currentRightTarget, rightSpeed, rightOutput);
-                    
-                    // UDP发送扩展的PID状态数据（包含角速度信息）
-                    std::array<float, 12> data = {
-                        (float)currentBaseSpeed,
-                        (float)targetAngVel,
-                        (float)angularVelocityPID.getError(),
-                        (float)currentLeftTarget,
-                        (float)leftSpeed,
-                        (float)leftOutput,
-                        (float)leftPID.getError(),
-                        (float)currentRightTarget,
-                        (float)rightSpeed,
-                        (float)rightOutput,
-                        (float)rightPID.getError(),
-                        (float)angularVelocityPID.getIntegral()
-                    };
-                    
-                    send_udp_data("motor_angular_status", data.data(), data.size());
-                } else {
-                    printf("Status - Left: Target=%.3f, Current=%.3f, Output=%.3f | "
-                           "Right: Target=%.3f, Current=%.3f, Output=%.3f\n",
-                           currentLeftTarget, leftSpeed, leftOutput,
-                           currentRightTarget, rightSpeed, rightOutput);
-                    
-                    // UDP发送PID状态数据
-                    std::array<float, 8> data = {
-                        (float)currentLeftTarget,
-                        (float)leftSpeed,
-                        (float)leftOutput,
-                        (float)leftPID.getError(),
-                        (float)leftPID.getIntegral(),
-                        (float)currentRightTarget,
-                        (float)rightSpeed,
-                        (float)rightOutput
-                    };
-                    
-                    send_udp_data("motor_status", data.data(), data.size());
-                }
-                
-                cycleCount = 0;
-            }
             
         } catch (const std::exception& e) {
             printf("Exception in control loop: %s\n", e.what());
@@ -496,11 +482,11 @@ bool MotorControlTask::isValidAngularVelocity(double angularVelocity) const {
 
 std::pair<double, double> MotorControlTask::kinematicsDecomposition(double baseSpeed, double angularVelocityRad) const {
     // 计算速度差：Δv = ω * L / 2
-    double deltaV = angularVelocityRad * wheelbase / 2.0;
+    double deltaV = angularVelocityRad * wheelbase / 2.0;;
     
     // 计算左右轮速度
-    double leftSpeed = baseSpeed - deltaV;
-    double rightSpeed = baseSpeed + deltaV;
+    double leftSpeed = baseSpeed + deltaV;
+    double rightSpeed = baseSpeed - deltaV;
     
     return {leftSpeed, rightSpeed};
 }
@@ -511,4 +497,107 @@ double MotorControlTask::degToRad(double deg) const {
 
 double MotorControlTask::radToDeg(double rad) const {
     return rad * 180.0 / M_PI;
+}
+
+// ==================== RampLimiter类实现 ====================
+
+MotorControlTask::RampLimiter::RampLimiter(double maxAcceleration, double maxDeceleration)
+    : maxAcceleration_(maxAcceleration)
+    , maxDeceleration_(maxDeceleration) {
+}
+
+double MotorControlTask::RampLimiter::apply(double target, double current, double dt) {
+    if (dt <= 0.0) {
+        return target;  // 无效的时间间隔，直接返回目标值
+    }
+    
+    // 计算允许的最大变化量
+    double maxChange = 0.0;
+    if (target > current) {
+        // 加速情况
+        maxChange = maxAcceleration_ * dt;
+    } else {
+        // 减速情况
+        maxChange = maxDeceleration_ * dt;
+    }
+    
+    // 限制变化量
+    double difference = target - current;
+    if (std::abs(difference) <= maxChange) {
+        // 变化量在允许范围内，直接到达目标值
+        return target;
+    } else {
+        // 限制变化量
+        if (difference > 0) {
+            return current + maxChange;
+        } else {
+            return current - maxChange;
+        }
+    }
+}
+
+void MotorControlTask::RampLimiter::reset(double value) {
+    // 这个实现不需要重置内部状态，因为RampLimiter是无状态的
+    // 状态由外部管理（lastLeftOutput_和lastRightOutput_）
+}
+
+void MotorControlTask::RampLimiter::setLimits(double maxAcceleration, double maxDeceleration) {
+    if (maxAcceleration > 0.0) {
+        maxAcceleration_ = maxAcceleration;
+    }
+    if (maxDeceleration > 0.0) {
+        maxDeceleration_ = maxDeceleration;
+    }
+}
+
+std::pair<double, double> MotorControlTask::RampLimiter::getLimits() const {
+    return {maxAcceleration_, maxDeceleration_};
+}
+
+// ==================== 斜坡控制相关方法实现 ====================
+
+void MotorControlTask::enableRampLimiting(bool enable) {
+    bool wasEnabled = rampLimitingEnabled.load();
+    rampLimitingEnabled.store(enable);
+    
+    if (enable && !wasEnabled) {
+        printf("Ramp limiting enabled\n");
+        // 重置上一次的输出值为当前电机速度（如果有的话）
+        // 这里可以添加获取当前速度的逻辑，但为了简单起见，我们重置为0
+        lastLeftOutput_ = 0.0;
+        lastRightOutput_ = 0.0;
+    } else if (!enable && wasEnabled) {
+        printf("Ramp limiting disabled\n");
+    }
+}
+
+bool MotorControlTask::isRampLimitingEnabled() const {
+    return rampLimitingEnabled.load();
+}
+
+void MotorControlTask::setRampLimits(double maxAcceleration, double maxDeceleration) {
+    if (maxAcceleration <= 0.0 || maxDeceleration <= 0.0) {
+        printf("Warning: Invalid ramp limits - acceleration: %.3f, deceleration: %.3f\n", 
+               maxAcceleration, maxDeceleration);
+        return;
+    }
+    
+    leftRampLimiter.setLimits(maxAcceleration, maxDeceleration);
+    rightRampLimiter.setLimits(maxAcceleration, maxDeceleration);
+    
+    printf("Ramp limits updated - acceleration: %.3f, deceleration: %.3f (duty/s)\n", 
+           maxAcceleration, maxDeceleration);
+}
+
+std::pair<double, double> MotorControlTask::getRampLimits() const {
+    return leftRampLimiter.getLimits();  // 左右限制器参数相同
+}
+
+void MotorControlTask::resetRampLimiters(double leftValue, double rightValue) {
+    leftRampLimiter.reset(leftValue);
+    rightRampLimiter.reset(rightValue);
+    lastLeftOutput_ = leftValue;
+    lastRightOutput_ = rightValue;
+    
+    printf("Ramp limiters reset - left: %.3f, right: %.3f\n", leftValue, rightValue);
 }

@@ -146,6 +146,40 @@ public:
      * @param wheelRadius 车轮半径（米）
      */
     void setWheelRadius(double wheelRadius);
+    
+    // ==================== 斜坡控制相关方法 ====================
+    
+    /**
+     * @brief 启用或禁用斜坡限制
+     * @param enable 是否启用斜坡限制
+     */
+    void enableRampLimiting(bool enable = true);
+    
+    /**
+     * @brief 检查斜坡限制是否启用
+     * @return 斜坡限制是否启用
+     */
+    bool isRampLimitingEnabled() const;
+    
+    /**
+     * @brief 设置斜坡限制参数
+     * @param maxAcceleration 最大加速度（占空比/秒）
+     * @param maxDeceleration 最大减速度（占空比/秒）
+     */
+    void setRampLimits(double maxAcceleration, double maxDeceleration);
+    
+    /**
+     * @brief 获取当前斜坡限制参数
+     * @return 当前最大加速度和减速度（占空比/秒）
+     */
+    std::pair<double, double> getRampLimits() const;
+    
+    /**
+     * @brief 重置斜坡限制器的当前值
+     * @param leftValue 左轮重置值
+     * @param rightValue 右轮重置值
+     */
+    void resetRampLimiters(double leftValue = 0.0, double rightValue = 0.0);
 
 private:
     void run();
@@ -166,6 +200,29 @@ private:
     double radToDeg(double rad) const;
 
 private:
+    // 斜坡限制器类
+    class RampLimiter {
+    public:
+        RampLimiter(double maxAcceleration = 0.5, double maxDeceleration = 0.5);
+        
+        // 应用斜坡限制
+        double apply(double target, double current, double dt);
+        
+        // 重置当前值
+        void reset(double value);
+        
+        // 设置限制参数
+        void setLimits(double maxAcceleration, double maxDeceleration);
+        
+        // 获取当前限制参数
+        std::pair<double, double> getLimits() const;
+        
+    private:
+        double maxAcceleration_;    // 最大加速度（占空比/秒）
+        double maxDeceleration_;    // 最大减速度（占空比/秒）
+    };
+
+private:
     // 原子变量存储目标速度（左右轮独立）
     std::atomic<double> leftTargetSpeed;
     std::atomic<double> rightTargetSpeed;
@@ -174,6 +231,9 @@ private:
     std::atomic<double> targetAngularVelocity;      // 目标角速度（°/s）
     std::atomic<double> baseSpeed;                  // 基础线速度（m/s）
     std::atomic<bool> angularVelocityControlEnabled; // 角速度控制是否启用
+    
+    // 斜坡控制相关原子变量
+    std::atomic<bool> rampLimitingEnabled;          // 斜坡限制是否启用
     
     // PID参数（非原子，初始化后不变）
     const Control::PID::Parameters leftParams;
@@ -203,4 +263,12 @@ private:
     // 实时优先级设置
     int rtPriority;
     int rtPolicy;
+    
+    // 斜坡限制器
+    RampLimiter leftRampLimiter;
+    RampLimiter rightRampLimiter;
+    
+    // 上一次的输出值（用于斜坡计算）
+    double lastLeftOutput_;
+    double lastRightOutput_;
 };
