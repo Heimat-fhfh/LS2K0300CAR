@@ -3,65 +3,6 @@
 #include <cmath>
 #include <cstring>
 
-
-MotorControlTask::MotorControlTask(
-    const Control::PID::Parameters& leftParams,
-    const Control::PID::Parameters& rightParams,
-    DualMotorController* motors,
-    Encoder* leftEncoder,
-    Encoder* rightEncoder,
-    double controlPeriod
-)
-    : leftTargetSpeed(0.0)
-    , rightTargetSpeed(0.0)
-    , targetAngularVelocity(0.0)
-    , baseSpeed(0.0)
-    , angularVelocityControlEnabled(false)
-    , rampLimitingEnabled(false)          // 默认禁用斜坡限制
-    , leftParams(leftParams)
-    , rightParams(rightParams)
-    , motors(motors)
-    , leftEncoder(leftEncoder)
-    , rightEncoder(rightEncoder)
-    , imu(nullptr)
-    , wheelbase(0.158)      // 默认轮距15.8cm = 0.158m
-    , wheelRadius(0.0325)   // 默认车轮半径3.25cm = 0.0325m
-    , controlPeriod(controlPeriod)
-    , running(false)
-    , taskError(false)
-    , workerThread(nullptr)
-    , rtPriority(50)
-    , rtPolicy(SCHED_FIFO)
-    , leftRampLimiter(0.5, 0.5)          // 默认加速度=0.5，减速度=0.5
-    , rightRampLimiter(0.5, 0.5)         // 默认加速度=0.5，减速度=0.5
-    , lastLeftOutput_(0.0)
-    , lastRightOutput_(0.0) {
-    
-    if (!motors || !leftEncoder || !rightEncoder) {
-        throw std::invalid_argument("MotorControlTask: Null pointer provided");
-    }
-    
-    if (controlPeriod <= 0.0) {
-        throw std::invalid_argument("MotorControlTask: Invalid control period");
-    }
-    
-    // 初始化角速度PID参数
-    angularVelocityParams.Kp = 0.65;      // 适中的反应速度
-    angularVelocityParams.Ki = 0.25;      // 较温和的误差消除
-    angularVelocityParams.Kd = 0.015;     // 微弱的阻尼，防止超调
-    
-    angularVelocityParams.limitP = 40.0;  // 允许比例项产生较大的修正
-    angularVelocityParams.limitI = 15.0;  // 限制积分项，防止严重超调
-    angularVelocityParams.limitD = 10.0;  // 限制微分震荡
-    
-    // 总输出限幅：
-    // 如果偏差很大，允许 PID 在目标值基础上最多补偿 ±50°/s
-    angularVelocityParams.limitOutput = 50.0; 
-    
-    angularVelocityParams.limitIMin = -15.0;
-    angularVelocityParams.enableAntiWindup = true; // 必须开启
-}
-
 MotorControlTask::MotorControlTask(
     const Control::PID::Parameters& leftParams,
     const Control::PID::Parameters& rightParams,
