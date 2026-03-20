@@ -154,20 +154,21 @@ int main_init_task()
         // 启用角速度控制
         motorTask->enableAngularVelocityControl(true);
         motorTask->enableRampLimiting(true);
+        motorTask->setRampLimits(0.8, 0.2);  // 设置较小的加速度限制
         motorTask->start();
         
         // 设置基础速度
-        motorTask->setBaseSpeed(0.0);  // 基础速度
+        motorTask->setBaseSpeed(0.5);  // 基础速度
         
         // 测试1：顺时针旋转（正角速度）
         printf("\nTest 1: Clockwise rotation (+90°/s)\n");
-        motorTask->setTargetAngularVelocity(0.0);  // 90°/s 顺时针
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+        motorTask->setTargetAngularVelocity(90.0);  // 90°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(15));
         
-        // // 测试2：逆时针旋转（负角速度）
-        // printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
-        // motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
-        // std::this_thread::sleep_for(std::chrono::seconds(5));
+        // 测试2：逆时针旋转（负角速度）
+        printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
+        motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
+        std::this_thread::sleep_for(std::chrono::seconds(30));
         
         // // 测试3：快速旋转
         // printf("\nTest 3: Fast rotation (+180°/s)\n");

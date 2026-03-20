@@ -32,8 +32,8 @@ MotorControlTask::MotorControlTask(
     , workerThread(nullptr)
     , rtPriority(50)
     , rtPolicy(SCHED_FIFO)
-    , leftRampLimiter(0.5, 0.5)          // 默认加速度=0.5，减速度=0.5
-    , rightRampLimiter(0.5, 0.5)         // 默认加速度=0.5，减速度=0.5
+    , leftRampLimiter(0.8, 0.2)          // 默认加速度=0.5，减速度=0.5
+    , rightRampLimiter(0.8, 0.2)         // 默认加速度=0.5，减速度=0.5
     , lastLeftOutput_(0.0)
     , lastRightOutput_(0.0) {
     
@@ -46,19 +46,18 @@ MotorControlTask::MotorControlTask(
     }
     
     // 初始化角速度PID参数
-    angularVelocityParams.Kp = 0.2;      // 适中的反应速度
-    angularVelocityParams.Ki = 0.05;      // 较温和的误差消除
-    angularVelocityParams.Kd = 0.0;     // 微弱的阻尼，防止超调
+    angularVelocityParams.Kp = 1.0;      // 适中的反应速度
+    angularVelocityParams.Ki = 0.5;      // 较温和的误差消除
+    angularVelocityParams.Kd = 0.05;     // 微弱的阻尼，防止超调
     
-    angularVelocityParams.limitP = 40.0;  // 允许比例项产生较大的修正
-    angularVelocityParams.limitI = 15.0;  // 限制积分项，防止严重超调
-    angularVelocityParams.limitD = 10.0;  // 限制微分震荡
+    angularVelocityParams.limitP = 80.0;  // 允许比例项产生较大的修正
+    angularVelocityParams.limitI = 100.0;  // 限制积分项，防止严重超调
+    angularVelocityParams.limitD = 30.0;  // 限制微分震荡
     
     // 总输出限幅：
     // 如果偏差很大，允许 PID 在目标值基础上最多补偿 ±50°/s
-    angularVelocityParams.limitOutput = 30.0; 
-    
-    angularVelocityParams.limitIMin = -15.0;
+    angularVelocityParams.limitOutput = 120.0; 
+    angularVelocityParams.limitIMin = -120.0;
     angularVelocityParams.enableAntiWindup = true; // 必须开启
 }
 
@@ -429,8 +428,8 @@ std::pair<double, double> MotorControlTask::kinematicsDecomposition(double baseS
     double deltaV = angularVelocityRad * wheelbase / 2.0;;
     
     // 计算左右轮速度
-    double leftSpeed = baseSpeed + deltaV;
-    double rightSpeed = baseSpeed - deltaV;
+    double leftSpeed = baseSpeed - deltaV;
+    double rightSpeed = baseSpeed + deltaV;
     
     return {leftSpeed, rightSpeed};
 }
