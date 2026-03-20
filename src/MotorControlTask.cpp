@@ -315,6 +315,7 @@ void MotorControlTask::run() {
                         imuErrorCount = 0;
                         lastValidAngularVelocity = actualAngularVelocity;
                     }
+                
                 } else {
                     printf("Warning: Failed to update IMU data\n");
                 }
@@ -340,7 +341,8 @@ void MotorControlTask::run() {
                 // 更新目标速度
                 currentLeftTarget = leftTarget;
                 currentRightTarget = rightTarget;
-                printf("%.2f,%.2f,%.2f,%.2f,%.2f",actualAngularVelocity,angularVelocityError,angularControlOutput,leftTarget,rightTarget);
+                printf("当前角速度: %.2f, 误差: %.2f, 角速度控制输出: %.2f", 
+                    actualAngularVelocity, angularVelocityError, angularControlOutput);
                 
                 // 更新原子变量（用于显示）
                 leftTargetSpeed.store(leftTarget);
@@ -360,7 +362,8 @@ void MotorControlTask::run() {
                 lastRightOutput_ = rightOutput;
             }
 
-            printf(",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",currentLeftTarget,currentRightTarget,leftSpeed,rightSpeed,leftOutput,rightOutput);
+            printf(",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+                currentLeftTarget,currentRightTarget,leftSpeed,rightSpeed,leftOutput,rightOutput);
             
             // 添加斜坡状态输出
             if (rampEnabled) {

@@ -121,105 +121,85 @@ int main_init_task()
     }
 
     //=================================== MOTOR_TEST ===================================
-    motorTask->start();
-    motorTask->enableRampLimiting(true);
-    motorTask->setRampLimits(0.8, 0.2);  // 设置较小的加速度限制
-    try {
-        // 测试1：无斜坡限制的基本测试
-        printf("\n=== 测试1：无斜坡限制的基本测试 ===\n");
-        motorTask->setTargetSpeed(1, 2);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(2, 4);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(4, 4);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(3, 3);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(1, 1);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(4, 4);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(0, 0);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(4, 4);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(1, 1);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(-2, -2);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        motorTask->setTargetSpeed(0, 0);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        
-        // 禁用斜坡限制
-        motorTask->enableRampLimiting(false);
-        printf("\n斜坡限制测试完成\n");
-        
-        // motorTask->stop();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        
-    } catch (const std::exception& e) {
-        std::cerr << "错误: " << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    //=================================== ANGULAR_VELOCITY_CONTROL_TEST ===================================
-    // printf("\n=== Angular Velocity Control Test ===\n");
+    // motorTask->start();
+    // motorTask->enableRampLimiting(true);
+    // motorTask->setRampLimits(0.8, 0.2);  // 设置较小的加速度限制
     // try {
-    //     // 启用角速度控制
-    //     // motorTask->enableAngularVelocityControl(true);
+    //     // 测试1：无斜坡限制的基本测试
+    //     printf("\n=== 测试1：无斜坡限制的基本测试 ===\n");
+    //     motorTask->setTargetSpeed(1, 4);
+    //     std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    //     motorTask->setTargetSpeed(4, 1);
+    //     std::this_thread::sleep_for(std::chrono::seconds(5));
         
-    //     // 设置基础速度
-    //     // motorTask->setBaseSpeed(1.0);  // 1.0 m/s 基础速度
+    //     motorTask->setTargetSpeed(0, 0);
+    //     std::this_thread::sleep_for(std::chrono::seconds(2));
         
-    //     // 测试1：顺时针旋转（正角速度）
-    //     // printf("\nTest 1: Clockwise rotation (+90°/s)\n");
-    //     // motorTask->setTargetAngularVelocity(60.0);  // 90°/s 顺时针
-    //     // std::this_thread::sleep_for(std::chrono::seconds(30));
-        
-    //     // // 测试2：逆时针旋转（负角速度）
-    //     // printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
-    //     // motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
-    //     // std::this_thread::sleep_for(std::chrono::seconds(5));
-        
-    //     // // 测试3：快速旋转
-    //     // printf("\nTest 3: Fast rotation (+180°/s)\n");
-    //     // motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
-    //     // std::this_thread::sleep_for(std::chrono::seconds(3));
-        
-    //     // // 测试4：慢速旋转
-    //     // printf("\nTest 4: Slow rotation (+45°/s)\n");
-    //     // motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
-    //     // std::this_thread::sleep_for(std::chrono::seconds(4));
-        
-    //     // // 测试5：停止旋转，只保持基础速度
-    //     // printf("\nTest 5: Straight line (0°/s)\n");
-    //     // motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
-    //     // std::this_thread::sleep_for(std::chrono::seconds(3));
-        
-    //     // // 测试6：改变基础速度
-    //     // printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
-    //     // motorTask->setBaseSpeed(0.3);  // 降低基础速度
-    //     // motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
-    //     // std::this_thread::sleep_for(std::chrono::seconds(4));
-        
-    //     // 禁用角速度控制
-    //     motorTask->enableAngularVelocityControl(false);
-    //     printf("\nAngular velocity control test completed.\n");
+    //     // 禁用斜坡限制
+    //     motorTask->enableRampLimiting(false);
+    //     motorTask->stop();
+    //     printf("\n斜坡限制测试完成\n");
+
+    //     std::this_thread::sleep_for(std::chrono::seconds(1));
         
     // } catch (const std::exception& e) {
-    //     std::cerr << "Angular velocity control test error: " << e.what() << std::endl;
-    //     motorTask->enableAngularVelocityControl(false);
+    //     std::cerr << "错误: " << e.what() << std::endl;
+    //     return EXIT_FAILURE;
     // }
+
+    //=================================== ANGULAR_VELOCITY_CONTROL_TEST ===================================
+    printf("\n=== Angular Velocity Control Test ===\n");
+    try {
+        // 启用角速度控制
+        motorTask->enableAngularVelocityControl(true);
+        motorTask->enableRampLimiting(true);
+        motorTask->start();
+        
+        // 设置基础速度
+        motorTask->setBaseSpeed(0.0);  // 基础速度
+        
+        // 测试1：顺时针旋转（正角速度）
+        printf("\nTest 1: Clockwise rotation (+90°/s)\n");
+        motorTask->setTargetAngularVelocity(0.0);  // 90°/s 顺时针
+        std::this_thread::sleep_for(std::chrono::seconds(30));
+        
+        // // 测试2：逆时针旋转（负角速度）
+        // printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
+        // motorTask->setTargetAngularVelocity(-90.0);  // -90°/s 逆时针
+        // std::this_thread::sleep_for(std::chrono::seconds(5));
+        
+        // // 测试3：快速旋转
+        // printf("\nTest 3: Fast rotation (+180°/s)\n");
+        // motorTask->setTargetAngularVelocity(180.0);  // 180°/s 顺时针
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
+        
+        // // 测试4：慢速旋转
+        // printf("\nTest 4: Slow rotation (+45°/s)\n");
+        // motorTask->setTargetAngularVelocity(45.0);  // 45°/s 顺时针
+        // std::this_thread::sleep_for(std::chrono::seconds(4));
+        
+        // // 测试5：停止旋转，只保持基础速度
+        // printf("\nTest 5: Straight line (0°/s)\n");
+        // motorTask->setTargetAngularVelocity(0.0);  // 0°/s 直行
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
+        
+        // // 测试6：改变基础速度
+        // printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
+        // motorTask->setBaseSpeed(0.3);  // 降低基础速度
+        // motorTask->setTargetAngularVelocity(60.0);  // 60°/s 顺时针
+        // std::this_thread::sleep_for(std::chrono::seconds(4));
+        
+        // 禁用角速度控制
+        motorTask->stop();
+        motorTask->enableAngularVelocityControl(false);
+        motorTask->enableRampLimiting(false);
+        printf("\nAngular velocity control test completed.\n");
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Angular velocity control test error: " << e.what() << std::endl;
+        motorTask->enableAngularVelocityControl(false);
+    }
 
     //================================== ENCODER_TEST ==================================
     try {
