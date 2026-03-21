@@ -1,5 +1,4 @@
-#ifndef BUZZER_HPP
-#define BUZZER_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -69,5 +68,3 @@ private:
     std::condition_variable stop_cv_;
     std::atomic<bool> stop_requested_;
 };
-
-#endif

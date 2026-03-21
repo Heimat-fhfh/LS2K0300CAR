@@ -35,7 +35,7 @@
 #include "encoder.hpp"
 #include "DualMotorController.h"
 #include "MotorControlTask.hpp"
-
+#include "buzzer.hpp"
 
 #define SERVO_MOTOR1_PWM        "/dev/zf_device_pwm_servo"
 
@@ -76,3 +76,13 @@ void pit_callback(void);
 void sigint_handler(int signum);
 void cleanup();
 int main_init_task();
+
+struct MainTestConfig {
+	bool buzzer_test = false;
+	bool imu_test = false;
+	bool motor_test = false;
+	bool angular_velocity_test = false;
+	bool encoder_test = false;
+};
+
+int main_test_task(const MainTestConfig& test_config);

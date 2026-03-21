@@ -178,7 +178,6 @@ bool IMUDevice::initialize()
     }
     
     is_initialized_ = true;
-    printf("IMU device initialized successfully\n");
     
     return true;
 }

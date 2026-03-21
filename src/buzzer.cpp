@@ -154,7 +154,7 @@ void Buzzer::ensureDeviceAccessible() const {
 
 void Buzzer::setLevel(bool active) {
     ensureDeviceAccessible();
-    gpio_set_level(device_path_.c_str(), active ? kBuzzerOnLevel : kBuzzerOffLevel);
+    gpio_set_level(device_path_.c_str(), !active ? kBuzzerOnLevel : kBuzzerOffLevel);
 }
 
 void Buzzer::startPattern(const std::vector<uint32_t>& on_times,
