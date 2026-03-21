@@ -14,22 +14,18 @@ Encoder encoder_right("/dev/zf_encoder_2", true); // 右轮编码器取反
 Control::PID::Parameters leftParams,rightParams;
 std::unique_ptr<MotorControlTask> motorTask;
 Buzzer buzzer;
+MainTestConfig test_config;
 
 int main() {
     argument_config();
     if (main_init_task() == EXIT_SUCCESS) { cout << "初始化成功" << endl; } else { cout << "初始化失败" << endl; return EXIT_FAILURE; }
-
-    MainTestConfig test_config;
-    test_config.buzzer_test = true;
-    test_config.imu_test = true;
-    test_config.motor_test = true;
-    test_config.angular_velocity_test = true;
-    test_config.encoder_test = true;
-
+    
     if (main_test_task(test_config) != EXIT_SUCCESS) {
         cout << "功能测试失败" << endl;
         return EXIT_FAILURE;
     }
+
+
     // VideoCapture Camera; CameraInit(Camera,CameraKind::VIDEO_0,320,240,120);
 
 
@@ -37,6 +33,44 @@ int main() {
     
     // Camera.release();
     return 0;
+}
+
+void argument_config(void)
+{
+    test_config.buzzer_test = false;
+    test_config.imu_test = false;
+    test_config.motor_test = false;
+    test_config.angular_velocity_test = false;
+    test_config.encoder_test = false;
+
+    buzzer.setShortDuration(60)
+            .setLongDuration(300)
+            .setIntervalDuration(120);
+
+    motors = std::make_unique<DualMotorController>();
+
+    leftParams.Kp = 1.0;
+    leftParams.Ki = 0.4;
+    leftParams.Kd = 0.0;
+    leftParams.limitP = 0.9;
+    leftParams.limitI = 0.7;
+    leftParams.limitD = 0.0;
+    leftParams.limitIMin = -0.7;
+    leftParams.limitOutput = 0.7;
+    leftParams.enableAntiWindup = true;
+
+    rightParams = leftParams;
+
+    // 使用带IMU的构造函数创建电机控制任务
+    motorTask = std::make_unique<MotorControlTask>(
+            leftParams,
+            rightParams,
+            motors.get(),
+            &encoder_left,
+            &encoder_right,
+            &imu,           // 传入IMU设备指针
+            0.01            // 10ms控制周期
+        );
 }
 
 void sigint_handler(int signum) 
@@ -304,39 +338,6 @@ int main_test_task(const MainTestConfig& test_config)
     motorTask->stop();
 
     return EXIT_SUCCESS;
-}
-
-void argument_config(void)
-{
-    buzzer.setShortDuration(60)
-            .setLongDuration(300)
-            .setIntervalDuration(120);
-
-
-    motors = std::make_unique<DualMotorController>();
-
-    leftParams.Kp = 1.0;
-    leftParams.Ki = 0.4;
-    leftParams.Kd = 0.0;
-    leftParams.limitP = 0.9;
-    leftParams.limitI = 0.7;
-    leftParams.limitD = 0.0;
-    leftParams.limitIMin = -0.7;
-    leftParams.limitOutput = 0.7;
-    leftParams.enableAntiWindup = true;
-
-    rightParams = leftParams;
-
-    // 使用带IMU的构造函数创建电机控制任务
-    motorTask = std::make_unique<MotorControlTask>(
-            leftParams,
-            rightParams,
-            motors.get(),
-            &encoder_left,
-            &encoder_right,
-            &imu,           // 传入IMU设备指针
-            0.01            // 10ms控制周期
-        );
 }
 
 void pit_callback()
