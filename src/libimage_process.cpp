@@ -1,6 +1,7 @@
 #include "common_system.h"
 #include "common_program.h"
 #include "AAAdefine.h"
+#include <condition_variable>
 
 using namespace std;
 using namespace cv;
@@ -8,8 +9,35 @@ using namespace cv;
 
 
 
-
 mutex CameraCapture_Mutex;  // 摄像头采集资源互斥锁
+condition_variable CameraCapture_CV; // 双缓冲图像就绪通知
+
+void CameraCaptureThreadStart(VideoCapture& Camera,Img_Store *Img_Store_p,std::thread& captureThread)
+{
+	{
+		lock_guard<mutex> lock(CameraCapture_Mutex);
+		Img_Store_p->CameraThreadRunning = true;
+	}
+	if (captureThread.joinable())
+	{
+		captureThread.join();
+	}
+	captureThread = std::thread(CameraImgGetThread, std::ref(Camera), Img_Store_p);
+}
+
+
+void CameraCaptureThreadStop(Img_Store *Img_Store_p,std::thread& captureThread)
+{
+	{
+		lock_guard<mutex> lock(CameraCapture_Mutex);
+		Img_Store_p->CameraThreadRunning = false;
+	}
+	CameraCapture_CV.notify_all();
+	if (captureThread.joinable())
+	{
+		captureThread.join();
+	}
+}
 
 /*
 	CameraInit说明
@@ -71,22 +99,45 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 {
 	Mat Img;
+	{
+		lock_guard<mutex> lock(CameraCapture_Mutex);
+		Img_Store_p->CameraThreadRunning = true;
+	}
+
     while (1)
     {
-        Camera >> Img;   // 将视频流转为图像流
-        if (Img.empty()) {
-            cerr << "Error: Captured image is empty!" << endl;
-			exit(-1);
+		{
+			lock_guard<mutex> lock(CameraCapture_Mutex);
+			if (!Img_Store_p->CameraThreadRunning)
+			{
+				break;
+			}
+		}
+
+        if (!Camera.read(Img)) {
+            cerr << "Error: Camera read failed!" << endl;
+			this_thread::sleep_for(chrono::milliseconds(2));
             continue;
         }
-        CameraCapture_Mutex.lock();
-        if (!Img_Store_p->Img_Capture.empty())
-        {
-            (Img_Store_p->Img_Capture).pop();
+
+        if (Img.empty()) {
+            cerr << "Error: Captured image is empty!" << endl;
+			this_thread::sleep_for(chrono::milliseconds(2));
+            continue;
         }
-        (Img_Store_p->Img_Capture).push(Img);
-        CameraCapture_Mutex.unlock();
-		waitKey(30);
+
+		{
+			lock_guard<mutex> lock(CameraCapture_Mutex);
+			int writeIndex = Img_Store_p->Img_WriteIndex;
+			int staleIndex = 1 - writeIndex;
+			Img_Store_p->Img_CaptureBuffer[writeIndex] = Img.clone();
+			Img_Store_p->Img_BufferReady[writeIndex] = true;
+			Img_Store_p->Img_BufferReady[staleIndex] = false; // 始终丢弃旧帧，仅保留最新帧
+			Img_Store_p->Img_ReadIndex = writeIndex;
+			Img_Store_p->Img_WriteIndex = 1 - writeIndex;
+			Img_Store_p->Img_FrameSeq++;
+		}
+		CameraCapture_CV.notify_one();
     }
 }
 
@@ -96,15 +147,20 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 */
 void CameraImgGet(Img_Store *Img_Store_p)
 {
-	while (Img_Store_p->Img_Capture.empty());
-    CameraCapture_Mutex.lock();
-    if (!Img_Store_p->Img_Capture.empty()) {
-        (Img_Store_p->Img_Color) = (Img_Store_p->Img_Capture).front().clone();
-        Img_Store_p->Img_Capture.pop();
-    } else {
-        cerr << "Error: Img_Capture is empty!" << endl;
-    }
-    CameraCapture_Mutex.unlock();
+	unique_lock<mutex> lock(CameraCapture_Mutex);
+	CameraCapture_CV.wait(lock, [Img_Store_p]() {
+		return (Img_Store_p->Img_FrameSeq != Img_Store_p->Img_LastReadSeq) || (!Img_Store_p->CameraThreadRunning);
+	});
+
+	if ((Img_Store_p->Img_FrameSeq == Img_Store_p->Img_LastReadSeq) && (!Img_Store_p->CameraThreadRunning))
+	{
+		return;
+	}
+
+	int readIndex = Img_Store_p->Img_ReadIndex;
+	(Img_Store_p->Img_Color) = (Img_Store_p->Img_CaptureBuffer[readIndex]).clone();
+	Img_Store_p->Img_BufferReady[readIndex] = false;
+	Img_Store_p->Img_LastReadSeq = Img_Store_p->Img_FrameSeq;
 }
 
 

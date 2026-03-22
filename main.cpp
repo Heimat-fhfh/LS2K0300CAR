@@ -15,23 +15,261 @@ Control::PID::Parameters leftParams,rightParams;
 std::unique_ptr<MotorControlTask> motorTask;
 Buzzer buzzer;
 MainTestConfig test_config;
+std::atomic<bool> g_running(true);
+bool g_runtime_config_ok = false;
+CameraKind g_camera_kind = CameraKind::VIDEO_0;
+
+JSON_PIDConfigData JSON_PIDConfigData_s;
+Function_EN Function_EN_s;
+Data_Path Data_Path_s;
+
+ImgProcess imgProcess;
+Judge judge;
+SYNC Sync;
+
+void ReadInput_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Function_EN_p;
+    Data_Path_p->JSON_TrackConfigData_v[0].Forward = Data_Path_p->JSON_TrackConfigData_v[0].Default_Forward;
+}
+
+void ProcessAlgo_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
+    if (!Img_Store_p->Img_OTSU.empty())
+    {
+        memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
+    }
+    imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
+}
+
+void OutputDisplay_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    imgProcess.ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
+    displayMatOnIPS200(Img_Store_p->Img_Track);
+}
+
+void RunCameraCatchTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    ReadInput_CameraCatch(Img_Store_p,Data_Path_p,Function_EN_p);
+    ProcessAlgo_CameraCatch(Img_Store_p,Data_Path_p,Function_EN_p);
+    OutputDisplay_CameraCatch(Img_Store_p,Data_Path_p,Function_EN_p);
+}
+
+void ReadInput_JudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+}
+
+void ProcessAlgo_JudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    Function_EN_p->Loop_Kind_EN = judge.TrackKind_Judge(Img_Store_p,Data_Path_p,Function_EN_p);  // 切换至赛道循环
+}
+
+void OutputDisplay_JudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+}
+
+void RunJudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    ReadInput_JudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    ProcessAlgo_JudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    OutputDisplay_JudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
+}
+
+void ReadInput_CommonTrackTask(Function_EN *Function_EN_p)
+{
+    (void)Function_EN_p;
+}
+
+void ProcessAlgo_CommonTrackTask(Function_EN *Function_EN_p)
+{
+    Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP;
+}
+
+void OutputDisplay_CommonTrackTask(Function_EN *Function_EN_p)
+{
+    (void)Function_EN_p;
+}
+
+void RunCommonTrackTask(Function_EN *Function_EN_p)
+{
+    ReadInput_CommonTrackTask(Function_EN_p);
+    ProcessAlgo_CommonTrackTask(Function_EN_p);
+    OutputDisplay_CommonTrackTask(Function_EN_p);
+}
+
+void ReadInput_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+}
+
+void ProcessAlgo_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    switch(Data_Path_p->Circle_Track_Step)
+    {
+        case IN_PREPARE:
+        {
+            CircleTrack_Step_IN_Prepare(Img_Store_p,Data_Path_p);   // 准备入环补线
+            break;
+        }
+        case IN:
+        {
+            CircleTrack_Step_IN(Img_Store_p,Data_Path_p);   // 入环补线
+            break;
+        }
+        case OUT:
+        {
+            CircleTrack_Step_OUT(Img_Store_p,Data_Path_p);   // 出环补线
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    imgSearch_l_r(Img_Store_p,Data_Path_p);
+    Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换回图像循环
+}
+
+void OutputDisplay_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+}
+
+void RunCircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    ReadInput_CircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    ProcessAlgo_CircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    OutputDisplay_CircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+}
+
+void ReadInput_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+}
+
+void ProcessAlgo_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    AcrossTrack(Img_Store_p,Data_Path_p);
+    imgSearch_l_r(Img_Store_p,Data_Path_p);
+    Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换回图像循环
+}
+
+void OutputDisplay_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+}
+
+void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    ReadInput_AcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    ProcessAlgo_AcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    OutputDisplay_AcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+}
+
+void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    switch (Function_EN_p->Loop_Kind_EN)
+    {
+        case CAMERA_CATCH_LOOP:
+        {
+            RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p);
+            break;
+        }
+        case JUDGE_LOOP:
+        {
+            RunJudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
+            break;
+        }
+        case COMMON_TRACK_LOOP:
+        {
+            RunCommonTrackTask(Function_EN_p);
+            break;
+        }
+        case L_CIRCLE_TRACK_LOOP:
+        case R_CIRCLE_TRACK_LOOP:
+        {
+            RunCircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+            break;
+        }
+        case ACROSS_TRACK_LOOP:
+        {
+            RunAcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+            break;
+        }
+        default:
+        {
+            Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP;
+            break;
+        }
+    }
+}
+
+void FrameTaskAfterRead(Img_Store *Img_Store_p)
+{
+    if (!Function_EN_s.Game_EN)
+    {
+        return;
+    }
+    ProcessTrackTaskPerFrame(Img_Store_p,&Data_Path_s,&Function_EN_s);
+}
 
 int main() {
     argument_config();
-    if (main_init_task() == EXIT_SUCCESS) { cout << "初始化成功" << endl; } else { cout << "初始化失败" << endl; return EXIT_FAILURE; }
-    
-    if (main_test_task(test_config) != EXIT_SUCCESS) {
-        cout << "功能测试失败" << endl;
+    if (!g_runtime_config_ok)
+    {
+        cout << "配置同步失败" << endl;
         return EXIT_FAILURE;
     }
 
+    if (main_init_task() == EXIT_SUCCESS) { cout << "初始化成功" << endl; } else { cout << "初始化失败" << endl; return EXIT_FAILURE; }
+    
+    if (main_test_task(test_config) != EXIT_SUCCESS) {cout << "功能测试失败" << endl;return EXIT_FAILURE;}
 
-    // VideoCapture Camera; CameraInit(Camera,CameraKind::VIDEO_0,320,240,120);
+    VideoCapture Camera; CameraInit(Camera,g_camera_kind,320,240,120);
+    Img_Store Img_Store_s;
+    std::thread captureThread;
+
+    CameraCaptureThreadStart(Camera, &Img_Store_s, captureThread);
+
+    while (g_running.load() && Function_EN_s.Game_EN)
+    {
+        CameraImgGet(&Img_Store_s);
+        if (!g_running.load())
+        {
+            break;
+        }
+
+        if (Img_Store_s.Img_Color.empty())
+        {
+            continue;
+        }
+
+        FrameTaskAfterRead(&Img_Store_s);
+    }
+
+    CameraCaptureThreadStop(&Img_Store_s, captureThread);
 
 
 
     
-    // Camera.release();
+    Camera.release();
     return 0;
 }
 
@@ -61,6 +299,19 @@ void argument_config(void)
 
     rightParams = leftParams;
 
+    Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s,&JSON_PIDConfigData_s);
+    g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
+    if (g_runtime_config_ok)
+    {
+        g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
+        Function_EN_s.Game_EN = true;
+        Function_EN_s.Loop_Kind_EN = CAMERA_CATCH_LOOP;
+    }
+    else
+    {
+        Function_EN_s.Game_EN = false;
+    }
+
     // 使用带IMU的构造函数创建电机控制任务
     motorTask = std::make_unique<MotorControlTask>(
             leftParams,
@@ -75,9 +326,10 @@ void argument_config(void)
 
 void sigint_handler(int signum) 
 {
+    (void)signum;
     printf("收到Ctrl+C，程序即将退出\n");
     motors->stopAll();
-    exit(0);
+    g_running.store(false);
 }
 
 void cleanup()

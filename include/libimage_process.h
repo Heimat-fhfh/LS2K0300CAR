@@ -27,6 +27,18 @@ void CameraImgGetThread(cv::VideoCapture& Camera,Img_Store *Img_Store_p);
 
 
 /*
+    启动摄像头独立采集线程
+*/
+void CameraCaptureThreadStart(cv::VideoCapture& Camera,Img_Store *Img_Store_p,std::thread& captureThread);
+
+
+/*
+    停止摄像头独立采集线程
+*/
+void CameraCaptureThreadStop(Img_Store *Img_Store_p,std::thread& captureThread);
+
+
+/*
 	获取图像
     @参数说明
     Img_Store_p 图像存储结构体指针

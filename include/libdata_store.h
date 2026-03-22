@@ -123,7 +123,13 @@ struct InversePerspectiveMap {
 */
 typedef struct Img_Store
 {
-    std::queue<cv::Mat> Img_Capture;    // 摄像头图像
+    cv::Mat Img_CaptureBuffer[2];   // 摄像头双缓冲
+    int Img_WriteIndex = 0;         // 生产者写入索引
+    int Img_ReadIndex = 0;          // 消费者读取索引
+    bool Img_BufferReady[2] = {false, false}; // 双缓冲有效标志
+    uint64_t Img_FrameSeq = 0;      // 最新帧序号(生产者递增)
+    uint64_t Img_LastReadSeq = 0;   // 消费者已读取帧序号
+    bool CameraThreadRunning = false; // 摄像头采集线程运行状态
     cv::Mat Img_Color;  // 使用
     cv::Mat Img_Color_Unpivot = cv::Mat(RESULT_ROW, RESULT_COL, CV_8UC3);
     cv::Mat Img_Gray;     // 使用
