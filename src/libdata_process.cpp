@@ -44,29 +44,34 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
     JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
-    static int State = 0;   // 状态记录
-    static int State_Across = 0;
-    static int State_Circle_IN_PREPARE = 0; // 准备入环时间
-    static int State_Circle_IN = 0;    // 入环时间
-    static int State_Circle_OUT_PREPARE = 0;    // 准备出环时间
-    static int State_Circle_OUT = 0;    // 出环时间
+    // 这些静态量用来记录“最近一次进入某状态的帧号”，
+    // 以便对十字、入环、出环等状态增加时间门限，减少误判后状态回跳的概率。
+    static int State = 0;   // 当前帧号快照
+    static int State_Across = 0;   // 最近一次进入十字状态的帧号
+    static int State_Circle_IN_PREPARE = 0; // 最近一次进入准备入环状态的帧号
+    static int State_Circle_IN = 0;    // 最近一次进入入环状态的帧号
+    static int State_Circle_OUT_PREPARE = 0;    // 最近一次进入准备出环状态的帧号
+    static int State_Circle_OUT = 0;    // 最近一次进入出环状态的帧号
 
     State = Img_Store_p -> ImgNum;
 
     if(Function_EN_p -> Control_EN == false)
     {
+        // 第一步：从当前帧提取拐点和弯点信息，作为状态机输入。
         Judge::InflectionPointSearch(Img_Store_p,Data_Path_p);
         Judge::BendPointSearch(Img_Store_p,Data_Path_p);
-        // 十字判断
-        // 若左右边线都有拐点则为十字
+        // 第二步：十字判断。
+        // 若左右边线都有拐点，且没有被圆环退出状态干扰，则先按十字赛道处理。
         if((Data_Path_p -> InflectionPointNum[0] >= 1) && (Data_Path_p -> InflectionPointNum[1] >= 1) && JSON_FunctionConfigData.AcrossIdentify_EN == true && Function_EN_p -> Gyroscope_EN == false && (Data_Path_p -> Circle_Track_Step != OUT_PREPARE || Data_Path_p -> Circle_Track_Step != OUT))
         {
+            // 记录十字状态的进入时刻，避免接下来的圆环判定立即覆盖十字结论。
             State_Across = Img_Store_p -> ImgNum;
             Loop_Kind = ACROSS_TRACK_LOOP;
             Data_Path_p -> Track_Kind = ACROSS_TRACK;
             Data_Path_p -> Circle_Track_Step = INIT;
 
-            // 防止左右边线均寻找到同一个拐点导致误判为十字
+            // 防止左右边线均寻找到同一个拐点导致误判为十字：
+            // 如果左右拐点几乎重合，则按最近一次确认的圆环类型回退。
             if(abs((Data_Path_p -> InflectionPointCoordinate[0][0])-(Data_Path_p -> InflectionPointCoordinate[0][2])) <= 30)
             {
                 switch(Data_Path_p -> Previous_Circle_Kind)
@@ -76,13 +81,13 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
                 }
             }
         }
-        // 圆环判断
-        // 若左右边线只有一边有拐点和弯点  
-        //且当前图像序号和十字中存储的图像序号有间隔才为左右圆环
+        // 第三步：圆环判断。
+        // 圆环只允许在“单侧出现拐点 + 单侧出现弯点 + 与十字状态隔离一段帧数”时成立，
+        // 这样可以避免十字、普通弯道与圆环之间的互相误判。
         else if((Data_Path_p -> InflectionPointNum[0] == 0) && (Data_Path_p -> InflectionPointNum[1] >= 1) && (Data_Path_p -> BendPointNum[0] <= 2) && (Data_Path_p -> BendPointNum[1] >= 1) && State - State_Across >= 5 && Function_EN_p -> Gyroscope_EN == false && JSON_FunctionConfigData.CircleIdentify_EN == true)
         {
-            // 准备入环阶段
-            // 在出环后经过固定帧数才能再次准备进环
+            // 准备入环阶段：先锁定圆环方向，再等待后续帧确认是否真的进入环口。
+            // 在出环后经过固定帧数才能再次准备进环，防止环口附近来回抖动。
             if(((Data_Path_p -> Circle_Track_Step) == INIT || (Data_Path_p -> Circle_Track_Step) == IN_PREPARE || (Data_Path_p -> Circle_Track_Step) == IN) && Data_Path_p -> Vector_Add_Unit_Dir[1] == 1)
             {
                 Loop_Kind = R_CIRCLE_TRACK_LOOP;
@@ -91,25 +96,27 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
                 Data_Path_p -> Circle_Track_Step = IN_PREPARE;
                 Data_Path_p -> Previous_Circle_Kind = R_CIRCLE_TRACK_OUTSIDE;
 
-                // 记录准备进环时间
+                // 记录准备进环时间，用于后续超时回退到 INIT。
                 State_Circle_IN_PREPARE = Img_Store_p -> ImgNum;
             }
-            // 入环阶段
+            // 入环阶段：当边线方向反转时，说明车辆已经真正进入环内，切换到持续补线模式。
             else if(Data_Path_p -> Vector_Add_Unit_Dir[1] == -1 && (Data_Path_p -> Circle_Track_Step == IN_PREPARE || Data_Path_p -> Circle_Track_Step == IN))   
             {
                 Data_Path_p -> Circle_Track_Step = IN;
 
-                // 以准备入环阶段确定的圆环类型作为入环阶段的圆环类型
+                // 以准备入环阶段确定的圆环类型作为入环阶段的圆环类型，
+                // 避免在环口中间再次反向切换左右圆环。
                 switch(Data_Path_p -> Previous_Circle_Kind)
                 {
                     case L_CIRCLE_TRACK_OUTSIDE:{ Loop_Kind = L_CIRCLE_TRACK_LOOP; Data_Path_p -> Track_Kind = L_CIRCLE_TRACK_INSIDE; Data_Path_p -> Circle_Track_Step = IN; break; }
                     case R_CIRCLE_TRACK_OUTSIDE:{ Loop_Kind = R_CIRCLE_TRACK_LOOP; Data_Path_p -> Track_Kind = R_CIRCLE_TRACK_INSIDE; Data_Path_p -> Circle_Track_Step = IN; break; }
                 }
 
-                // 记录进环时间
+                // 记录进环时间，供后续“进入出环准备”判断使用。
                 State_Circle_IN = Img_Store_p -> ImgNum;
             }   
-            // 考虑十字姿态不好，误判为圆环的情况
+            // 考虑十字姿态不好，误判为圆环的情况：
+            // 如果只是单次看到疑似特征，但状态尚未进入准备阶段，则直接回退普通赛道。
             else if(Data_Path_p -> Vector_Add_Unit_Dir[1] == -1 && Data_Path_p -> Circle_Track_Step == INIT)  
             {
                 Loop_Kind = COMMON_TRACK_LOOP;
@@ -117,14 +124,16 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
             }
             else
             {
+                // 其余情况均按普通弯道处理，避免错误进入圆环状态后持续补线。
                 Loop_Kind = COMMON_TRACK_LOOP;
                 Data_Path_p -> Track_Kind = BEND_TRACK;
             }
         }
+        // 左侧圆环判断：与右侧圆环逻辑对称，只是拐点/弯点出现在另一侧。
         else if((Data_Path_p -> InflectionPointNum[0] >= 1) && (Data_Path_p -> InflectionPointNum[1] == 0) && (Data_Path_p -> BendPointNum[0] >= 1) && (Data_Path_p -> BendPointNum[1] <= 2) && State - State_Across >= 5 && Function_EN_p -> Gyroscope_EN == false && JSON_FunctionConfigData.CircleIdentify_EN == true)
         {
-            // 准备入环阶段
-            // 在出环后经过固定帧数才能再次准备进环
+            // 准备入环阶段：先锁定圆环方向，再等待后续帧确认是否真的进入环口。
+            // 在出环后经过固定帧数才能再次准备进环，防止环口附近来回抖动。
             if(((Data_Path_p -> Circle_Track_Step) == INIT || (Data_Path_p -> Circle_Track_Step) == IN_PREPARE || (Data_Path_p -> Circle_Track_Step) == IN) && Data_Path_p -> Vector_Add_Unit_Dir[0] == 1)
             {
                 Loop_Kind = L_CIRCLE_TRACK_LOOP;
@@ -133,25 +142,27 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
                 Data_Path_p -> Circle_Track_Step = IN_PREPARE;
                 Data_Path_p -> Previous_Circle_Kind = L_CIRCLE_TRACK_OUTSIDE;
 
-                // 记录准备进环时间
+                // 记录准备进环时间，用于后续超时回退到 INIT。
                 State_Circle_IN_PREPARE = Img_Store_p -> ImgNum;
             }
-            // 入环阶段
+            // 入环阶段：当边线方向反转时，说明车辆已经真正进入环内，切换到持续补线模式。
             else if(Data_Path_p -> Vector_Add_Unit_Dir[0] == -1 && (Data_Path_p -> Circle_Track_Step == IN_PREPARE || Data_Path_p -> Circle_Track_Step == IN))   
             {
                 Data_Path_p -> Circle_Track_Step = IN;
 
-                // 以准备入环阶段确定的圆环类型作为入环阶段的圆环类型
+                // 以准备入环阶段确定的圆环类型作为入环阶段的圆环类型，
+                // 避免在环口中间再次反向切换左右圆环。
                 switch(Data_Path_p -> Previous_Circle_Kind)
                 {
                     case L_CIRCLE_TRACK_OUTSIDE:{ Loop_Kind = L_CIRCLE_TRACK_LOOP; Data_Path_p -> Track_Kind = L_CIRCLE_TRACK_INSIDE; Data_Path_p -> Circle_Track_Step = IN; break; }
                     case R_CIRCLE_TRACK_OUTSIDE:{ Loop_Kind = R_CIRCLE_TRACK_LOOP; Data_Path_p -> Track_Kind = R_CIRCLE_TRACK_INSIDE; Data_Path_p -> Circle_Track_Step = IN; break; }
                 }
                 
-                // 记录进环时间
+                // 记录进环时间，供后续“进入出环准备”判断使用。
                 State_Circle_IN = Img_Store_p -> ImgNum;
             }   
-            // 考虑十字姿态不好，误判为圆环的情况
+            // 考虑十字姿态不好，误判为圆环的情况：
+            // 如果只是单次看到疑似特征，但状态尚未进入准备阶段，则直接回退普通赛道。
             else if(Data_Path_p -> Vector_Add_Unit_Dir[0] == -1 && Data_Path_p -> Circle_Track_Step == INIT)  
             {
                 Loop_Kind = COMMON_TRACK_LOOP;
@@ -159,31 +170,33 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
             }
             else
             {
+                // 其余情况均按普通弯道处理，避免错误进入圆环状态后持续补线。
                 Loop_Kind = COMMON_TRACK_LOOP;
                 Data_Path_p -> Track_Kind = BEND_TRACK;
             }
         }
-        // 出环判断
-        // 若当前圆环步骤为准备出环或出环状态则在下位机陀螺仪积分达到目标值的时间区间内进行出环操作
+        // 第四步：出环判断。
+        // 只有在陀螺仪允许的出环时间窗口内，才允许从圆环切回普通赛道。
         else if((Data_Path_p -> Circle_Track_Step == OUT_PREPARE || Data_Path_p -> Circle_Track_Step == OUT) && Function_EN_p -> Gyroscope_EN == true)
         {
             Data_Path_p -> Circle_Track_Step = OUT;
 
-            // 以准备入环阶段确定的圆环类型作为出环阶段的圆环类型
+            // 出环阶段沿用入环阶段确认的圆环类型，避免在出环过程中切换左右环。
             switch(Data_Path_p -> Previous_Circle_Kind)
             {
                 case L_CIRCLE_TRACK_OUTSIDE:{ Loop_Kind = L_CIRCLE_TRACK_LOOP; Data_Path_p -> Track_Kind = L_CIRCLE_TRACK_INSIDE; Data_Path_p -> Circle_Track_Step = OUT; break; }
                 case R_CIRCLE_TRACK_OUTSIDE:{ Loop_Kind = R_CIRCLE_TRACK_LOOP; Data_Path_p -> Track_Kind = R_CIRCLE_TRACK_INSIDE; Data_Path_p -> Circle_Track_Step = OUT; break; }
             }
 
-            // 记录出环时间
+            // 记录出环时间，用于随后切换到 OUT_2_STRIGHT 再回到 INIT。
             State_Circle_OUT = Img_Store_p -> ImgNum;
         }
-        // 普通赛道判断
+        // 第五步：普通赛道判断。
+        // 当不满足任何特殊元素条件时，按普通直道/弯道处理，并同步维护圆环状态的超时回退。
         else
         {
             Loop_Kind = COMMON_TRACK_LOOP;
-            // 判定是弯道还是直道
+            // 普通赛道下先判断弯道还是直道，为后续电机速度选择提供依据。
             if((Data_Path_p -> BendPointNum[0] >= JSON_TrackConfigData.BendPointNum[0]) || (Data_Path_p -> BendPointNum[1] >= JSON_TrackConfigData.BendPointNum[0]))
             {
                 Data_Path_p -> Track_Kind = BEND_TRACK;
@@ -193,31 +206,33 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
                 Data_Path_p -> Track_Kind = STRIGHT_TRACK;
             }
 
-            // 判定圆环步骤
-            // 进入圆环后固定帧数进入准备出环步骤
+            // 判定圆环步骤：下面这些条件只负责“状态回退/超时推进”，不改变当前赛道类型判断。
+
+            // 进入圆环后固定帧数进入准备出环步骤，保证车辆有足够时间完成环内行驶。
             if(State - State_Circle_IN >= 10 && Data_Path_p -> Circle_Track_Step == IN)
             {
                 Data_Path_p -> Circle_Track_Step = OUT_PREPARE;
                 State_Circle_OUT_PREPARE = Img_Store_p -> ImgNum;
             }
-            // 若误判为准备入环则在固定帧数之后进入占位：防止在弯道十字等位置误判导致一直补线从而影响寻线
+            // 若误判为准备入环，则在固定帧数之后进入 INIT：
+            // 防止在弯道、十字等位置误判导致一直处于补线相关状态。
             if(State - State_Circle_IN_PREPARE >= JSON_TrackConfigData.Circle_In_Prepare_Time && Data_Path_p -> Circle_Track_Step == IN_PREPARE)
             {
                 Data_Path_p -> Circle_Track_Step = INIT;
             }
-            // 出环后进入出环转直线
+            // 出环后先进入“出环转直线”过渡态，为恢复普通寻线留出缓冲帧。
             if((Data_Path_p -> Circle_Track_Step) == OUT)
             {
                 Data_Path_p -> Circle_Track_Step = OUT_2_STRIGHT;
                 State_Circle_OUT = Img_Store_p -> ImgNum;
             }
-            // 经过固定帧数后出环转直线进入占位从而可以进行准备下一次的圆环
+            // 经过固定帧数后从“出环转直线”回到 INIT，允许下一次圆环重新判定。
             if((Data_Path_p -> Circle_Track_Step) == OUT_2_STRIGHT && State-State_Circle_OUT >= 60)
             {
                 Data_Path_p -> Circle_Track_Step = INIT;
             }
-            // 防止上次圆环未入环导致状态卡在准备出环阶段
-            // 经过固定帧数后准备出环进入占位从而可以进行准备下一次的圆环
+            // 防止上次圆环未真正入环导致状态卡在准备出环阶段。
+            // 若长时间没有完成出环，则回到 INIT，避免后续一直按圆环补线处理。
             if((Data_Path_p -> Circle_Track_Step) == OUT_PREPARE && State-State_Circle_OUT_PREPARE >= 200)
             {
                 Data_Path_p -> Circle_Track_Step = INIT;

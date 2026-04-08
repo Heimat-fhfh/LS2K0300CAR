@@ -113,30 +113,38 @@ void ReadInput_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Fun
 
 void ProcessAlgo_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
+    // 圆环赛道状态机只在本轮周期内完成“补线 + 寻线 + 回到图像循环”的闭环。
+    // 其中 Circle_Track_Step 由决策模块提前写入，这里只负责按步骤执行对应补线算法。
     switch(Data_Path_p->Circle_Track_Step)
     {
         case IN_PREPARE:
         {
+            // 准备入环：根据当前圆环方向先做预补线，避免进入环口时边线断裂。
             CircleTrack_Step_IN_Prepare(Img_Store_p,Data_Path_p);   // 准备入环补线
             break;
         }
         case IN:
         {
+            // 入环：沿已确认的圆环方向继续补线，保证进入环内后仍能稳定寻线。
             CircleTrack_Step_IN(Img_Store_p,Data_Path_p);   // 入环补线
             break;
         }
         case OUT:
         {
+            // 出环：完成从环内到环外的补线过渡，给后续恢复普通寻线提供连续边线。
             CircleTrack_Step_OUT(Img_Store_p,Data_Path_p);   // 出环补线
             break;
         }
         default:
         {
+            // INIT / OUT_2_STRIGHT 等非补线阶段直接跳过，由普通图像循环接管。
             break;
         }
     }
 
+    // 补线结束后重新寻线，输出给下一帧的决策模块使用。
     imgSearch_l_r(Img_Store_p,Data_Path_p);
+    // 圆环任务只占用一个周期，执行完立即切回图像循环，等待下一次状态机判定。
     Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换回图像循环
 }
 
@@ -185,7 +193,13 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
 /**
  * @brief 处理每帧的赛道任务
  * 
- * 根据当前循环类型调度不同的赛道处理任务
+ * 根据当前循环类型调度不同的赛道处理任务。
+ * 这里是主状态机的执行入口：
+ * 1. CAMERA_CATCH_LOOP 负责采集后的基础图像处理
+ * 2. JUDGE_LOOP 负责识别当前赛道并更新下一阶段状态
+ * 3. COMMON_TRACK_LOOP 负责普通赛道的方向/速度计算
+ * 4. L_CIRCLE_TRACK_LOOP / R_CIRCLE_TRACK_LOOP 负责圆环补线
+ * 5. ACROSS_TRACK_LOOP 负责十字赛道处理
  * 
  * @param Img_Store_p 图像存储指针
  * @param Data_Path_p 路径数据指针
@@ -197,32 +211,38 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
     {
         case CAMERA_CATCH_LOOP:
         {
+            // 图像循环：先完成预处理、二值化和基础寻线，为后续识别提供输入。
             RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p);
             break;
         }
         case JUDGE_LOOP:
         {
+            // 决策循环：根据拐点、弯点和状态位判断当前属于哪类赛道。
             RunJudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
             break;
         }
         case COMMON_TRACK_LOOP:
         {
+            // 普通赛道循环：输出常规路径控制结果，并立即回到图像循环。
             RunCommonTrackTask(Function_EN_p);
             break;
         }
         case L_CIRCLE_TRACK_LOOP:
         case R_CIRCLE_TRACK_LOOP:
         {
+            // 圆环循环：根据当前 Circle_Track_Step 执行对应补线策略。
             RunCircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
             break;
         }
         case ACROSS_TRACK_LOOP:
         {
+            // 十字循环：执行十字赛道的特殊处理逻辑，然后回到图像循环。
             RunAcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
             break;
         }
         default:
         {
+            // 兜底保护：遇到非法状态时回到图像循环，避免状态机卡死。
             Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP;
             break;
         }
@@ -398,6 +418,7 @@ void argument_config(void)
     {
         g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
         Function_EN_s.Game_EN = true;
+        // 默认从图像循环开始，等待第一帧完成赛道状态判定后再切换到对应任务。
         Function_EN_s.Loop_Kind_EN = CAMERA_CATCH_LOOP;
     }
     else
