@@ -39,6 +39,14 @@ class Judge
         */
         void MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
+
+        /*
+            将方向控制结果转换为目标角速度双轮差速控制目标
+            @参数说明
+            Data_Path_p 路径相关数据指针
+        */
+        void AngularVelocityTarget_Judge(Data_Path *Data_Path_p);
+
         
         /*
             保护线程

@@ -5,27 +5,26 @@ using namespace cv;
 using namespace std::chrono;
 using namespace std::this_thread;
 
+// 全局变量声明
+IMUDevice imu;                                      // IMU设备对象
+std::unique_ptr<DualMotorController> motors;        // 双电机控制器
+Encoder encoder_left("/dev/zf_encoder_1");          // 左轮编码器
+Encoder encoder_right("/dev/zf_encoder_2", true);   // 右轮编码器（取反）
+Control::PID::Parameters leftParams,rightParams;    // 左右轮PID参数
+std::unique_ptr<MotorControlTask> motorTask;        // 电机控制任务
+Buzzer buzzer;                                      // 蜂鸣器
+MainTestConfig test_config;                         // 测试配置
+std::atomic<bool> g_running(true);                  // 程序运行标志
+bool g_runtime_config_ok = false;                   // 运行时配置状态
+CameraKind g_camera_kind = CameraKind::VIDEO_0;     // 摄像头类型
 
+JSON_PIDConfigData JSON_PIDConfigData_s;            // JSON PID配置数据
+Function_EN Function_EN_s;                          // 功能使能状态
+Data_Path Data_Path_s;                              // 路径数据
 
-IMUDevice imu;
-std::unique_ptr<DualMotorController> motors;
-Encoder encoder_left("/dev/zf_encoder_1");
-Encoder encoder_right("/dev/zf_encoder_2", true); // 右轮编码器取反
-Control::PID::Parameters leftParams,rightParams;
-std::unique_ptr<MotorControlTask> motorTask;
-Buzzer buzzer;
-MainTestConfig test_config;
-std::atomic<bool> g_running(true);
-bool g_runtime_config_ok = false;
-CameraKind g_camera_kind = CameraKind::VIDEO_0;
-
-JSON_PIDConfigData JSON_PIDConfigData_s;
-Function_EN Function_EN_s;
-Data_Path Data_Path_s;
-
-ImgProcess imgProcess;
-Judge judge;
-SYNC Sync;
+ImgProcess imgProcess;                              // 图像处理对象
+Judge judge;                                        // 赛道判断对象
+SYNC Sync;                                          // 同步对象
 
 void ReadInput_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
@@ -183,6 +182,15 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
     OutputDisplay_AcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
 }
 
+/**
+ * @brief 处理每帧的赛道任务
+ * 
+ * 根据当前循环类型调度不同的赛道处理任务
+ * 
+ * @param Img_Store_p 图像存储指针
+ * @param Data_Path_p 路径数据指针
+ * @param Function_EN_p 功能使能状态指针
+ */
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
     switch (Function_EN_p->Loop_Kind_EN)
@@ -221,6 +229,42 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
     }
 }
 
+/**
+ * @brief 应用差速控制
+ * 
+ * 根据视觉处理结果和功能使能状态，计算并设置电机的目标角速度和基础速度
+ * 实现上位机控制模式下的差速控制
+ * 
+ * @param Img_Store_p 图像存储指针
+ * @param Data_Path_p 路径数据指针
+ * @param Function_EN_p 功能使能状态指针
+ */
+void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+{
+    (void)Img_Store_p;
+    if (!motorTask || !motorTask->isRunning())
+    {
+        return;
+    }
+
+    // 上位机控制模式：视觉输出 -> 目标角速度差速控制。
+    if (Function_EN_p->Control_EN == false)
+    {
+        judge.ServoDirAngle_Judge(Data_Path_p);
+        judge.MotorSpeed_Judge(Img_Store_p,Data_Path_p);
+        judge.AngularVelocityTarget_Judge(Data_Path_p);
+
+        motorTask->setBaseSpeed(Data_Path_p->TargetBaseSpeedMps);
+        motorTask->setTargetAngularVelocity(Data_Path_p->TargetAngularVelocityDeg);
+    }
+    else
+    {
+        // 非上位机控制时，清零角速度目标，防止残留指令。
+        motorTask->setTargetAngularVelocity(0.0);
+        motorTask->setBaseSpeed(0.0);
+    }
+}
+
 void FrameTaskAfterRead(Img_Store *Img_Store_p)
 {
     if (!Function_EN_s.Game_EN)
@@ -228,9 +272,25 @@ void FrameTaskAfterRead(Img_Store *Img_Store_p)
         return;
     }
     ProcessTrackTaskPerFrame(Img_Store_p,&Data_Path_s,&Function_EN_s);
+    ApplyDifferentialControl(Img_Store_p,&Data_Path_s,&Function_EN_s);
 }
 
+/**
+ * @brief 主函数 - 智能小车控制程序入口
+ * 
+ * 程序主要流程：
+ * 1. 配置参数初始化
+ * 2. 硬件设备初始化
+ * 3. 功能测试
+ * 4. 启动电机控制任务
+ * 5. 初始化摄像头并启动图像采集线程
+ * 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
+ * 7. 程序退出时的清理工作
+ * 
+ * @return int 程序退出码：0表示成功，非0表示失败
+ */
 int main() {
+    // 1. 配置参数初始化
     argument_config();
     if (!g_runtime_config_ok)
     {
@@ -238,16 +298,28 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    // 2. 硬件设备初始化
     if (main_init_task() == EXIT_SUCCESS) { cout << "初始化成功" << endl; } else { cout << "初始化失败" << endl; return EXIT_FAILURE; }
     
+    // 3. 功能测试
     if (main_test_task(test_config) != EXIT_SUCCESS) {cout << "功能测试失败" << endl;return EXIT_FAILURE;}
 
+    // 4. 启动电机控制任务
+    // 主流程启用目标角速度差速控制。
+    motorTask->enableAngularVelocityControl(true);
+    motorTask->enableRampLimiting(true);
+    motorTask->setRampLimits(0.8, 0.2);
+    motorTask->setWheelbase(0.158);
+    motorTask->start();
+
+    // 5. 初始化摄像头并启动图像采集线程
     VideoCapture Camera; CameraInit(Camera,g_camera_kind,320,240,120);
     Img_Store Img_Store_s;
     std::thread captureThread;
 
     CameraCaptureThreadStart(Camera, &Img_Store_s, captureThread);
 
+    // 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
     while (g_running.load() && Function_EN_s.Game_EN)
     {
         CameraImgGet(&Img_Store_s);
@@ -264,29 +336,49 @@ int main() {
         FrameTaskAfterRead(&Img_Store_s);
     }
 
+    // 7. 程序退出时的清理工作
     CameraCaptureThreadStop(&Img_Store_s, captureThread);
 
+    if (motorTask)
+    {
+        motorTask->setTargetAngularVelocity(0.0);
+        motorTask->setBaseSpeed(0.0);
+        motorTask->stop();
+    }
 
-
-    
     Camera.release();
     return 0;
 }
 
+/**
+ * @brief 参数配置函数
+ * 
+ * 初始化程序运行所需的各项参数和配置：
+ * 1. 测试配置初始化
+ * 2. 蜂鸣器参数设置
+ * 3. 电机控制器创建
+ * 4. PID参数设置
+ * 5. 配置文件同步
+ * 6. 电机控制任务创建
+ */
 void argument_config(void)
 {
+    // 1. 测试配置初始化
     test_config.buzzer_test = false;
     test_config.imu_test = false;
     test_config.motor_test = false;
     test_config.angular_velocity_test = false;
     test_config.encoder_test = false;
 
+    // 2. 蜂鸣器参数设置
     buzzer.setShortDuration(60)
             .setLongDuration(300)
             .setIntervalDuration(120);
 
+    // 3. 电机控制器创建
     motors = std::make_unique<DualMotorController>();
 
+    // 4. PID参数设置
     leftParams.Kp = 1.0;
     leftParams.Ki = 0.4;
     leftParams.Kd = 0.0;
@@ -299,6 +391,7 @@ void argument_config(void)
 
     rightParams = leftParams;
 
+    // 5. 配置文件同步
     Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s,&JSON_PIDConfigData_s);
     g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
     if (g_runtime_config_ok)
@@ -312,6 +405,7 @@ void argument_config(void)
         Function_EN_s.Game_EN = false;
     }
 
+    // 6. 电机控制任务创建
     // 使用带IMU的构造函数创建电机控制任务
     motorTask = std::make_unique<MotorControlTask>(
             leftParams,
@@ -339,24 +433,43 @@ void cleanup()
 }
 
 
+/**
+ * @brief 主初始化任务
+ * 
+ * 初始化硬件设备和系统设置：
+ * 1. 设置程序退出清理函数
+ * 2. 设置信号处理函数（Ctrl+C）
+ * 3. 初始化显示屏
+ * 4. 显示IP地址
+ * 5. 初始化UDP通信
+ * 6. 初始化IMU设备
+ * 
+ * @return int 初始化结果：EXIT_SUCCESS表示成功，EXIT_FAILURE表示失败
+ */
 int main_init_task()
 {
-    // 任务初始化代码
+    // 1. 设置程序退出清理函数
     atexit(cleanup);
+    
+    // 2. 设置信号处理函数（Ctrl+C）
     signal(SIGINT, sigint_handler);
+    
+    // 3. 初始化显示屏
     setbuf(stdout, NULL);
     ips200_init("/dev/fb0");
     
-    // 显示IP地址
+    // 4. 显示IP地址
     display_ip_address(0, 181);
     printf("IP address displayed on screen.\n");
 
+    // 5. 初始化UDP通信
     if(udp_dev.init(SERVER_IP, PORT) == 0){printf("tcp_client ok\r\n");}
     else{printf("tcp_client error\r\n");return -1;}
     
     uint8 temp_str[] = "UDP IS READY.\r\n";
     udp_dev.send_data(temp_str, sizeof(temp_str));
 
+    // 6. 初始化IMU设备
     if (!imu.initialize()) {
         printf("Failed to initialize IMU device\n");
         return EXIT_FAILURE;

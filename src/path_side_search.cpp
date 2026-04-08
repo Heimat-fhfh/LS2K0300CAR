@@ -1,5 +1,6 @@
 #include "common_system.h"
 #include "common_program.h"
+#include "path_refactor.h"
 
 using namespace std;
 using namespace cv;
@@ -644,6 +645,17 @@ void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
  *************************************************************************************************************/
 	Data_Path_p->NumSearch[0] = l_data_statics;
 	Data_Path_p->NumSearch[1] = r_data_statics;
+
+    // 参考算法迁移：对迷宫法提取的边线做三角平滑和等距采样，减少噪点并统一点密度。
+    // 参数说明：
+    // - sample_dist_px = 2.0F: 约每 2 像素采样一个点，兼顾精度与计算量。
+    // - blur_kernel = 5: 中等平滑强度，降低边线抖动。
+    // - max_points_per_side = USE_num: 与现有缓存保持一致，避免写越界。
+    optimize_edge_lines(Data_Path_p,
+                        image_w,
+                        2.0F,
+                        5,
+                        static_cast<int>(USE_num));
 
 /*************************************************************************************************************
  ***********************************        获取右左边界        ******************************************

@@ -163,12 +163,6 @@ void CameraImgGet(Img_Store *Img_Store_p)
 	Img_Store_p->Img_LastReadSeq = Img_Store_p->Img_FrameSeq;
 }
 
-
-
-
-
-
-
 void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
 	(Img_Store_p->Img_Track) = (Img_Store_p->Img_Color).clone();

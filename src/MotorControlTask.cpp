@@ -359,7 +359,6 @@ void MotorControlTask::setTargetAngularVelocity(double angularVelocity) {
     }
     
     targetAngularVelocity.store(angularVelocity);
-    printf("Target angular velocity updated to: %.3f °/s\n", angularVelocity);
 }
 
 double MotorControlTask::getTargetAngularVelocity() const {
@@ -391,7 +390,6 @@ void MotorControlTask::setBaseSpeed(double baseSpeed) {
     }
     
     this->baseSpeed.store(baseSpeed);
-    printf("Base speed updated to: %.3f m/s\n", baseSpeed);
 }
 
 double MotorControlTask::getBaseSpeed() const {

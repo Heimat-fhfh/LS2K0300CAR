@@ -1,9 +1,33 @@
 #include "common_system.h"
 #include "common_program.h"
 #include "libdata_store.h"
+#include "path_refactor.h"
 
 using namespace std;
 using namespace cv;
+
+namespace {
+// 将当前左右边线拷贝为浮点点集，供角度法识别模块复用。
+std::vector<cv::Point2f> collect_side_points(const Data_Path* data_path, bool left_side) {
+    std::vector<cv::Point2f> points;
+    if (data_path == nullptr) {
+        return points;
+    }
+
+    const int num = left_side ? data_path->NumSearch[0] : data_path->NumSearch[1];
+    if (num <= 0) {
+        return points;
+    }
+
+    points.reserve(num);
+    for (int i = 0; i < num; ++i) {
+        const float x = static_cast<float>(left_side ? data_path->SideCoordinate_Eight[i][0] : data_path->SideCoordinate_Eight[i][2]);
+        const float y = static_cast<float>(left_side ? data_path->SideCoordinate_Eight[i][1] : data_path->SideCoordinate_Eight[i][3]);
+        points.emplace_back(x, y);
+    }
+    return points;
+}
+} // namespace
 
 
 /*
@@ -211,24 +235,16 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
 void Judge::ServoDirAngle_Judge(Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    int find_row = JSON_TrackConfigData.Forward;
-    if (find_row < Data_Path_p->hightest) find_row = Data_Path_p->hightest + 10;
-    
-    (Data_Path_p -> ServoAngle) = (Data_Path_p -> center_line[find_row]) - image_w/2;
-    // printf("%d,%d,%d\r\n",(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start),Data_Path_p->hightest,find_row);
 
-    Data_Path_p->findrow = find_row;
-    
-    // 计算舵机方向和角度
-    if((Data_Path_p -> ServoAngle) < 0)
-    {
-        (Data_Path_p -> ServoDir) = 1;  // 右转
-        (Data_Path_p -> ServoAngle) = abs(Data_Path_p -> ServoAngle);
-    }
-    else
-    {
-        (Data_Path_p -> ServoDir) = -1;  // 左转
-    }
+    // 使用平滑前瞻替代单行前瞻，降低舵机角在噪声边线上的抖动。
+    compute_smoothed_servo_control(Data_Path_p,
+                                   image_w,
+                                   JSON_TrackConfigData.Forward,
+                                   image_h - 1,
+                                   0);
+
+    // 带符号转向误差：沿用历史方向定义，右转为正，左转为负。
+    Data_Path_p->SteerErrorPx = (Data_Path_p->ServoDir == 1) ? Data_Path_p->ServoAngle : -Data_Path_p->ServoAngle;
 }
 
 
@@ -340,100 +356,95 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 
 
 /*
+    AngularVelocityTarget_Judge说明
+    将方向控制结果转换为目标角速度双轮差速控制目标
+*/
+void Judge::AngularVelocityTarget_Judge(Data_Path *Data_Path_p)
+{
+    // 经验参数：像素误差转角速度增益，可按车模响应继续微调。
+    constexpr double kYawRatePerPixel = 1.2;     // deg/s per pixel
+    constexpr double kMaxYawRateDeg = 220.0;     // deg/s
+    constexpr double kBaseSpeedScale = 0.01;     // 旧速度档位(0-100)映射到 m/s
+    constexpr double kMinBaseSpeedMps = 0.0;
+    constexpr double kMaxBaseSpeedMps = 1.2;
+    constexpr double kWheelbaseM = 0.158;
+
+    const double target_yaw = std::clamp(
+        static_cast<double>(Data_Path_p->SteerErrorPx) * kYawRatePerPixel,
+        -kMaxYawRateDeg,
+        kMaxYawRateDeg
+    );
+
+    const double base_speed = std::clamp(
+        static_cast<double>(Data_Path_p->MotorSpeed) * kBaseSpeedScale,
+        kMinBaseSpeedMps,
+        kMaxBaseSpeedMps
+    );
+
+    const double yaw_rad = target_yaw * PI / 180.0;
+    const double v_left = base_speed - yaw_rad * (kWheelbaseM * 0.5);
+    const double v_right = base_speed + yaw_rad * (kWheelbaseM * 0.5);
+
+    Data_Path_p->TargetAngularVelocityDeg = target_yaw;
+    Data_Path_p->TargetBaseSpeedMps = base_speed;
+    Data_Path_p->TargetLeftSpeedMps = v_left;
+    Data_Path_p->TargetRightSpeedMps = v_right;
+}
+
+
+/*
     InflectionPointSearch说明
     边线拐点寻找
 */
 void Judge::InflectionPointSearch(Img_Store* Img_Store_p,Data_Path *Data_Path_p)
 {
+    (void)Img_Store_p;
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-
-    int i;
-    int j;
-    // static int Record;
     Data_Path_p -> InflectionPointNum[0] = 0;
     Data_Path_p -> InflectionPointNum[1] = 0;
-    int Vector[2][4] = {0}; // 左右中断点与上下两点构成的向量坐标
-    int Vector_ScalarProduct[2] = {0};  // 左右中断点向量点乘
-    double Vector_Module[4] = {0};   // 左右中断点向量的模
-    double AngleVector[2] = {0}; // 左右中断点向量夹角(角度制)
-    // 寻拐点范围
-    // 左边线拐点
-    for(i = (JSON_TrackConfigData.InflectionPointVectorDistance);i <= (Data_Path_p -> NumSearch[0])-(JSON_TrackConfigData.InflectionPointVectorDistance);)
-    {
-        // 左边线第一个向量
-        Vector[0][0] = (Data_Path_p -> SideCoordinate_Eight[i-(JSON_TrackConfigData.InflectionPointVectorDistance)][0])-(Data_Path_p -> SideCoordinate_Eight[i][0]);
-        Vector[0][1] = (Data_Path_p -> SideCoordinate_Eight[i-(JSON_TrackConfigData.InflectionPointVectorDistance)][1])-(Data_Path_p -> SideCoordinate_Eight[i][1]);
-        // 左边线第二个向量
-        Vector[1][0] = (Data_Path_p -> SideCoordinate_Eight[i+(JSON_TrackConfigData.InflectionPointVectorDistance)][0])-(Data_Path_p -> SideCoordinate_Eight[i][0]);
-        Vector[1][1] = (Data_Path_p -> SideCoordinate_Eight[i+(JSON_TrackConfigData.InflectionPointVectorDistance)][1])-(Data_Path_p -> SideCoordinate_Eight[i][1]);
 
-        // 计算中断点向量点乘
-        Vector_ScalarProduct[0] = Vector[0][0]*Vector[1][0]+Vector[0][1]*Vector[1][1];
+    Data_Path_p->Vector_Add_Unit_Dir[0] = 0;
+    Data_Path_p->Vector_Add_Unit_Dir[1] = 0;
 
-        // 计算中断点向量的模
-        Vector_Module[0] = sqrt(pow(Vector[0][0],2)+pow(Vector[0][1],2));
-        Vector_Module[1] = sqrt(pow(Vector[1][0],2)+pow(Vector[1][1],2));
-    
-        if( Vector_Module[0]*Vector_Module[1] != 0)
-        {
-            AngleVector[0] = acos(Vector_ScalarProduct[0]/(Vector_Module[0]*Vector_Module[1]))*(180/PI);    // 左边线断点向量夹角
-            // cout << AngleVector[0] << "  " << AngleVector[1] << endl;
-        }
+    const int dist_step = std::max(1, JSON_TrackConfigData.InflectionPointVectorDistance);
+    const std::vector<cv::Point2f> left_points = collect_side_points(Data_Path_p, true);
+    const std::vector<cv::Point2f> right_points = collect_side_points(Data_Path_p, false);
 
-        // 计算拐点并存储坐标，前提：拐点坐标不再边框上
-        if(abs(AngleVector[0]) > (JSON_TrackConfigData.InflectionPointIdentifyAngle[0]) && abs(AngleVector[0]) < (JSON_TrackConfigData.InflectionPointIdentifyAngle[1]) && (Data_Path_p -> SideCoordinate_Eight[i][0]) > 30 && (Vector[0][1]*Vector[1][1]) >= -40)
-        {
-            //  cout << abs(AngleVector[0]) << endl;
-            (Data_Path_p -> InflectionPointCoordinate[(Data_Path_p -> InflectionPointNum[0])][0]) = (Data_Path_p -> SideCoordinate_Eight[i][0]);
-            (Data_Path_p -> InflectionPointCoordinate[(Data_Path_p -> InflectionPointNum[0])][1]) = (Data_Path_p -> SideCoordinate_Eight[i][1]);
-            if(Data_Path_p -> InflectionPointNum[0] == 0)
-            {
-                // 向量加和
-                Data_Path_p -> Vector_Add_Unit_Dir[0] = (Vector[0][1]+Vector[1][1])/abs(Vector[0][1]+Vector[1][1]);
-            }
-            Data_Path_p -> InflectionPointNum[0]++;
-            i = i+10;
-        }
-        i++;
+    // 元素拐点识别：采用角度变化率 + 非极大值抑制。
+    const PathRefactorFeatureResult left_result = detect_feature_by_angle(left_points,
+                                                                          static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[0]),
+                                                                          static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[1]),
+                                                                          dist_step,
+                                                                          10,
+                                                                          30,
+                                                                          true);
+    const PathRefactorFeatureResult right_result = detect_feature_by_angle(right_points,
+                                                                           static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[0]),
+                                                                           static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[1]),
+                                                                           dist_step,
+                                                                           10,
+                                                                           30,
+                                                                           false);
+
+    // 保留纵向趋势符号，供圆环准备入环判据使用。
+    Data_Path_p->Vector_Add_Unit_Dir[0] = left_result.vertical_direction_sign;
+    Data_Path_p->Vector_Add_Unit_Dir[1] = right_result.vertical_direction_sign;
+
+    const int left_max = static_cast<int>(sizeof(Data_Path_p->InflectionPointCoordinate) / sizeof(Data_Path_p->InflectionPointCoordinate[0]));
+    const int right_max = left_max;
+
+    for (int k = 0; k < static_cast<int>(left_result.indices.size()) && Data_Path_p->InflectionPointNum[0] < left_max; ++k) {
+        const int idx = left_result.indices[k];
+        Data_Path_p->InflectionPointCoordinate[Data_Path_p->InflectionPointNum[0]][0] = static_cast<int>(left_points[idx].x);
+        Data_Path_p->InflectionPointCoordinate[Data_Path_p->InflectionPointNum[0]][1] = static_cast<int>(left_points[idx].y);
+        Data_Path_p->InflectionPointNum[0]++;
     }
-    // 右边线拐点
-    for(j = (JSON_TrackConfigData.InflectionPointVectorDistance);j <= (Data_Path_p -> NumSearch[1])-(JSON_TrackConfigData.InflectionPointVectorDistance);)
-    {
-        // 右边线第一个向量
-        Vector[0][2] = (Data_Path_p -> SideCoordinate_Eight[j-(JSON_TrackConfigData.InflectionPointVectorDistance)][2])-(Data_Path_p -> SideCoordinate_Eight[j][2]);
-        Vector[0][3] = (Data_Path_p -> SideCoordinate_Eight[j-(JSON_TrackConfigData.InflectionPointVectorDistance)][3])-(Data_Path_p -> SideCoordinate_Eight[j][3]);
-        // 右边线第二个向量
-        Vector[1][2] = (Data_Path_p -> SideCoordinate_Eight[j+(JSON_TrackConfigData.InflectionPointVectorDistance)][2])-(Data_Path_p -> SideCoordinate_Eight[j][2]);
-        Vector[1][3] = (Data_Path_p -> SideCoordinate_Eight[j+(JSON_TrackConfigData.InflectionPointVectorDistance)][3])-(Data_Path_p -> SideCoordinate_Eight[j][3]);
 
-        // 计算拐点向量点乘
-        Vector_ScalarProduct[1] = Vector[0][2]*Vector[1][2]+Vector[0][3]*Vector[1][3];
-
-        // 计算拐点向量的模
-        Vector_Module[2] = sqrt(pow(Vector[0][2],2)+pow(Vector[0][3],2));
-        Vector_Module[3] = sqrt(pow(Vector[1][2],2)+pow(Vector[1][3],2));
-    
-        if( Vector_Module[2]*Vector_Module[3] != 0)
-        {
-            AngleVector[1] = acos(Vector_ScalarProduct[1]/(Vector_Module[2]*Vector_Module[3]))*(180/PI);    // 右边线断点向量夹角
-            // cout << AngleVector[0] << "  " << AngleVector[1] << endl;
-        }
-
-        // 计算拐点并存储坐标，前提：拐点坐标不在边框上
-        if(abs(AngleVector[1]) > (JSON_TrackConfigData.InflectionPointIdentifyAngle[0]) && abs(AngleVector[1]) < (JSON_TrackConfigData.InflectionPointIdentifyAngle[1]) && ((image_w-1)-(Data_Path_p -> SideCoordinate_Eight[j][2])) > 30 && (Vector[0][3]*Vector[1][3]) >= -40)
-        {
-            // cout << abs(AngleVector[1]) << endl;
-            (Data_Path_p -> InflectionPointCoordinate[(Data_Path_p -> InflectionPointNum[1])][2]) = (Data_Path_p -> SideCoordinate_Eight[j][2]);
-            (Data_Path_p -> InflectionPointCoordinate[(Data_Path_p -> InflectionPointNum[1])][3]) = (Data_Path_p -> SideCoordinate_Eight[j][3]);
-            if(Data_Path_p -> InflectionPointNum[1] == 0)
-            {
-                // 向量加和
-                Data_Path_p -> Vector_Add_Unit_Dir[1] = (Vector[0][3]+Vector[1][3])/abs(Vector[0][3]+Vector[1][3]);
-            }
-            Data_Path_p -> InflectionPointNum[1]++;
-            j = j+10;
-        }
-        j++;
+    for (int k = 0; k < static_cast<int>(right_result.indices.size()) && Data_Path_p->InflectionPointNum[1] < right_max; ++k) {
+        const int idx = right_result.indices[k];
+        Data_Path_p->InflectionPointCoordinate[Data_Path_p->InflectionPointNum[1]][2] = static_cast<int>(right_points[idx].x);
+        Data_Path_p->InflectionPointCoordinate[Data_Path_p->InflectionPointNum[1]][3] = static_cast<int>(right_points[idx].y);
+        Data_Path_p->InflectionPointNum[1]++;
     }
 }
 
@@ -445,85 +456,46 @@ void Judge::InflectionPointSearch(Img_Store* Img_Store_p,Data_Path *Data_Path_p)
 */
 void Judge::BendPointSearch(Img_Store* Img_Store_p,Data_Path *Data_Path_p)
 {
+    (void)Img_Store_p;
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-
-    int i;
-    int j;
-    // static int Record;
     Data_Path_p -> BendPointNum[0] = 0;
     Data_Path_p -> BendPointNum[1] = 0;
-    int Vector[2][4] = {0}; // 左右弯点与上下两点构成的向量坐标
-    int Vector_ScalarProduct[2] = {0};  // 左右弯点向量点乘
-    double Vector_Module[4] = {0};   // 左右弯点向量的模
-    double AngleVector[2] = {0}; // 左右弯点向量夹角(角度制)
-    // 寻弯点范围
-    // 左边线弯点
-    for(i = (JSON_TrackConfigData.BendPointVectorDistance);i <= (Data_Path_p -> NumSearch[0])-(JSON_TrackConfigData.BendPointVectorDistance);)
-    {
-        // 左边线第一个向量
-        Vector[0][0] = (Data_Path_p -> SideCoordinate_Eight[i-(JSON_TrackConfigData.BendPointVectorDistance)][0])-(Data_Path_p -> SideCoordinate_Eight[i][0]);
-        Vector[0][1] = (Data_Path_p -> SideCoordinate_Eight[i-(JSON_TrackConfigData.BendPointVectorDistance)][1])-(Data_Path_p -> SideCoordinate_Eight[i][1]);
-        // 左边线第二个向量
-        Vector[1][0] = (Data_Path_p -> SideCoordinate_Eight[i+(JSON_TrackConfigData.BendPointVectorDistance)][0])-(Data_Path_p -> SideCoordinate_Eight[i][0]);
-        Vector[1][1] = (Data_Path_p -> SideCoordinate_Eight[i+(JSON_TrackConfigData.BendPointVectorDistance)][1])-(Data_Path_p -> SideCoordinate_Eight[i][1]);
 
-        // 计算弯点向量点乘
-        Vector_ScalarProduct[0] = Vector[0][0]*Vector[1][0]+Vector[0][1]*Vector[1][1];
+    const int dist_step = std::max(1, JSON_TrackConfigData.BendPointVectorDistance);
+    const std::vector<cv::Point2f> left_points = collect_side_points(Data_Path_p, true);
+    const std::vector<cv::Point2f> right_points = collect_side_points(Data_Path_p, false);
 
-        // 计算弯点向量的模
-        Vector_Module[0] = sqrt(pow(Vector[0][0],2)+pow(Vector[0][1],2));
-        Vector_Module[1] = sqrt(pow(Vector[1][0],2)+pow(Vector[1][1],2));
-    
-        if( Vector_Module[0]*Vector_Module[1] != 0)
-        {
-            AngleVector[0] = acos(Vector_ScalarProduct[0]/(Vector_Module[0]*Vector_Module[1]))*(180/PI);    // 左边线弯点向量夹角
-            // cout << AngleVector[0] << "  " << AngleVector[1] << endl;
-        }
+    // 边线弯点识别：与拐点共用算法，不同的是阈值取 BendPoint 配置。
+    const PathRefactorFeatureResult left_result = detect_feature_by_angle(left_points,
+                                                                          static_cast<float>(JSON_TrackConfigData.BendPointIdentifyAngle[0]),
+                                                                          static_cast<float>(JSON_TrackConfigData.BendPointIdentifyAngle[1]),
+                                                                          dist_step,
+                                                                          10,
+                                                                          30,
+                                                                          true);
+    const PathRefactorFeatureResult right_result = detect_feature_by_angle(right_points,
+                                                                           static_cast<float>(JSON_TrackConfigData.BendPointIdentifyAngle[0]),
+                                                                           static_cast<float>(JSON_TrackConfigData.BendPointIdentifyAngle[1]),
+                                                                           dist_step,
+                                                                           10,
+                                                                           30,
+                                                                           false);
 
-        // 计算弯点并存储坐标，前提：拐点坐标不再边框上
-        if(abs(AngleVector[0]) > (JSON_TrackConfigData.BendPointIdentifyAngle[0]) && abs(AngleVector[0]) < (JSON_TrackConfigData.BendPointIdentifyAngle[1]) && (Data_Path_p -> SideCoordinate_Eight[i][0]) > 30)
-        {
-            //  cout << abs(AngleVector[0]) << endl;
-            (Data_Path_p -> BendPointCoordinate[(Data_Path_p -> BendPointNum[0])][0]) = (Data_Path_p -> SideCoordinate_Eight[i][0]);
-            (Data_Path_p -> BendPointCoordinate[(Data_Path_p -> BendPointNum[0])][1]) = (Data_Path_p -> SideCoordinate_Eight[i][1]);
-            Data_Path_p -> BendPointNum[0]++;
-            i = i+10;
-        }
-        i++;
+    const int left_max = static_cast<int>(sizeof(Data_Path_p->BendPointCoordinate) / sizeof(Data_Path_p->BendPointCoordinate[0]));
+    const int right_max = left_max;
+
+    for (int k = 0; k < static_cast<int>(left_result.indices.size()) && Data_Path_p->BendPointNum[0] < left_max; ++k) {
+        const int idx = left_result.indices[k];
+        Data_Path_p->BendPointCoordinate[Data_Path_p->BendPointNum[0]][0] = static_cast<int>(left_points[idx].x);
+        Data_Path_p->BendPointCoordinate[Data_Path_p->BendPointNum[0]][1] = static_cast<int>(left_points[idx].y);
+        Data_Path_p->BendPointNum[0]++;
     }
-    // 右边线弯点
-    for(j = (JSON_TrackConfigData.BendPointVectorDistance);j <= (Data_Path_p -> NumSearch[1])-(JSON_TrackConfigData.BendPointVectorDistance);)
-    {
-        // 右边线第一个向量
-        Vector[0][2] = (Data_Path_p -> SideCoordinate_Eight[j-(JSON_TrackConfigData.BendPointVectorDistance)][2])-(Data_Path_p -> SideCoordinate_Eight[j][2]);
-        Vector[0][3] = (Data_Path_p -> SideCoordinate_Eight[j-(JSON_TrackConfigData.BendPointVectorDistance)][3])-(Data_Path_p -> SideCoordinate_Eight[j][3]);
-        // 右边线第二个向量
-        Vector[1][2] = (Data_Path_p -> SideCoordinate_Eight[j+(JSON_TrackConfigData.BendPointVectorDistance)][2])-(Data_Path_p -> SideCoordinate_Eight[j][2]);
-        Vector[1][3] = (Data_Path_p -> SideCoordinate_Eight[j+(JSON_TrackConfigData.BendPointVectorDistance)][3])-(Data_Path_p -> SideCoordinate_Eight[j][3]);
 
-        // 计算弯点向量点乘
-        Vector_ScalarProduct[1] = Vector[0][2]*Vector[1][2]+Vector[0][3]*Vector[1][3];
-
-        // 计算弯点向量的模
-        Vector_Module[2] = sqrt(pow(Vector[0][2],2)+pow(Vector[0][3],2));
-        Vector_Module[3] = sqrt(pow(Vector[1][2],2)+pow(Vector[1][3],2));
-    
-        if( Vector_Module[2]*Vector_Module[3] != 0)
-        {
-            AngleVector[1] = acos(Vector_ScalarProduct[1]/(Vector_Module[2]*Vector_Module[3]))*(180/PI);    // 右边线弯点向量夹角
-            // cout << AngleVector[0] << "  " << AngleVector[1] << endl;
-        }
-
-        // 计算弯点并存储坐标，前提：拐点坐标不在边框上
-        if(abs(AngleVector[1]) > (JSON_TrackConfigData.BendPointIdentifyAngle[0]) && abs(AngleVector[1]) < (JSON_TrackConfigData.BendPointIdentifyAngle[1]) && 319-(Data_Path_p -> SideCoordinate_Eight[j][2]) > 30)
-        {
-            // cout << abs(AngleVector[1]) << endl;
-            (Data_Path_p -> BendPointCoordinate[(Data_Path_p -> BendPointNum[1])][2]) = (Data_Path_p -> SideCoordinate_Eight[j][2]);
-            (Data_Path_p -> BendPointCoordinate[(Data_Path_p -> BendPointNum[1])][3]) = (Data_Path_p -> SideCoordinate_Eight[j][3]);
-            Data_Path_p -> BendPointNum[1]++;
-            j = j+10;
-        }
-        j++;
+    for (int k = 0; k < static_cast<int>(right_result.indices.size()) && Data_Path_p->BendPointNum[1] < right_max; ++k) {
+        const int idx = right_result.indices[k];
+        Data_Path_p->BendPointCoordinate[Data_Path_p->BendPointNum[1]][2] = static_cast<int>(right_points[idx].x);
+        Data_Path_p->BendPointCoordinate[Data_Path_p->BendPointNum[1]][3] = static_cast<int>(right_points[idx].y);
+        Data_Path_p->BendPointNum[1]++;
     }
 }
 
@@ -624,8 +596,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     JSON_TrackConfigData.InflectionPointVectorDistance = ConfigData.at("POINT_DISTANCE");  // 获取元素拐点角度区
     JSON_TrackConfigData.BendPointVectorDistance = ConfigData.at("POINT_DISTANCE");  // 获取边线弯点角度区
-    JSON_TrackConfigData.BendPointNum[0] = ConfigData.at("LITTLE_ANGLE_BEND_POINT_NUM");    // 获取边线弯点数量
-    JSON_TrackConfigData.BendPointNum[1] = ConfigData.at("BIG_ANGLE_BEND_POINT_NUM");       // 获取边线弯点数量
+    JSON_TrackConfigData.BendPointNum[0] = ConfigData.at("LITTLE_ANGLE_BEND_POINT_NUM");    // 小角度弯道 弯点数量
+    JSON_TrackConfigData.BendPointNum[1] = ConfigData.at("BIG_ANGLE_BEND_POINT_NUM");       // 大角度弯道 弯点数量
     JSON_TrackConfigData.InflectionPointIdentifyAngle[0] = ConfigData.at("MIN_INFLECTION_POINT_ANGLE");  // 获取元素拐点角度区间
     JSON_TrackConfigData.InflectionPointIdentifyAngle[1] = ConfigData.at("MAX_INFLECTION_POINT_ANGLE"); 
     JSON_TrackConfigData.BendPointIdentifyAngle[0] = ConfigData.at("MIN_BEND_POINT_ANGLE");  // 获取边线弯点角度区间

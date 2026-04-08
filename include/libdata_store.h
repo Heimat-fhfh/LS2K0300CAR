@@ -225,6 +225,13 @@ typedef struct Data_Path
     int ServoAngle = 0;    // 舵机角度
     int MotorSpeed = 0;    // 电机速度
 
+    // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask 角速度模式）
+    int SteerErrorPx = 0;                 // 带符号的横向误差（像素）
+    double TargetAngularVelocityDeg = 0;  // 目标角速度（deg/s）
+    double TargetBaseSpeedMps = 0;        // 目标基础线速度（m/s）
+    double TargetLeftSpeedMps = 0;        // 运动学分解得到的左轮目标速度（m/s）
+    double TargetRightSpeedMps = 0;       // 运动学分解得到的右轮目标速度（m/s）
+
     int findrow;
 
 }Data_Path;

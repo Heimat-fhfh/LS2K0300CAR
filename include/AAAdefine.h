@@ -29,7 +29,7 @@ typedef unsigned           int uint32;
 #define OUT_H  image_h
 #define OUT_W  image_w
 
-#define RESULT_ROW  180//结果图行列
+#define RESULT_ROW  240//结果图行列
 #define RESULT_COL  320
 
 
