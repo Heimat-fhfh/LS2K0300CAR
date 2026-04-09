@@ -6,6 +6,8 @@
 #include <sys/select.h>
 #include <vector>
 
+#include "camera_calibration.h"
+
 using namespace std;
 using namespace cv;
 using namespace std::chrono;
@@ -24,6 +26,7 @@ MainTestConfig test_config;                         // 测试配置
 std::atomic<bool> g_running(true);                  // 程序运行标志
 bool g_runtime_config_ok = false;                   // 运行时配置状态
 CameraKind g_camera_kind = CameraKind::VIDEO_0;     // 摄像头类型
+bool g_calibration_enabled = false;                 // 标定校正使能
 
 JSON_PIDConfigData JSON_PIDConfigData_s;            // JSON PID配置数据
 Function_EN Function_EN_s;                          // 功能使能状态
@@ -32,6 +35,7 @@ Data_Path Data_Path_s;                              // 路径数据
 ImgProcess imgProcess;                              // 图像处理对象
 Judge judge;                                        // 赛道判断对象
 SYNC Sync;                                          // 同步对象
+CameraCalibrationCorrector g_calibration_corrector; // 摄像头标定校正器
 
 namespace
 {
@@ -44,6 +48,28 @@ std::string BuildTimestampString(const std::chrono::system_clock::time_point &tp
     std::ostringstream oss;
     oss << std::put_time(&localTm, "%Y%m%d_%H%M%S");
     return oss.str();
+}
+
+long long DurationToMicroseconds(const std::chrono::steady_clock::duration &d)
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
+}
+
+void LogFrameTiming(uint64_t frameIndex,
+                    const std::chrono::steady_clock::duration &frameCost,
+                    const std::chrono::steady_clock::duration &captureCost,
+                    const std::chrono::steady_clock::duration &undistortCost,
+                    bool undistortExecuted)
+{
+    std::cout << "[Perf] frame=" << frameIndex
+              << " total_us=" << DurationToMicroseconds(frameCost)
+              << " capture_us=" << DurationToMicroseconds(captureCost)
+              << " undistort_us=" << DurationToMicroseconds(undistortCost);
+    if (!undistortExecuted)
+    {
+        std::cout << " (skip)";
+    }
+    std::cout << std::endl;
 }
 
 class ScopedTerminalRawMode
@@ -425,11 +451,13 @@ int main() {
 
     // 临时采图功能：按一次键开始保存，再按一次键停止并退出。
     ScopedTerminalRawMode terminalRawMode;
-    const bool keyCaptureReady = terminalRawMode.enable();
+    const bool enableTempCapture = false;
+    const bool keyCaptureReady = enableTempCapture && terminalRawMode.enable();
     bool saveEnabled = false;
     bool saveSessionStarted = false;
     std::string outputDir;
     uint64_t outputIndex = 0;
+    uint64_t frameIndex = 0;
     std::vector<cv::Mat> cachedFrames;
     cachedFrames.reserve(1024);
 
@@ -445,6 +473,11 @@ int main() {
     // 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
     while (g_running.load() && Function_EN_s.Game_EN)
     {
+        const auto frameStart = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::duration captureCost = std::chrono::steady_clock::duration::zero();
+        std::chrono::steady_clock::duration undistortCost = std::chrono::steady_clock::duration::zero();
+        bool undistortExecuted = false;
+
         if (keyCaptureReady && terminalRawMode.pollKeyPress())
         {
             if (!saveEnabled)
@@ -465,7 +498,9 @@ int main() {
             }
         }
 
+        const auto captureStart = std::chrono::steady_clock::now();
         CameraImgGet(&Img_Store_s);
+        captureCost = std::chrono::steady_clock::now() - captureStart;
         if (!g_running.load())
         {
             printf("退出信号已接收，正在停止摄像头捕获线程...\n");
@@ -475,7 +510,25 @@ int main() {
         if (Img_Store_s.Img_Color.empty())
         {
             printf("Warning: Captured image is empty, skipping this frame.\n");
+            LogFrameTiming(
+                frameIndex++,
+                std::chrono::steady_clock::now() - frameStart,
+                captureCost,
+                undistortCost,
+                undistortExecuted);
             continue;
+        }
+
+        if (g_calibration_enabled)
+        {
+            const auto undistortStart = std::chrono::steady_clock::now();
+            cv::Mat correctedFrame;
+            if (g_calibration_corrector.correct(Img_Store_s.Img_Color, correctedFrame))
+            {
+                Img_Store_s.Img_Color = std::move(correctedFrame);
+            }
+            undistortCost = std::chrono::steady_clock::now() - undistortStart;
+            undistortExecuted = true;
         }
 
         if (saveEnabled)
@@ -512,6 +565,12 @@ int main() {
 
 		// displayMatOnIPS200(Img_Store_s.Img_Color);
         // FrameTaskAfterRead(&Img_Store_s);
+        LogFrameTiming(
+            frameIndex++,
+            std::chrono::steady_clock::now() - frameStart,
+            captureCost,
+            undistortCost,
+            undistortExecuted);
     }
 
     if (!outputDir.empty())
@@ -579,6 +638,37 @@ void argument_config(void)
     g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
     if (g_runtime_config_ok)
     {
+        std::string calibrationError;
+        const std::string calibrationJsonPath = "config/calibration.json";
+        const std::string calibrationYamlPath = "config/calibration.yaml";
+
+        // 优先尝试 JSON，未找到或失败时回退 YAML。
+        if (std::filesystem::exists(calibrationJsonPath))
+        {
+            g_calibration_enabled = g_calibration_corrector.load(calibrationJsonPath, &calibrationError);
+            if (!g_calibration_enabled)
+            {
+                std::cerr << "[Calibration] JSON 加载失败: " << calibrationError << std::endl;
+            }
+        }
+
+        if (!g_calibration_enabled)
+        {
+            g_calibration_enabled = g_calibration_corrector.load(calibrationYamlPath, &calibrationError);
+            if (!g_calibration_enabled)
+            {
+                std::cerr << "[Calibration] YAML 加载失败: " << calibrationError << std::endl;
+            }
+            else
+            {
+                std::cout << "[Calibration] 已加载 YAML 标定参数: " << calibrationYamlPath << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "[Calibration] 已加载 JSON 标定参数: " << calibrationJsonPath << std::endl;
+        }
+
         g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
         Function_EN_s.Game_EN = true;
         // 默认从图像循环开始，等待第一帧完成赛道状态判定后再切换到对应任务。

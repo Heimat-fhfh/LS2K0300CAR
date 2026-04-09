@@ -72,7 +72,10 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 		Camera.set(CAP_PROP_FRAME_WIDTH, Width);      // 帧宽
 		Camera.set(CAP_PROP_FRAME_HEIGHT, Height);     // 帧高
 		Camera.set(CAP_PROP_FPS, FPS);              // 帧率
-		// Camera.set(CAP_PROP_EXPOSURE, -14);	// 曝光度
+		// Camera.set(CAP_PROP_EXPOSURE, 3);	// 曝光度
+		// Camera.set(CAP_PROP_BRIGHTNESS, 0.8);    // 亮度，范围通常0~1
+		// Camera.set(CAP_PROP_GAIN, 1);          // 增益，提高亮度但会增加噪点
+		// Camera.set(CAP_PROP_CONTRAST, 0.7);      // 对比度，让画面更通透
 		double actualWidth = Camera.get(CAP_PROP_FRAME_WIDTH); 
 		double actualHeight = Camera.get(CAP_PROP_FRAME_HEIGHT); 
 		double actualFps = Camera.get(CAP_PROP_FPS); 

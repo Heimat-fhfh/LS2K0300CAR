@@ -21,13 +21,17 @@ link_libraries(pthread)
 
 # 指定OpenCV所用头文件路径
 include_directories(/home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/include/opencv4)
+set(OPENCV_LIB_DIR /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
 # 找到opencv所需的库文件并保存到变量中
-set(OPENCV_CORE /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_core.so)
-set(OPENCV_IMGPROC /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_imgproc.so)
-set(OPENCV_HIGHGUI /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_highgui.so)
-set(OPENCV_VIDEOIO /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_videoio.so)
-set(OPENCV_IMGCODECS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_imgcodecs.so)
-set(OPENCV_DNN /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib/libopencv_dnn.so)
+set(OPENCV_CORE ${OPENCV_LIB_DIR}/libopencv_core.so)
+set(OPENCV_IMGPROC ${OPENCV_LIB_DIR}/libopencv_imgproc.so)
+set(OPENCV_HIGHGUI ${OPENCV_LIB_DIR}/libopencv_highgui.so)
+set(OPENCV_VIDEOIO ${OPENCV_LIB_DIR}/libopencv_videoio.so)
+set(OPENCV_IMGCODECS ${OPENCV_LIB_DIR}/libopencv_imgcodecs.so)
+set(OPENCV_DNN ${OPENCV_LIB_DIR}/libopencv_dnn.so)
+set(OPENCV_CALIB3D ${OPENCV_LIB_DIR}/libopencv_calib3d.so)
+set(OPENCV_FEATURES2D ${OPENCV_LIB_DIR}/libopencv_features2d.so)
+set(OPENCV_FLANN ${OPENCV_LIB_DIR}/libopencv_flann.so)
 
 
 
@@ -59,6 +63,9 @@ add_subdirectory(third_party/cpp-httplib-master)
 # 由源文件生成一个可执行程序
 add_executable(main main.cpp ${SRC} ${TEST})
 
+# 交叉链接时为 ld 提供动态库依赖搜索路径，避免 calib3d 的间接依赖找不到。
+target_link_options(main PUBLIC -Wl,-rpath-link,${OPENCV_LIB_DIR})
+
 # 连接OpenCV动态库
 target_link_libraries(main PUBLIC 
     ${OPENCV_CORE} 
@@ -67,6 +74,9 @@ target_link_libraries(main PUBLIC
     ${OPENCV_VIDEOIO} 
     ${OPENCV_IMGCODECS} 
     ${OPENCV_DNN}
+    ${OPENCV_CALIB3D}
+    ${OPENCV_FEATURES2D}
+    ${OPENCV_FLANN}
     )
 # 连接第三方web库cpp-httplib
 target_link_libraries(main PUBLIC httplib::httplib)
