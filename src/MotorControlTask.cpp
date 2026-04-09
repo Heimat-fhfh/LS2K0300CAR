@@ -281,8 +281,8 @@ void MotorControlTask::run() {
                 // 更新目标速度
                 currentLeftTarget = leftTarget;
                 currentRightTarget = rightTarget;
-                printf("当前角速度: %.2f, 误差: %.2f, 角速度控制输出: %.2f", 
-                    actualAngularVelocity, angularVelocityError, angularControlOutput);
+                // printf("当前角速度: %.2f, 误差: %.2f, 角速度控制输出: %.2f", 
+                //     actualAngularVelocity, angularVelocityError, angularControlOutput);
                 
                 // 更新原子变量（用于显示）
                 leftTargetSpeed.store(leftTarget);
@@ -302,16 +302,16 @@ void MotorControlTask::run() {
                 lastRightOutput_ = rightOutput;
             }
 
-            printf(",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-                currentLeftTarget,currentRightTarget,leftSpeed,rightSpeed,leftOutput,rightOutput);
+            // printf(",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+            //     currentLeftTarget,currentRightTarget,leftSpeed,rightSpeed,leftOutput,rightOutput);
             
-            // 添加斜坡状态输出
-            if (rampEnabled) {
-                printf(",RAMP");
-            } else {
-                printf(",NORAMP");
-            }
-            printf("\n");
+            // // 添加斜坡状态输出
+            // if (rampEnabled) {
+            //     printf(",RAMP");
+            // } else {
+            //     printf(",NORAMP");
+            // }
+            // printf("\n");
             
             std::array<float, 12> data = {
                 (float)currentLeftTarget,           // 0

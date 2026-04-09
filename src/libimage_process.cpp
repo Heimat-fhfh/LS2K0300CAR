@@ -68,6 +68,7 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 	else
 	{
 		Camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G')); 
+		Camera.set(CAP_PROP_BUFFERSIZE, 1);         // 减少驱动侧积压帧，降低延迟与无效解码开销
 		Camera.set(CAP_PROP_FRAME_WIDTH, Width);      // 帧宽
 		Camera.set(CAP_PROP_FRAME_HEIGHT, Height);     // 帧高
 		Camera.set(CAP_PROP_FPS, FPS);              // 帧率
@@ -99,6 +100,13 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 {
 	Mat Img;
+	double cameraFps = Camera.get(CAP_PROP_FPS);
+	if (cameraFps <= 0.0)
+	{
+		cameraFps = 60.0;
+	}
+	const auto frameInterval = chrono::microseconds(static_cast<long long>(1000000.0 / cameraFps));
+	auto nextFrameTime = chrono::steady_clock::now();
 	{
 		lock_guard<mutex> lock(CameraCapture_Mutex);
 		Img_Store_p->CameraThreadRunning = true;
@@ -130,7 +138,7 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 			lock_guard<mutex> lock(CameraCapture_Mutex);
 			int writeIndex = Img_Store_p->Img_WriteIndex;
 			int staleIndex = 1 - writeIndex;
-			Img_Store_p->Img_CaptureBuffer[writeIndex] = Img.clone();
+			Img_Store_p->Img_CaptureBuffer[writeIndex] = std::move(Img);
 			Img_Store_p->Img_BufferReady[writeIndex] = true;
 			Img_Store_p->Img_BufferReady[staleIndex] = false; // 始终丢弃旧帧，仅保留最新帧
 			Img_Store_p->Img_ReadIndex = writeIndex;
@@ -138,6 +146,13 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 			Img_Store_p->Img_FrameSeq++;
 		}
 		CameraCapture_CV.notify_one();
+
+		nextFrameTime += frameInterval;
+		this_thread::sleep_until(nextFrameTime);
+		if (chrono::steady_clock::now() > nextFrameTime + frameInterval)
+		{
+			nextFrameTime = chrono::steady_clock::now();
+		}
     }
 }
 
@@ -158,7 +173,7 @@ void CameraImgGet(Img_Store *Img_Store_p)
 	}
 
 	int readIndex = Img_Store_p->Img_ReadIndex;
-	(Img_Store_p->Img_Color) = (Img_Store_p->Img_CaptureBuffer[readIndex]).clone();
+	Img_Store_p->Img_Color = std::move(Img_Store_p->Img_CaptureBuffer[readIndex]);
 	Img_Store_p->Img_BufferReady[readIndex] = false;
 	Img_Store_p->Img_LastReadSeq = Img_Store_p->Img_FrameSeq;
 }

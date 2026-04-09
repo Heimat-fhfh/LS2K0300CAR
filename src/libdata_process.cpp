@@ -2,6 +2,8 @@
 #include "common_program.h"
 #include "libdata_store.h"
 #include "path_refactor.h"
+#include <cerrno>
+#include <cstring>
 
 using namespace std;
 using namespace cv;
@@ -562,6 +564,14 @@ bool changetimes = 0;
 */
 void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSON_PIDConfigData *JSON_PIDConfigData_p)
 {
+    if (Data_Path_p == nullptr || Function_EN_p == nullptr || JSON_PIDConfigData_p == nullptr)
+    {
+        std::cerr << "[Config] ConfigData_SYNC 参数非法: Data_Path_p=" << Data_Path_p
+                  << ", Function_EN_p=" << Function_EN_p
+                  << ", JSON_PIDConfigData_p=" << JSON_PIDConfigData_p << std::endl;
+        return;
+    }
+
     JSON_FunctionConfigData JSON_FunctionConfigData;
     JSON_TrackConfigData JSON_TrackConfigData;
 
@@ -573,6 +583,13 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         cout << "0.低速参数\n1.中速参数\n2.高速参数" << endl;
         cout << "参数选择：";
         cin >> JSON_FileNum;
+        if (cin.fail())
+        {
+            cin.clear();
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cerr << "[Config] 输入不是有效数字，回退到 config_0.json" << std::endl;
+            JSON_FileNum = 0;
+        }
         changetimes = true;
         jsonnum = JSON_FileNum;
     }
@@ -580,15 +597,95 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         JSON_FileNum = jsonnum;
     }
 
+    if (JSON_FileNum < 0 || JSON_FileNum > 2)
+    {
+        std::cerr << "[Config] 非法配置编号: " << JSON_FileNum << "，回退到 config_0.json" << std::endl;
+        JSON_FileNum = 0;
+        jsonnum = 0;
+    }
+
     switch(JSON_FileNum)
     {
-        case 0:{ ConfigFilePath = "config/config_0.json"; break; }
-        case 1:{ ConfigFilePath = "config/config_1.json"; break; }
-        case 2:{ ConfigFilePath = "config/config_2.json"; break; }
+        case 0:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_0.json"; break; }
+        case 1:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_1.json"; break; }
+        case 2:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_2.json"; break; }
+        default:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_0.json"; break; }
     }
-    printf("OPENING JSON FILE :%s\n",ConfigFilePath);
+
+    std::cout << "[Config] OPENING JSON FILE: " << ConfigFilePath << std::endl;
     ifstream ConfigFile(ConfigFilePath);
-    nlohmann::json ConfigData = nlohmann::json::parse(ConfigFile);
+    if (!ConfigFile.is_open())
+    {
+        std::cerr << "[Config] 打开配置文件失败: " << ConfigFilePath
+                  << ", errno=" << errno
+                  << ", msg=" << std::strerror(errno) << std::endl;
+        return;
+    }
+
+    ConfigFile.seekg(0, std::ios::end);
+    std::streampos file_size = ConfigFile.tellg();
+    ConfigFile.seekg(0, std::ios::beg);
+    std::cout << "[Config] 文件大小: " << static_cast<long long>(file_size) << " bytes" << std::endl;
+    if (file_size <= 0)
+    {
+        std::cerr << "[Config] 配置文件为空: " << ConfigFilePath << std::endl;
+        return;
+    }
+
+    nlohmann::json ConfigData;
+    try
+    {
+        ConfigData = nlohmann::json::parse(ConfigFile);
+    }
+    catch (const nlohmann::json::parse_error& e)
+    {
+        std::cerr << "[Config] JSON 解析失败: " << e.what() << std::endl;
+        return;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Config] 读取配置异常: " << e.what() << std::endl;
+        return;
+    }
+
+    if (!ConfigData.is_object())
+    {
+        std::cerr << "[Config] JSON 根节点不是 object，实际类型: " << ConfigData.type_name() << std::endl;
+        return;
+    }
+
+    const std::vector<std::string> required_keys = {
+        "SPEED_L", "SPEED_R", "UART_EN", "IMG_COMPRESS_EN", "CAMERA_EN", "IMAGE_SAVE_EN", "VIDEO_SHOW_EN",
+        "DATA_PRINT_EN", "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN", "FORWARD", "PATH_SEARCH_START",
+        "PATH_SEARCH_END", "SIDE_SEARCH_START", "SIDE_SEARCH_END", "POINT_DISTANCE", "LITTLE_ANGLE_BEND_POINT_NUM",
+        "BIG_ANGLE_BEND_POINT_NUM", "MIN_INFLECTION_POINT_ANGLE", "MAX_INFLECTION_POINT_ANGLE", "MIN_BEND_POINT_ANGLE",
+        "MAX_BEND_POINT_ANGLE", "TRACK_WIDTH", "CIRCLE_OUT_WIDTH", "STRIGHT_TRACK_MOTOR_SPEED",
+        "LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED", "BIG_ANGLE_BEND_TRACK_MOTOR_SPEED", "ACROSS_TRACK_MOTOR_SPEED",
+        "CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE", "CIRCLE_TRACK_MOTOR_SPEED_INSIDE", "BRIDGE_ZONE_MOTOR_SPEED",
+        "CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE", "CIRCLE_IN_PREPARE_TIME"
+    };
+
+    std::vector<std::string> missing_keys;
+    missing_keys.reserve(required_keys.size());
+    for (const auto& key : required_keys)
+    {
+        if (!ConfigData.contains(key))
+        {
+            missing_keys.push_back(key);
+        }
+    }
+
+    if (!missing_keys.empty())
+    {
+        std::cerr << "[Config] JSON 缺少必需字段，缺失数量: " << missing_keys.size() << std::endl;
+        for (const auto& key : missing_keys)
+        {
+            std::cerr << "[Config] missing key: " << key << std::endl;
+        }
+        return;
+    }
+
+    std::cout << "[Config] JSON 根节点字段数量: " << ConfigData.size() << std::endl;
 
     JSON_PIDConfigData_p->speedl = ConfigData.at("SPEED_L");    // 获取电机低速
     JSON_PIDConfigData_p->speedr = ConfigData.at("SPEED_R");    // 获取电机高速
@@ -630,6 +727,19 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_TrackConfigData.BridgeZoneMotorSpeed = ConfigData.at("BRIDGE_ZONE_MOTOR_SPEED"); // 桥梁区域电机速度
     JSON_TrackConfigData.CrosswalkZoneMotorSpeed = ConfigData.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE"); // 斑马线区域准备停车电机速度
     JSON_TrackConfigData.Circle_In_Prepare_Time = ConfigData.at("CIRCLE_IN_PREPARE_TIME");  // 准备入环限定时间
+
+    // 同步配置到运行时容器（覆盖旧值，保持单配置生效）。
+    Function_EN_p->JSON_FunctionConfigData_v.clear();
+    Data_Path_p->JSON_TrackConfigData_v.clear();
+    Function_EN_p->JSON_FunctionConfigData_v.push_back(JSON_FunctionConfigData);
+    Data_Path_p->JSON_TrackConfigData_v.push_back(JSON_TrackConfigData);
+
+    std::cout << "[Config] Function 配置数量: " << Function_EN_p->JSON_FunctionConfigData_v.size()
+              << ", Track 配置数量: " << Data_Path_p->JSON_TrackConfigData_v.size() << std::endl;
+    std::cout << "[Config] Camera_EN=" << static_cast<int>(JSON_FunctionConfigData.Camera_EN)
+              << ", Forward=" << JSON_TrackConfigData.Forward
+              << ", PathSearch=[" << JSON_TrackConfigData.Path_Search_Start
+              << ", " << JSON_TrackConfigData.Path_Search_End << "]" << std::endl;
 
     cout << "<---------------------JSON参数获取成功--------------------->" << endl;
 }

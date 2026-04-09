@@ -19,6 +19,7 @@ void    ips200_show_uint        (uint16 x, uint16 y, const uint32 dat, uint8 num
 void    ips200_show_float       (uint16 x, uint16 y, const double dat, uint8 num, uint8 pointnum);
 
 void    ips200_show_gray_image  (uint16 x, uint16 y, const uint8 *image, uint16 width, uint16 height);
+void    ips200_show_rgb565_image(uint16 x, uint16 y, const uint16 *image, uint16 width, uint16 height);
 
 void    ips200_init             (const char *path);
 

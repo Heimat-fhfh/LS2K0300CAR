@@ -1,6 +1,7 @@
 #include "zf_device_ips200_fb.h"
 #include "zf_common_font.h"
 #include "zf_common_function.h"
+#include <cstring>
 
 static uint16 ips200_pencolor = IPS200_DEFAULT_PENCOLOR;
 static uint16 ips200_bgcolor = IPS200_DEFAULT_BGCOLOR;
@@ -220,6 +221,40 @@ uint16 width, uint16 height)
             ips200_draw_point(x_start, y_start,  color);
         }
     }    
+}
+
+void ips200_show_rgb565_image(uint16 x, uint16 y, const uint16 *image,
+uint16 width, uint16 height)
+{
+    if (NULL == screen_base || NULL == image)
+    {
+        return;
+    }
+
+    if (x >= ips200_width || y >= ips200_height)
+    {
+        return;
+    }
+
+    uint16 draw_width = width;
+    uint16 draw_height = height;
+
+    if ((x + draw_width) > (uint16)ips200_width)
+    {
+        draw_width = (uint16)ips200_width - x;
+    }
+
+    if ((y + draw_height) > (uint16)ips200_height)
+    {
+        draw_height = (uint16)ips200_height - y;
+    }
+
+    for (uint16 row = 0; row < draw_height; ++row)
+    {
+        uint16 *dst = &screen_base[(y + row) * ips200_width + x];
+        const uint16 *src = &image[row * width];
+        std::memcpy(dst, src, draw_width * sizeof(uint16));
+    }
 }
 
 

@@ -1,9 +1,16 @@
 #include "main.hpp"
 
+#include <filesystem>
+#include <sstream>
+#include <termios.h>
+#include <sys/select.h>
+#include <vector>
+
 using namespace std;
 using namespace cv;
 using namespace std::chrono;
 using namespace std::this_thread;
+namespace fs = std::filesystem;
 
 // 全局变量声明
 IMUDevice imu;                                      // IMU设备对象
@@ -25,6 +32,80 @@ Data_Path Data_Path_s;                              // 路径数据
 ImgProcess imgProcess;                              // 图像处理对象
 Judge judge;                                        // 赛道判断对象
 SYNC Sync;                                          // 同步对象
+
+namespace
+{
+std::string BuildTimestampString(const std::chrono::system_clock::time_point &tp)
+{
+    const std::time_t tt = std::chrono::system_clock::to_time_t(tp);
+    std::tm localTm{};
+    localtime_r(&tt, &localTm);
+
+    std::ostringstream oss;
+    oss << std::put_time(&localTm, "%Y%m%d_%H%M%S");
+    return oss.str();
+}
+
+class ScopedTerminalRawMode
+{
+public:
+    bool enable()
+    {
+        if (!isatty(STDIN_FILENO))
+        {
+            return false;
+        }
+        if (tcgetattr(STDIN_FILENO, &oldTermios_) != 0)
+        {
+            return false;
+        }
+        termios raw = oldTermios_;
+        raw.c_lflag &= static_cast<unsigned>(~(ICANON | ECHO));
+        raw.c_cc[VMIN] = 0;
+        raw.c_cc[VTIME] = 0;
+        if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) != 0)
+        {
+            return false;
+        }
+        enabled_ = true;
+        return true;
+    }
+
+    bool pollKeyPress()
+    {
+        if (!enabled_)
+        {
+            return false;
+        }
+
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(STDIN_FILENO, &readfds);
+        timeval tv{0, 0};
+        const int ready = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &tv);
+        if (ready <= 0 || !FD_ISSET(STDIN_FILENO, &readfds))
+        {
+            return false;
+        }
+
+        char ch = '\0';
+        const ssize_t bytes = read(STDIN_FILENO, &ch, 1);
+        return bytes == 1;
+    }
+
+    ~ScopedTerminalRawMode()
+    {
+        if (enabled_)
+        {
+            tcsetattr(STDIN_FILENO, TCSANOW, &oldTermios_);
+        }
+    }
+
+private:
+    bool enabled_ = false;
+    termios oldTermios_{};
+};
+}
 
 void ReadInput_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
@@ -342,25 +423,105 @@ int main() {
 
     CameraCaptureThreadStart(Camera, &Img_Store_s, captureThread);
 
+    // 临时采图功能：按一次键开始保存，再按一次键停止并退出。
+    ScopedTerminalRawMode terminalRawMode;
+    const bool keyCaptureReady = terminalRawMode.enable();
+    bool saveEnabled = false;
+    bool saveSessionStarted = false;
+    std::string outputDir;
+    uint64_t outputIndex = 0;
+    std::vector<cv::Mat> cachedFrames;
+    cachedFrames.reserve(1024);
+
+    if (keyCaptureReady)
+    {
+        cout << "按任意键开始保存图像，再按任意键停止并退出..." << endl;
+    }
+    else
+    {
+        cout << "终端按键捕获不可用，临时采图功能将不会触发。" << endl;
+    }
+
     // 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
     while (g_running.load() && Function_EN_s.Game_EN)
     {
+        if (keyCaptureReady && terminalRawMode.pollKeyPress())
+        {
+            if (!saveEnabled)
+            {
+                saveEnabled = true;
+                saveSessionStarted = false;
+                outputDir.clear();
+                outputIndex = 0;
+                cachedFrames.clear();
+                cout << "检测到按键，开始保存图像。" << endl;
+            }
+            else
+            {
+                saveEnabled = false;
+                g_running.store(false);
+                cout << "检测到按键，停止保存图像。" << endl;
+                break;
+            }
+        }
+
         CameraImgGet(&Img_Store_s);
         if (!g_running.load())
         {
+            printf("退出信号已接收，正在停止摄像头捕获线程...\n");
             break;
         }
 
         if (Img_Store_s.Img_Color.empty())
         {
+            printf("Warning: Captured image is empty, skipping this frame.\n");
             continue;
         }
 
-        FrameTaskAfterRead(&Img_Store_s);
+        if (saveEnabled)
+        {
+            if (!saveSessionStarted)
+            {
+                outputDir = "img/" + BuildTimestampString(std::chrono::system_clock::now());
+                std::error_code ec;
+                fs::create_directories(outputDir, ec);
+                if (ec)
+                {
+                    std::cerr << "创建输出目录失败: " << outputDir << " error=" << ec.message() << std::endl;
+                    saveEnabled = false;
+                }
+                else
+                {
+                    saveSessionStarted = true;
+                    cout << "输出目录: " << outputDir << endl;
+                }
+            }
+
+            if (saveEnabled && saveSessionStarted)
+            {
+                cachedFrames.emplace_back(Img_Store_s.Img_Color.clone());
+                const std::string filePath = outputDir + "/" + std::to_string(outputIndex) + ".jpg";
+                if (!imwrite(filePath, cachedFrames.back()))
+                {
+                    std::cerr << "保存图像失败: " << filePath << std::endl;
+                }
+                ++outputIndex;
+            }
+        }
+
+
+		// displayMatOnIPS200(Img_Store_s.Img_Color);
+        // FrameTaskAfterRead(&Img_Store_s);
     }
 
-    // 7. 程序退出时的清理工作
+    if (!outputDir.empty())
+    {
+        cout << "保存结束，目录: " << outputDir << "，总帧数: " << outputIndex
+             << "，内存缓存帧数: " << cachedFrames.size() << endl;
+    }
+
     CameraCaptureThreadStop(&Img_Store_s, captureThread);
+    Camera.release();
 
     if (motorTask)
     {
@@ -369,7 +530,6 @@ int main() {
         motorTask->stop();
     }
 
-    Camera.release();
     return 0;
 }
 
@@ -426,6 +586,17 @@ void argument_config(void)
     }
     else
     {
+        std::cerr << "[Config] 配置同步失败" << std::endl;
+        std::cerr << "[Config] Function 配置数量: " << Function_EN_s.JSON_FunctionConfigData_v.size()
+                  << ", Track 配置数量: " << Data_Path_s.JSON_TrackConfigData_v.size() << std::endl;
+        if (Function_EN_s.JSON_FunctionConfigData_v.empty())
+        {
+            std::cerr << "[Config] JSON_FunctionConfigData_v 为空，请检查功能配置文件" << std::endl;
+        }
+        if (Data_Path_s.JSON_TrackConfigData_v.empty())
+        {
+            std::cerr << "[Config] JSON_TrackConfigData_v 为空，请检查赛道配置文件" << std::endl;
+        }
         Function_EN_s.Game_EN = false;
     }
 
@@ -445,15 +616,19 @@ void argument_config(void)
 void sigint_handler(int signum) 
 {
     (void)signum;
-    printf("收到Ctrl+C，程序即将退出\n");
-    motors->stopAll();
     g_running.store(false);
+    motorTask->stop();
+    motors->stopAll();
+    exit(EXIT_SUCCESS);
 }
 
 void cleanup()
 {
-    motors->stopAll();
     printf("程序退出，执行清理操作\n");
+    g_running.store(false);
+    motorTask->stop();
+    motors->stopAll();
+    exit(EXIT_SUCCESS);
 }
 
 
