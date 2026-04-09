@@ -169,12 +169,6 @@ void ImgPathSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     - Data_Path_p->dir_l / dir_r：每一步的生长方向。
     - Data_Path_p->NumSearch[0] / NumSearch[1]：左右边线最终点数。
     - Data_Path_p->hightest：左右边线相遇或达到有效终止条件时的最高点。
-
-    这次改动的重点：
-    - 使用二值图的实际宽高替代固定的 239 / 319 魔数，减少硬编码。
-    - 补齐输入检查，防止空图或尺寸不匹配时继续访问。
-    - 修正“左右边线是否都至少找到两个点”的判断笔误。
-    - 将搜索起点、结束条件和回退条件写得更明确，降低后续维护成本。
 */
 void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
@@ -195,7 +189,6 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     const int last_row = image_height - 1;
 
     // 变量设置
-    //————————————————————————————————————————————————————————————————————————————————————//
     // 寻种子变量设置
     // 边线坐标
     int X = 0;
@@ -445,45 +438,141 @@ void dataMove(Data_Path *Data_Path_p)
 
 }
 
+namespace {
+
+inline bool in_image_bounds(int x, int y) {
+    return x >= 0 && x < image_w && y >= 0 && y < image_h;
+}
+
+inline int clamp_int(int value, int low, int high) {
+    if (value < low) {
+        return low;
+    }
+    if (value > high) {
+        return high;
+    }
+    return value;
+}
+
+bool find_seed_points_eight(const uint8 bin_image[image_h][image_w],
+                            int start_row,
+                            int start_x,
+                            cv::Point& start_point_l,
+                            cv::Point& start_point_r) {
+    bool l_found = false;
+    bool r_found = false;
+
+    for (int x = start_x; x > border_min; --x) {
+        if (bin_image[start_row][x] == 255 && bin_image[start_row][x - 1] == 0) {
+            start_point_l = cv::Point(x, start_row);
+            l_found = true;
+            break;
+        }
+    }
+
+    for (int x = start_x; x < border_max; ++x) {
+        if (bin_image[start_row][x] == 255 && bin_image[start_row][x + 1] == 0) {
+            start_point_r = cv::Point(x, start_row);
+            r_found = true;
+            break;
+        }
+    }
+
+    return l_found && r_found;
+}
+
+void trace_one_side_eight(const uint8 bin_image[image_h][image_w],
+                          const cv::Point& start_point,
+                          const int seeds[8][2],
+                          int start_row,
+                          int end_row,
+                          uint16 points[(uint16)USE_num][2],
+                          uint16 dirs[(uint16)USE_num],
+                          int& out_count) {
+    cv::Point center = start_point;
+    int repeat_same = 0;
+    int count = 0;
+
+    while (count < static_cast<int>(USE_num)) {
+        points[count][0] = static_cast<uint16>(center.x);
+        points[count][1] = static_cast<uint16>(center.y);
+
+        if (center.y <= end_row) {
+            ++count;
+            break;
+        }
+        if (center.y > start_row + 2) {
+            ++count;
+            break;
+        }
+
+        cv::Point next = center;
+        int best_dir = -1;
+        bool found = false;
+
+        for (int i = 0; i < 8; ++i) {
+            const int nx = center.x + seeds[i][0];
+            const int ny = center.y + seeds[i][1];
+            const int nx_next = center.x + seeds[(i + 1) & 7][0];
+            const int ny_next = center.y + seeds[(i + 1) & 7][1];
+
+            if (!in_image_bounds(nx, ny) || !in_image_bounds(nx_next, ny_next)) {
+                continue;
+            }
+
+            if (bin_image[ny][nx] == 0 && bin_image[ny_next][nx_next] == 255) {
+                if (!found || ny < next.y) {
+                    next.x = nx;
+                    next.y = ny;
+                    best_dir = i;
+                    found = true;
+                }
+            }
+        }
+
+        dirs[count] = (best_dir >= 0) ? static_cast<uint16>(best_dir) : 0;
+
+        if (!found) {
+            ++count;
+            break;
+        }
+
+        if (next.x == center.x && next.y == center.y) {
+            ++repeat_same;
+            if (repeat_same >= 2) {
+                ++count;
+                break;
+            }
+        } else {
+            repeat_same = 0;
+        }
+
+        ++count;
+        center = next;
+    }
+
+    out_count = count;
+}
+
+} // namespace
+
 /*
-    imgSearch_l_r 说明
-    八邻域边线提取前的二值图准备函数。
-
-    输入数据：
-    - Img_Store_p->Img_OTSU：上一阶段完成预处理后的二值图，作为八邻域搜索的唯一图像依据。
-    - Data_Path_p：承载左右边线点集、搜索方向、最高点和边界缓存的路径数据结构。
-
-    输出数据：
-    - Img_Store_p->bin_image：将二值图按行展开到二维数组，方便后续按坐标快速访问。
-    - 后续的八邻域搜索会继续写入 Data_Path_p->points_l / points_r / dir_l / dir_r / hightest 等字段。
-
-    实现方式：
-    - 先校验输入图像是否为空，以及尺寸和通道类型是否满足固定寻线假设。
-    - 再将 Mat 中的每一行复制到 bin_image，保留连续的二维数组访问方式。
-    - 这一步本身不做寻线，只负责把图像数据转换成更适合八邻域算法的访问格式。
-
-    为什么这样优化：
-    - 避免在后续像素访问中频繁调用 Mat::at，降低函数调用和边界检查开销。
-    - 尺寸不匹配时直接返回，避免使用错误图像导致越界和脏数据传播。
-    - 行级复制使用 std::copy_n，比分像素逐个赋值更紧凑，也更容易被编译器优化。
+    ImgSideSearchEightNeighborhood 说明
+    现代化、结构化、安全的八邻域边线搜索主函数。
 */
-void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
+void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
-    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    // printf("获取八邻域起始点\n");
-	int i = 0, j = 0, l_found = 0, r_found = 0;
+    if (Img_Store_p == nullptr || Data_Path_p == nullptr) {
+        return;
+    }
+    if (Data_Path_p->JSON_TrackConfigData_v.empty()) {
+        return;
+    }
 
-    Point start_point_l,start_point_r;
-
-    int start_row = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
-
-/*************************************************************************************************************
- *********************************        将Mat转化为数组更高效        *****************************************
- *************************************************************************************************************/
-
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p->JSON_TrackConfigData_v[0];
     const Mat& binary = Img_Store_p->Img_OTSU;
     if (binary.empty() || binary.rows != image_h || binary.cols != image_w || binary.type() != CV_8UC1) {
-        cerr << "Error: Img_OTSU is empty or has unexpected size/type in imgSearch_l_r!" << endl;
+        cerr << "Error: Img_OTSU is empty or has unexpected size/type in ImgSideSearchEightNeighborhood!" << endl;
         return;
     }
 
@@ -491,243 +580,107 @@ void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
         const uint8* row_ptr = binary.ptr<uint8>(row);
         std::copy_n(row_ptr, image_w, Img_Store_p->bin_image[row]);
     }
-    
-    
-    // ApplyInversePerspective(Img_Store_p);
 
-/*************************************************************************************************************
- **********************************        寻找左右两边的起始点        *****************************************
- *************************************************************************************************************/
+    memset(Data_Path_p->points_l, 0, sizeof(Data_Path_p->points_l));
+    memset(Data_Path_p->points_r, 0, sizeof(Data_Path_p->points_r));
+    memset(Data_Path_p->dir_l, 0, sizeof(Data_Path_p->dir_l));
+    memset(Data_Path_p->dir_r, 0, sizeof(Data_Path_p->dir_r));
+    Data_Path_p->NumSearch[0] = 0;
+    Data_Path_p->NumSearch[1] = 0;
 
-	for (i = image_w / 2; i > border_min; i--)
-	{
-		start_point_l.x = i;    start_point_l.y = start_row;
-		if (Img_Store_p->bin_image[start_row][i] == 255 && Img_Store_p->bin_image[start_row][i - 1] == 0)
-		{
-			// printf("找到左边起点image[%d][%d]\n", start_row,i);
-			l_found = 1;
-			break;
-		}
-	}
+    const int start_row = clamp_int(RESULT_ROW - JSON_TrackConfigData.Path_Search_Start, 1, image_h - 2);
+    const int end_row = clamp_int(RESULT_ROW - JSON_TrackConfigData.Side_Search_End, 0, image_h - 1);
 
-	for (i = image_w / 2; i < border_max; i++)
-	{
-		start_point_r.x = i;    start_point_r.y = start_row;
-		if (Img_Store_p->bin_image[start_row][i] == 255 && Img_Store_p->bin_image[start_row][i + 1] == 0)
-		{
-			// printf("找到右边起点image[%d][%d]\n",start_row, i);
-			r_found = 1;
-			break;
-		}
-	}
+    static int last_mid_x = image_w / 2;
+    int start_x = image_w / 2;
+    if (Img_Store_p->ImgNum > 5) {
+        start_x = clamp_int(last_mid_x, 1, image_w - 2);
+    }
 
-	if (l_found && r_found) ;   // 左右都找到了起点
-	else return;                // 没找到起点
+    Point start_point_l;
+    Point start_point_r;
+    if (!find_seed_points_eight(Img_Store_p->bin_image, start_row, start_x, start_point_l, start_point_r)) {
+        if (!find_seed_points_eight(Img_Store_p->bin_image, start_row, image_w / 2, start_point_l, start_point_r)) {
+            return;
+        }
+    }
 
-/*************************************************************************************************************
- ***************************************        变量初始化        *********************************************
- *************************************************************************************************************/
+    last_mid_x = (start_point_l.x + start_point_r.x) / 2;
 
-	//左边变量
-	uint16 search_filds_l[8][2] = { {  0 } };
-	Point center_point_l = Point(0,0);
-	uint16 index_l = 0;
-	uint16 temp_l[8][2] = { {  0 } };
-	uint16 l_data_statics;//统计左边
-	//定义八个邻域
-	static int8 seeds_l[8][2] = { {0,  1},{-1,1},{-1,0},{-1,-1},{0,-1},{1,-1},{1,  0},{1, 1}, };
-	//{-1,-1},{0,-1},{+1,-1},
-	//{-1, 0},	     {+1, 0},
-	//{-1,+1},{0,+1},{+1,+1},
-	//这个是顺时针
+    static const int seeds_l[8][2] = {
+        {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}, {1, 0}, {1, 1}
+    };
+    static const int seeds_r[8][2] = {
+        {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}
+    };
 
-	//右边变量
-	uint16 search_filds_r[8][2] = { {  0 } };
-	Point center_point_r = Point(0,0);
-	uint16 index_r = 0;//索引下标
-	uint16 temp_r[8][2] = { {  0 } };
-	uint16 r_data_statics;//统计右边
-	//定义八个邻域
-	static int8 seeds_r[8][2] = { {0,  1},{1,1},{1,0}, {1,-1},{0,-1},{-1,-1}, {-1,  0},{-1, 1}, };
-	//{-1,-1},{0,-1},{+1,-1},
-	//{-1, 0},	     {+1, 0},
-	//{-1,+1},{0,+1},{+1,+1},
-	//这个是逆时针
+    int left_count = 0;
+    int right_count = 0;
+    trace_one_side_eight(Img_Store_p->bin_image,
+                         start_point_l,
+                         seeds_l,
+                         start_row,
+                         end_row,
+                         Data_Path_p->points_l,
+                         Data_Path_p->dir_l,
+                         left_count);
+    trace_one_side_eight(Img_Store_p->bin_image,
+                         start_point_r,
+                         seeds_r,
+                         start_row,
+                         end_row,
+                         Data_Path_p->points_r,
+                         Data_Path_p->dir_r,
+                         right_count);
 
-	l_data_statics = 0; r_data_statics = 0;
+    Data_Path_p->NumSearch[0] = left_count;
+    Data_Path_p->NumSearch[1] = right_count;
 
-	//第一次更新坐标点  将找到的起点值传进来
-	center_point_l = start_point_l;
-	center_point_r = start_point_r;
+    Data_Path_p->hightest = static_cast<uint16>(start_row);
+    const int min_count = std::min(left_count, right_count);
+    for (int i = 0; i < min_count; ++i) {
+        const int dx = my_abs(static_cast<int>(Data_Path_p->points_l[i][0]) - static_cast<int>(Data_Path_p->points_r[i][0]));
+        const int dy = my_abs(static_cast<int>(Data_Path_p->points_l[i][1]) - static_cast<int>(Data_Path_p->points_r[i][1]));
+        if (dx <= 2 && dy <= 2) {
+            Data_Path_p->hightest = static_cast<uint16>((Data_Path_p->points_l[i][1] + Data_Path_p->points_r[i][1]) / 2);
+            break;
+        }
+    }
+    if (min_count > 0 && Data_Path_p->hightest == static_cast<uint16>(start_row)) {
+        Data_Path_p->hightest = static_cast<uint16>(std::min(static_cast<int>(Data_Path_p->points_l[min_count - 1][1]),
+                                                             static_cast<int>(Data_Path_p->points_r[min_count - 1][1])));
+    }
 
-	//开启邻域循环
-    uint16 break_flag = (uint16)USE_num;
-
-
-/*************************************************************************************************************
- ***************************************        八邻域巡线        *********************************************
- *************************************************************************************************************/
-
-	while (break_flag--)
-	{
-		//左边
-		for (i = 0; i < 8; i++)//传递8F坐标
-		{
-			search_filds_l[i][0] = center_point_l.x + seeds_l[i][0];//x
-			search_filds_l[i][1] = center_point_l.y + seeds_l[i][1];//y
-		}
-		//中心坐标点填充到已经找到的点内
-		Data_Path_p->points_l[l_data_statics][0] = center_point_l.x;//x
-		Data_Path_p->points_l[l_data_statics][1] = center_point_l.y;//y
-		l_data_statics++;//索引加一
-
-		//右边
-		for (i = 0; i < 8; i++)//传递8F坐标
-		{
-			search_filds_r[i][0] = center_point_r.x + seeds_r[i][0];//x
-			search_filds_r[i][1] = center_point_r.y + seeds_r[i][1];//y
-		}
-		//中心坐标点填充到已经找到的点内
-		Data_Path_p->points_r[r_data_statics][0] = center_point_r.x;//x
-		Data_Path_p->points_r[r_data_statics][1] = center_point_r.y;//y
-
-		index_l = 0;//先清零，后使用
-		for (i = 0; i < 8; i++)
-		{
-			temp_l[i][0] = 0;//先清零，后使用
-			temp_l[i][1] = 0;//先清零，后使用
-		}
-
-		//左边判断
-		for (i = 0; i < 8; i++)
-		{
-			if (Img_Store_p->bin_image[search_filds_l[i][1]][search_filds_l[i][0]] == 0
-				&& Img_Store_p->bin_image[search_filds_l[(i + 1) & 7][1]][search_filds_l[(i + 1) & 7][0]] == 255)
-			{
-				temp_l[index_l][0] = search_filds_l[(i)][0];
-				temp_l[index_l][1] = search_filds_l[(i)][1];
-				index_l++;
-				Data_Path_p->dir_l[l_data_statics - 1] = (i);//记录生长方向
-			}
-
-			if (index_l)
-			{
-				//更新坐标点
-				center_point_l.x = temp_l[0][0];//x
-				center_point_l.y = temp_l[0][1];//y
-				for (j = 0; j < index_l; j++)
-				{
-					if (center_point_l.y > temp_l[j][1])
-					{
-						center_point_l.x = temp_l[j][0];//x
-						center_point_l.y = temp_l[j][1];//y
-					}
-				}
-			}
-
-		}
-		if ((Data_Path_p->points_r[r_data_statics][0] == Data_Path_p->points_r[r_data_statics - 1][0] && Data_Path_p->points_r[r_data_statics][0] == Data_Path_p->points_r[r_data_statics - 2][0]
-			&& Data_Path_p->points_r[r_data_statics][1] == Data_Path_p->points_r[r_data_statics - 1][1] && Data_Path_p->points_r[r_data_statics][1] == Data_Path_p->points_r[r_data_statics - 2][1])
-			|| (Data_Path_p->points_l[l_data_statics - 1][0] == Data_Path_p->points_l[l_data_statics - 2][0] && Data_Path_p->points_l[l_data_statics - 1][0] == Data_Path_p->points_l[l_data_statics - 3][0]
-				&& Data_Path_p->points_l[l_data_statics - 1][1] == Data_Path_p->points_l[l_data_statics - 2][1] && Data_Path_p->points_l[l_data_statics - 1][1] == Data_Path_p->points_l[l_data_statics - 3][1]))
-		{
-			//printf("三次进入同一个点，退出\n");
-			break;
-		}
-		if (my_abs(Data_Path_p->points_r[r_data_statics][0] - Data_Path_p->points_l[l_data_statics - 1][0]) < 2
-			&& my_abs(Data_Path_p->points_r[r_data_statics][1] - Data_Path_p->points_l[l_data_statics - 1][1] < 2)
-			)
-		{
-			//printf("\n左右相遇退出\n");	
-			Data_Path_p->hightest = (Data_Path_p->points_r[r_data_statics][1] + Data_Path_p->points_l[l_data_statics - 1][1]) >> 1;//取出最高点
-			//printf("\n在y=%d处退出\n",*hightest);
-			break;
-		}
-		if ((Data_Path_p->points_r[r_data_statics][1] < Data_Path_p->points_l[l_data_statics - 1][1]))
-		{
-			// printf("\n如果左边比右边高了，左边等待右边\n");
-			continue;//如果左边比右边高了，左边等待右边
-		}
-		if (Data_Path_p->dir_l[l_data_statics - 1] == 7
-			&& (Data_Path_p->points_r[r_data_statics][1] > Data_Path_p->points_l[l_data_statics - 1][1]))//左边比右边高且已经向下生长了
-		{
-			//printf("\n左边开始向下了，等待右边，等待中... \n");
-			center_point_l.x = Data_Path_p->points_l[l_data_statics - 1][0];//x
-			center_point_l.y = Data_Path_p->points_l[l_data_statics - 1][1];//y
-			l_data_statics--;
-		}
-        // if (center_point_l.y > JSON_TrackConfigData.Path_Search_End)
-        // {
-        //     printf("达到巡线最高点，退出");
-        //     break;
-        // }
-		r_data_statics++;//索引加一
-
-		index_r = 0;//先清零，后使用
-		for (i = 0; i < 8; i++)
-		{
-			temp_r[i][0] = 0;//先清零，后使用
-			temp_r[i][1] = 0;//先清零，后使用
-		}
-
-		//右边判断
-		for (i = 0; i < 8; i++)
-		{
-			if (Img_Store_p->bin_image[search_filds_r[i][1]][search_filds_r[i][0]] == 0
-				&& Img_Store_p->bin_image[search_filds_r[(i + 1) & 7][1]][search_filds_r[(i + 1) & 7][0]] == 255)
-			{
-				temp_r[index_r][0] = search_filds_r[(i)][0];
-				temp_r[index_r][1] = search_filds_r[(i)][1];
-				index_r++;//索引加一
-				Data_Path_p->dir_r[r_data_statics - 1] = (i);//记录生长方向
-				//printf("dir[%d]:%d\n", r_data_statics - 1, Data_Path_p->dir_r[r_data_statics - 1]);
-			}
-			if (index_r)
-			{
-
-				//更新坐标点
-				center_point_r.x = temp_r[0][0];//x
-				center_point_r.y = temp_r[0][1];//y
-				for (j = 0; j < index_r; j++)
-				{
-					if (center_point_r.y > temp_r[j][1])
-					{
-						center_point_r.x = temp_r[j][0];//x
-						center_point_r.y = temp_r[j][1];//y
-					}
-				}
-
-			}
-		}
-
-
-	}
-
-/*************************************************************************************************************
- ***********************************        传递找到的点的数量        ******************************************
- *************************************************************************************************************/
-	Data_Path_p->NumSearch[0] = l_data_statics;
-	Data_Path_p->NumSearch[1] = r_data_statics;
-
-    // 参考算法迁移：对迷宫法提取的边线做三角平滑和等距采样，减少噪点并统一点密度。
-    // 参数说明：
-    // - sample_dist_px = 2.0F: 约每 2 像素采样一个点，兼顾精度与计算量。
-    // - blur_kernel = 5: 中等平滑强度，降低边线抖动。
-    // - max_points_per_side = USE_num: 与现有缓存保持一致，避免写越界。
     optimize_edge_lines(Data_Path_p,
                         image_w,
                         2.0F,
                         5,
                         static_cast<int>(USE_num));
 
-/*************************************************************************************************************
- ***********************************        获取右左边界        ******************************************
- *************************************************************************************************************/
-
-    get_left(l_data_statics,Data_Path_p);
-    get_right(r_data_statics,Data_Path_p);
-
+    get_left(static_cast<uint16>(Data_Path_p->NumSearch[0]), Data_Path_p);
+    get_right(static_cast<uint16>(Data_Path_p->NumSearch[1]), Data_Path_p);
     dataMove(Data_Path_p);
-    // Img_Store_p->LoadData(Img_Store_p->Img_OTSU_Unpivot,Img_Store_p->bin_image);
+
+    if (!Img_Store_p->Img_Track.empty()) {
+        if (left_count > 0) {
+            circle(Img_Store_p->Img_Track,
+                   Point(Data_Path_p->points_l[0][0], Data_Path_p->points_l[0][1]),
+                   4,
+                   Scalar(255, 0, 255),
+                   1);
+        }
+        if (right_count > 0) {
+            circle(Img_Store_p->Img_Track,
+                   Point(Data_Path_p->points_r[0][0], Data_Path_p->points_r[0][1]),
+                   4,
+                   Scalar(255, 0, 255),
+                   1);
+        }
+    }
+}
+
+void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
+{
+    ImgSideSearchEightNeighborhood(Img_Store_p, Data_Path_p);
 }
 

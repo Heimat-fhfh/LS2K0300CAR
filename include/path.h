@@ -23,6 +23,7 @@ void ImgPathSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
     Data_Path_p 路径数据指针
 */
 void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
+void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
 /*
