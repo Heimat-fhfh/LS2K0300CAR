@@ -30,18 +30,21 @@ void ReadInput_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functio
 {
     (void)Img_Store_p;
     (void)Function_EN_p;
-    Data_Path_p->JSON_TrackConfigData_v[0].Forward = Data_Path_p->JSON_TrackConfigData_v[0].Default_Forward;
+    Data_Path_p->JSON_TrackConfigData_v[0].Forward = Data_Path_p->JSON_TrackConfigData_v[0].Default_Forward; // 前瞻点初始化
 }
 
+// 摄像头捕获任务的算法处理函数
 void ProcessAlgo_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
     imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
     if (!Img_Store_p->Img_OTSU.empty())
     {
-        memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
+        memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8)); 
+        // 将处理后的二值图像数据复制到二维数组中，供后续算法使用
     }
     imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
 }
+
 
 void OutputDisplay_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {

@@ -163,16 +163,25 @@ void CameraImgGet(Img_Store *Img_Store_p)
 	Img_Store_p->Img_LastReadSeq = Img_Store_p->Img_FrameSeq;
 }
 
+/**
+ * @brief 图像预处理
+ * 图像预处理函数，包含以下步骤：
+ * 1. 将彩色图像转换为灰度图像。
+ * 2. 对灰度图像进行高斯模糊以减少噪声。
+ * 3. 使用Otsu's方法对模糊后的图像进行二值化处理。
+ * 4. 在二值化图像的边界绘制白色边框以防止八邻域寻线出错。
+ * @param Img_Store_p 图像存储指针，包含原始图像和处理后的图像。
+ * @param Data_Path_p 路径数据指针。
+ * @param Function_EN_p 功能使能状态指针。
+ */
 void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
-	(Img_Store_p->Img_Track) = (Img_Store_p->Img_Color).clone();
-
-    if (Img_Store_p->Img_Color.empty()) {
+	if (Img_Store_p->Img_Color.empty()) {
         cerr << "Error: Img_Color is empty!" << endl;
         return;
     }
 	
-	Img_Store_p -> Img_Track = (Img_Store_p -> Img_Color).clone();
+	Img_Store_p->Img_Track = Img_Store_p->Img_Color.clone();
 
 	cvtColor(Img_Store_p->Img_Color, Img_Store_p->Img_Gray, COLOR_BGR2GRAY);
 
@@ -180,10 +189,12 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
     GaussianBlur(Img_Store_p->Img_Gray, blurred, Size(5, 5), 0);
     threshold(blurred, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
-	line(Img_Store_p->Img_OTSU,Point(0,0),Point(image_w-1,0),Scalar(0),3);
-	line(Img_Store_p->Img_OTSU,Point(image_w-1,0),Point(image_w-1,image_h-1),Scalar(0),3);
-	line(Img_Store_p->Img_OTSU,Point(image_w-1,image_h-1),Point(0,image_h-1),Scalar(0),3);
-	line(Img_Store_p->Img_OTSU,Point(0,image_h-1),Point(0,0),Scalar(0),3);
+	const int imgWidth = Img_Store_p->Img_OTSU.cols;
+	const int imgHeight = Img_Store_p->Img_OTSU.rows;
+	line(Img_Store_p->Img_OTSU,Point(0,0),Point(imgWidth-1,0),Scalar(0),3);
+	line(Img_Store_p->Img_OTSU,Point(imgWidth-1,0),Point(imgWidth-1,imgHeight-1),Scalar(0),3);
+	line(Img_Store_p->Img_OTSU,Point(imgWidth-1,imgHeight-1),Point(0,imgHeight-1),Scalar(0),3);
+	line(Img_Store_p->Img_OTSU,Point(0,imgHeight-1),Point(0,0),Scalar(0),3);
 	
 }	
 

@@ -148,15 +148,52 @@ void ImgPathSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 }
 
 /*
-    ImgSideSearch说明
-    八临域寻线(左右)
-    使用前必须使用 ImgPathSearch()
-    对赛道寻边线处理以此提供寻找中断点的边线坐标
-    将边线坐标存储至 Data_Path_p -> SideCoordinate 中
+    ImgSideSearch 说明
+    八邻域边线搜索函数。
+
+    算法目标：
+    - 在已经完成二值化的赛道图像上，从靠近图像下方的一条起始搜索线出发，
+      分别向左、向右提取赛道边线点。
+    - 采用 8 邻域的“黑到白”边缘转折判定，持续向上追踪左右边线。
+    - 搜索结果会继续写入 Data_Path_p，供后续中线拟合、弯点识别、控制量计算使用。
+
+    输入数据：
+    - Img_Store_p->Img_OTSU：上一阶段生成的二值图像，是八邻域追踪的唯一图像来源。
+    - Data_Path_p->JSON_TrackConfigData_v[0]：提供 Side_Search_Start / Side_Search_End 等搜索参数。
+    - Data_Path_p->SideCoordinate_Eight / points_l / points_r / dir_l / dir_r / NumSearch / hightest：
+      用于存储和回传搜索过程中的边线点、方向与终止状态。
+
+    输出数据：
+    - Data_Path_p->SideCoordinate_Eight：左右边线离散点缓存。
+    - Data_Path_p->points_l / points_r：左右边线点序列。
+    - Data_Path_p->dir_l / dir_r：每一步的生长方向。
+    - Data_Path_p->NumSearch[0] / NumSearch[1]：左右边线最终点数。
+    - Data_Path_p->hightest：左右边线相遇或达到有效终止条件时的最高点。
+
+    这次改动的重点：
+    - 使用二值图的实际宽高替代固定的 239 / 319 魔数，减少硬编码。
+    - 补齐输入检查，防止空图或尺寸不匹配时继续访问。
+    - 修正“左右边线是否都至少找到两个点”的判断笔误。
+    - 将搜索起点、结束条件和回退条件写得更明确，降低后续维护成本。
 */
 void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+    if (Img_Store_p == nullptr || Data_Path_p == nullptr) {
+        return;
+    }
+
+    const Mat& binary = Img_Store_p->Img_OTSU;
+    if (binary.empty() || binary.type() != CV_8UC1) {
+        cerr << "Error: Img_OTSU is empty or not CV_8UC1 in ImgSideSearch!" << endl;
+        return;
+    }
+
+    const int image_width = binary.cols;
+    const int image_height = binary.rows;
+    const int last_col = image_width - 1;
+    const int last_row = image_height - 1;
+
     // 变量设置
     //————————————————————————————————————————————————————————————————————————————————————//
     // 寻种子变量设置
@@ -165,6 +202,8 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     int Y = 0;
     // 设置种子寻找起始点横坐标
     static int StartX = 160;
+    const int seed_row = last_row - JSON_TrackConfigData.Side_Search_Start;
+    const int seed_row_next = seed_row - 1;
 
     // 八临域寻线变量设置
     int SeedGrow_Dir[16][4] = { {0,1,0,1} , {-1,1,1,1} , {-1,0,1,0} , {-1,-1,1,-1} , {0,-1,0,-1} , {1,-1,-1,-1} , {1,0,-1,0} , {1,1,-1,1} ,
@@ -187,12 +226,12 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     // 八邻域种子寻找
     if(NumSearch[0] <= 1 && NumSearch[1] <= 1)
     {
-        for(Y = 239-(JSON_TrackConfigData.Side_Search_Start);Y >= 238-(JSON_TrackConfigData.Side_Search_Start);Y--)
+        for(Y = seed_row; Y >= seed_row_next; --Y)
         {
             // 左边线
-            for(X = StartX;X >= 0;X--)
+            for(X = StartX; X >= 0; --X)
             {
-                if((Img_Store_p -> Img_OTSU).at<uchar>(Y,X) == 255)
+                if(binary.at<uchar>(Y, X) == 255)
                 {
                     // cout << "L_SIDE" << endl;
                     (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][0]) = X;
@@ -202,9 +241,9 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
                 }
             }
             // 右边线
-            for(X = StartX;X <= 319;X++)
+            for(X = StartX; X <= last_col; ++X)
             {
-                if((Img_Store_p -> Img_OTSU).at<uchar>(Y,X) == 255)
+                if(binary.at<uchar>(Y, X) == 255)
                 {
                     // cout << "R_SIDE" << endl;
                     (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][2]) = X;
@@ -232,7 +271,7 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     }
 
     // 八邻域寻线
-    if(NumSearch[0] >= 2 && NumSearch[0] >= 2)
+    if(NumSearch[0] >= 2 && NumSearch[1] >= 2)
     {
         // 左边线寻线循环
         while(true)
@@ -240,7 +279,7 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
             // 左边线
             for(Dir_Num = Dir_Num_Store;Dir_Num <= Dir_Num_Store+7;Dir_Num++)
             {
-                if((Img_Store_p -> Img_OTSU).at<uchar>((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-1][1])+SeedGrow_Dir[Dir_Num][1],(Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-1][0])+SeedGrow_Dir[Dir_Num][0]) == 0)
+                if(binary.at<uchar>((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-1][1])+SeedGrow_Dir[Dir_Num][1],(Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-1][0])+SeedGrow_Dir[Dir_Num][0]) == 0)
                 {
                     if(Dir_Num-1 >= 0){Dir_Num = Dir_Num;}
                     else{Dir_Num = Dir_Num+8;}
@@ -268,12 +307,12 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
             circle((Img_Store_p -> Img_Track),Point((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][0]),(Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1])),1,Scalar(255,0,255),1);	//左边线画点
             
             // 循环退出条件：1.寻线到寻线结束点和起始点 2.寻线折返 3.寻线到中心线 4.坐标数量大于阈值
-            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1]) <= 239-(JSON_TrackConfigData.Side_Search_End) || (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1]) >= 239-(JSON_TrackConfigData.Side_Search_Start))
+            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1]) <= last_row-(JSON_TrackConfigData.Side_Search_End) || (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1]) >= last_row-(JSON_TrackConfigData.Side_Search_Start))
             {
                 break;
             } 
 
-            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1]) == (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-20][1]))
+            if(NumSearch[0] >= 20 && (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][1]) == (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-20][1]))
             {
                 if(abs((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][0]) - (Data_Path_p -> SideCoordinate_Eight[NumSearch[0]-20][0])) <= 10)
                 {
@@ -281,7 +320,7 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
                 }
             }
 
-            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][0]) > 239)
+		    if((Data_Path_p -> SideCoordinate_Eight[NumSearch[0]][0]) > last_col)
             {
                 break;
             } 
@@ -300,7 +339,7 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
             // 左边线
             for(Dir_Num = Dir_Num_Store;Dir_Num <= Dir_Num_Store+7;Dir_Num++)
             {
-                if((Img_Store_p -> Img_OTSU).at<uchar>((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-1][3])+SeedGrow_Dir[Dir_Num][3],(Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-1][2])+SeedGrow_Dir[Dir_Num][2]) == 0)
+                if(binary.at<uchar>((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-1][3])+SeedGrow_Dir[Dir_Num][3],(Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-1][2])+SeedGrow_Dir[Dir_Num][2]) == 0)
                 {
                     if(Dir_Num-1 >= 0){Dir_Num = Dir_Num;}
                     else{Dir_Num = Dir_Num+8;}
@@ -328,12 +367,12 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
             circle((Img_Store_p -> Img_Track),Point((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][2]),(Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3])),1,Scalar(255,0,255),1);	//右边线画点
             
             // 循环退出条件：1.寻线到寻线结束点和起始点 2.寻线折返 3.寻线到中心线 4.坐标数量大于阈值
-            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3]) <= 239-(JSON_TrackConfigData.Side_Search_End) || (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3]) >= 239-(JSON_TrackConfigData.Side_Search_Start))
+            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3]) <= last_row-(JSON_TrackConfigData.Side_Search_End) || (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3]) >= last_row-(JSON_TrackConfigData.Side_Search_Start))
             {
                 break;
             } 
 
-            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3]) == (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-20][3]))
+            if(NumSearch[1] >= 20 && (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][3]) == (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-20][3]))
             {
                 if(abs((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][2]) - (Data_Path_p -> SideCoordinate_Eight[NumSearch[1]-20][2])) <= 10)
                 {
@@ -341,7 +380,7 @@ void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
                 }
             }
 
-            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][2]) < 80)
+            if((Data_Path_p -> SideCoordinate_Eight[NumSearch[1]][2]) < border_min)
             {
                 break;
             } 
@@ -406,6 +445,28 @@ void dataMove(Data_Path *Data_Path_p)
 
 }
 
+/*
+    imgSearch_l_r 说明
+    八邻域边线提取前的二值图准备函数。
+
+    输入数据：
+    - Img_Store_p->Img_OTSU：上一阶段完成预处理后的二值图，作为八邻域搜索的唯一图像依据。
+    - Data_Path_p：承载左右边线点集、搜索方向、最高点和边界缓存的路径数据结构。
+
+    输出数据：
+    - Img_Store_p->bin_image：将二值图按行展开到二维数组，方便后续按坐标快速访问。
+    - 后续的八邻域搜索会继续写入 Data_Path_p->points_l / points_r / dir_l / dir_r / hightest 等字段。
+
+    实现方式：
+    - 先校验输入图像是否为空，以及尺寸和通道类型是否满足固定寻线假设。
+    - 再将 Mat 中的每一行复制到 bin_image，保留连续的二维数组访问方式。
+    - 这一步本身不做寻线，只负责把图像数据转换成更适合八邻域算法的访问格式。
+
+    为什么这样优化：
+    - 避免在后续像素访问中频繁调用 Mat::at，降低函数调用和边界检查开销。
+    - 尺寸不匹配时直接返回，避免使用错误图像导致越界和脏数据传播。
+    - 行级复制使用 std::copy_n，比分像素逐个赋值更紧凑，也更容易被编译器优化。
+*/
 void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
@@ -420,13 +481,15 @@ void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
  *********************************        将Mat转化为数组更高效        *****************************************
  *************************************************************************************************************/
 
-    for (int i = 0; i < image_h; ++i) {
-        // 获取第i行的指针
-        const uint8* row_ptr = Img_Store_p->Img_OTSU.ptr<uint8>(i);
-        // 复制该行数据到bin_image
-        for (int j = 0; j < image_w; ++j) {
-            Img_Store_p->bin_image[i][j] = row_ptr[j];
-        }
+    const Mat& binary = Img_Store_p->Img_OTSU;
+    if (binary.empty() || binary.rows != image_h || binary.cols != image_w || binary.type() != CV_8UC1) {
+        cerr << "Error: Img_OTSU is empty or has unexpected size/type in imgSearch_l_r!" << endl;
+        return;
+    }
+
+    for (int row = 0; row < image_h; ++row) {
+        const uint8* row_ptr = binary.ptr<uint8>(row);
+        std::copy_n(row_ptr, image_w, Img_Store_p->bin_image[row]);
     }
     
     
