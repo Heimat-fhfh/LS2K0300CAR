@@ -26,6 +26,8 @@
 #include "libdata_process.h"
 #include "libdata_store.h"
 
+class CameraCalibrationCorrector;
+
 #include "PID.hpp"
 #include "AAAdefine.h"
 
@@ -85,4 +87,31 @@ struct MainTestConfig {
 	bool encoder_test = false;
 };
 
+extern IMUDevice imu;
+extern std::unique_ptr<DualMotorController> motors;
+extern Encoder encoder_left;
+extern Encoder encoder_right;
+extern Control::PID::Parameters leftParams;
+extern Control::PID::Parameters rightParams;
+extern std::unique_ptr<MotorControlTask> motorTask;
+extern Buzzer buzzer;
+extern MainTestConfig test_config;
+extern std::atomic<bool> g_running;
+extern bool g_runtime_config_ok;
+extern CameraKind g_camera_kind;
+extern bool g_calibration_enabled;
+extern JSON_PIDConfigData JSON_PIDConfigData_s;
+extern Function_EN Function_EN_s;
+extern Data_Path Data_Path_s;
+extern ImgProcess imgProcess;
+extern Judge judge;
+extern SYNC Sync;
+extern CameraCalibrationCorrector g_calibration_corrector;
+
+void FrameTaskAfterRead(Img_Store *Img_Store_p);
+int CameraOnlyInitAndTestLoop();
+void argument_config(void);
+void sigint_handler(int signum);
+void cleanup();
+int main_init_task();
 int main_test_task(const MainTestConfig& test_config);

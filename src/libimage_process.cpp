@@ -104,6 +104,7 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 {
 	Mat Img;
 	double cameraFps = Camera.get(CAP_PROP_FPS);
+	cout << "摄像头获取图像线程 Camera FPS: " << cameraFps << endl;
 	if (cameraFps <= 0.0)
 	{
 		cameraFps = 60.0;
@@ -206,6 +207,8 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
 	Mat blurred;
     GaussianBlur(Img_Store_p->Img_Gray, blurred, Size(5, 5), 0);
     threshold(blurred, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
+
+    // threshold(Img_Store_p->Img_Gray, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
 	const int imgWidth = Img_Store_p->Img_OTSU.cols;
 	const int imgHeight = Img_Store_p->Img_OTSU.rows;

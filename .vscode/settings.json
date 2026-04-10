@@ -117,6 +117,10 @@
     },
     "[c]": {
         "editor.semanticHighlighting.enabled": true
+    },
+    "chat.tools.terminal.autoApprove": {
+        "make": true,
+        "nproc": true
     }
     
 //     ,
