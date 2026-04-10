@@ -1,5 +1,6 @@
 .rubbish
 build/
+build_host/
 document/
 ls2k0300_linux_4.19/
 opencv_4_10_build/

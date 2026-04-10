@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图像处理离线测试 WebUI</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">
+      <h2>图像处理离线测试 WebUI</h2>
+      <div id="datasetInfo" class="subtitle">数据源加载中...</div>
+    </div>
+
+    <div class="toolbar">
+      <input id="idx" type="range" min="0" max="0" value="0" />
+      <button id="prevBtn" type="button">上一帧</button>
+      <button id="nextBtn" type="button">下一帧</button>
+      <button id="playBtn" type="button">播放</button>
+    </div>
+
+    <div id="meta" class="meta">加载中...</div>
+
+    <div class="grid">
+      <div class="panel"><h3>原图</h3><img id="img_orig" alt="原图" /></div>
+      <div class="panel"><h3>OTSU 二值图</h3><img id="img_otsu" alt="OTSU 图" /></div>
+      <div class="panel"><h3>轨迹标注图</h3><img id="img_track" alt="轨迹图" /></div>
+      <div class="panel"><h3>合成图</h3><img id="img_all" alt="合成图" /></div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
