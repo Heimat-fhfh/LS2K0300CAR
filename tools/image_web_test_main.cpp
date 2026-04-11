@@ -36,6 +36,7 @@ namespace
     struct FrameResult
     {
         std::vector<unsigned char> original_jpg;
+        std::vector<unsigned char> gray_jpg;
         std::vector<unsigned char> otsu_jpg;
         std::vector<unsigned char> track_jpg;
         std::vector<unsigned char> all_jpg;
@@ -299,6 +300,7 @@ namespace
 
             FrameResult current;
             current.original_jpg = encode_jpeg(img_store.Img_Color);
+            current.gray_jpg = encode_jpeg(img_store.Img_Gray);
             current.otsu_jpg = encode_jpeg(img_store.Img_OTSU);
             current.track_jpg = encode_jpeg(img_store.Img_Track);
             current.all_jpg = encode_jpeg(img_store.Img_All);
@@ -429,6 +431,11 @@ int main(int argc, char **argv)
     }
 
     httplib::Server server;
+    server.set_default_headers({
+        {"Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"},
+        {"Pragma", "no-cache"},
+        {"Expires", "0"}
+    });
     const std::string frontend_dir = resolve_frontend_dir(cfg.frontend_dir);
     if (!frontend_dir.empty())
     {
@@ -486,12 +493,14 @@ int main(int argc, char **argv)
     }
 
     const std::vector<unsigned char>* payload = &frame.original_jpg;
-    if (type == "otsu") {
-      payload = &frame.otsu_jpg;
+    if (type == "gray") {
+        payload = &frame.gray_jpg;
+    } else if (type == "otsu") {
+        payload = &frame.otsu_jpg;
     } else if (type == "track") {
-      payload = &frame.track_jpg;
+        payload = &frame.track_jpg;
     } else if (type == "all") {
-      payload = &frame.all_jpg;
+        payload = &frame.all_jpg;
     }
 
     if (payload->empty()) {

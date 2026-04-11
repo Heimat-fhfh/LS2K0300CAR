@@ -222,7 +222,11 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
 	
 	Img_Store_p->Img_Track = Img_Store_p->Img_Color.clone();
 
-	cvtColor(Img_Store_p->Img_Color, Img_Store_p->Img_Gray, COLOR_BGR2GRAY);
+	vector<Mat> bgrChannels;
+	split(Img_Store_p->Img_Color, bgrChannels);
+	Mat rgSum;
+	add(bgrChannels[2], bgrChannels[1], rgSum);          // R + G
+	subtract(rgSum, bgrChannels[0], Img_Store_p->Img_Gray); // R + G - B（8U 饱和裁剪）
 
 	if (EnsureVisionTransformReady() && g_vision_transform_pipeline.isEnabled())
 	{

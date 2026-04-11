@@ -24,6 +24,7 @@ async function loadMeta() {
 async function render(idx) {
   const ts = Date.now();
   document.getElementById('img_orig').src = `/api/image?idx=${idx}&type=orig&t=${ts}`;
+  document.getElementById('img_gray').src = `/api/image?idx=${idx}&type=gray&t=${ts}`;
   document.getElementById('img_otsu').src = `/api/image?idx=${idx}&type=otsu&t=${ts}`;
   document.getElementById('img_track').src = `/api/image?idx=${idx}&type=track&t=${ts}`;
   document.getElementById('img_all').src = `/api/image?idx=${idx}&type=all&t=${ts}`;
