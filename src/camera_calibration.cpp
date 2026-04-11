@@ -1,5 +1,5 @@
 #include "camera_calibration.h"
-
+#include <stdio.h>
 #include <fstream>
 
 namespace
@@ -60,6 +60,52 @@ bool CameraCalibrationCorrector::correct(const cv::Mat &src, cv::Mat &dst)
 
     cv::remap(src, dst, map1_, map2_, cv::INTER_LINEAR);
     return !dst.empty();
+}
+
+bool CameraCalibrationCorrector::correctBinary(const cv::Mat &src, cv::Mat &dst)
+{
+    if (!loaded_ || src.empty())
+    {
+        std::cerr << "Error: Calibration not loaded or source image is empty in correctBinary." << std::endl;
+        return false;
+    }
+
+    buildUndistortMapIfNeeded(src.size());
+    if (map1_.empty() || map2_.empty())
+    {
+        std::cerr << "Error: Failed to build undistort map in correctBinary." << std::endl;
+        return false;
+    }
+
+    cv::remap(src, dst, map1_, map2_, cv::INTER_NEAREST);
+    return !dst.empty();
+}
+
+bool CameraCalibrationCorrector::buildUndistortFloatMap(const cv::Size &frameSize, cv::Mat &mapX, cv::Mat &mapY)
+{
+    if (!loaded_ || frameSize.width <= 0 || frameSize.height <= 0)
+    {
+        return false;
+    }
+
+    cv::Mat optimizedCameraMatrix = cv::getOptimalNewCameraMatrix(
+        cameraMatrix_,
+        distCoeffs_,
+        frameSize,
+        1.0,
+        frameSize);
+
+    cv::initUndistortRectifyMap(
+        cameraMatrix_,
+        distCoeffs_,
+        cv::Mat(),
+        optimizedCameraMatrix,
+        frameSize,
+        CV_32FC1,
+        mapX,
+        mapY);
+
+    return !mapX.empty() && !mapY.empty();
 }
 
 bool CameraCalibrationCorrector::loadFromYaml(const std::string &configPath, std::string *errorMessage)

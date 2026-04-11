@@ -481,77 +481,38 @@ bool find_seed_points_eight(const uint8 bin_image[image_h][image_w],
     return l_found && r_found;
 }
 
-void trace_one_side_eight(const uint8 bin_image[image_h][image_w],
-                          const cv::Point& start_point,
-                          const int seeds[8][2],
-                          int start_row,
-                          int end_row,
-                          uint16 points[(uint16)USE_num][2],
-                          uint16 dirs[(uint16)USE_num],
-                          int& out_count) {
-    cv::Point center = start_point;
-    int repeat_same = 0;
-    int count = 0;
+bool advance_one_side_eight(const uint8 bin_image[image_h][image_w],
+                            const cv::Point& center,
+                            const int seeds[8][2],
+                            cv::Point& out_next,
+                            uint16& out_dir) {
+    cv::Point next = center;
+    int best_dir = -1;
+    bool found = false;
 
-    while (count < static_cast<int>(USE_num)) {
-        points[count][0] = static_cast<uint16>(center.x);
-        points[count][1] = static_cast<uint16>(center.y);
+    for (int i = 0; i < 8; ++i) {
+        const int nx = center.x + seeds[i][0];
+        const int ny = center.y + seeds[i][1];
+        const int nx_next = center.x + seeds[(i + 1) & 7][0];
+        const int ny_next = center.y + seeds[(i + 1) & 7][1];
 
-        if (center.y <= end_row) {
-            ++count;
-            break;
-        }
-        if (center.y > start_row + 2) {
-            ++count;
-            break;
+        if (!in_image_bounds(nx, ny) || !in_image_bounds(nx_next, ny_next)) {
+            continue;
         }
 
-        cv::Point next = center;
-        int best_dir = -1;
-        bool found = false;
-
-        for (int i = 0; i < 8; ++i) {
-            const int nx = center.x + seeds[i][0];
-            const int ny = center.y + seeds[i][1];
-            const int nx_next = center.x + seeds[(i + 1) & 7][0];
-            const int ny_next = center.y + seeds[(i + 1) & 7][1];
-
-            if (!in_image_bounds(nx, ny) || !in_image_bounds(nx_next, ny_next)) {
-                continue;
-            }
-
-            if (bin_image[ny][nx] == 0 && bin_image[ny_next][nx_next] == 255) {
-                if (!found || ny < next.y) {
-                    next.x = nx;
-                    next.y = ny;
-                    best_dir = i;
-                    found = true;
-                }
+        if (bin_image[ny][nx] == 0 && bin_image[ny_next][nx_next] == 255) {
+            if (!found || ny < next.y) {
+                next.x = nx;
+                next.y = ny;
+                best_dir = i;
+                found = true;
             }
         }
-
-        dirs[count] = (best_dir >= 0) ? static_cast<uint16>(best_dir) : 0;
-
-        if (!found) {
-            ++count;
-            break;
-        }
-
-        if (next.x == center.x && next.y == center.y) {
-            ++repeat_same;
-            if (repeat_same >= 2) {
-                ++count;
-                break;
-            }
-        } else {
-            repeat_same = 0;
-        }
-
-        ++count;
-        center = next;
     }
 
-    out_count = count;
+    out_next = next;
+    out_dir = (best_dir >= 0) ? static_cast<uint16>(best_dir) : 0;
+    return found;
 }
 
 } // namespace
@@ -614,41 +575,90 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
         {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}
     };
 
+    Point center_l = start_point_l;
+    Point center_r = start_point_r;
     int left_count = 0;
     int right_count = 0;
-    trace_one_side_eight(Img_Store_p->bin_image,
-                         start_point_l,
-                         seeds_l,
-                         start_row,
-                         end_row,
-                         Data_Path_p->points_l,
-                         Data_Path_p->dir_l,
-                         left_count);
-    trace_one_side_eight(Img_Store_p->bin_image,
-                         start_point_r,
-                         seeds_r,
-                         start_row,
-                         end_row,
-                         Data_Path_p->points_r,
-                         Data_Path_p->dir_r,
-                         right_count);
+    bool left_active = true;
+    bool right_active = true;
+
+    Data_Path_p->hightest = static_cast<uint16>(start_row);
+    for (int step = 0; step < static_cast<int>(USE_num); ++step) {
+        if (left_active && left_count < static_cast<int>(USE_num)) {
+            Data_Path_p->points_l[left_count][0] = static_cast<uint16>(center_l.x);
+            Data_Path_p->points_l[left_count][1] = static_cast<uint16>(center_l.y);
+            ++left_count;
+        }
+        if (right_active && right_count < static_cast<int>(USE_num)) {
+            Data_Path_p->points_r[right_count][0] = static_cast<uint16>(center_r.x);
+            Data_Path_p->points_r[right_count][1] = static_cast<uint16>(center_r.y);
+            ++right_count;
+        }
+
+        if (left_count > 0 && right_count > 0) {
+            const int lx = static_cast<int>(Data_Path_p->points_l[left_count - 1][0]);
+            const int ly = static_cast<int>(Data_Path_p->points_l[left_count - 1][1]);
+            const int rx = static_cast<int>(Data_Path_p->points_r[right_count - 1][0]);
+            const int ry = static_cast<int>(Data_Path_p->points_r[right_count - 1][1]);
+            if (my_abs(lx - rx) <= 2 && my_abs(ly - ry) <= 2) {
+                Data_Path_p->hightest = static_cast<uint16>((ly + ry) / 2);
+                break;
+            }
+        }
+
+        const bool left_row_valid = left_active && center_l.y > end_row && center_l.y <= start_row + 2;
+        const bool right_row_valid = right_active && center_r.y > end_row && center_r.y <= start_row + 2;
+
+        Point next_l = center_l;
+        Point next_r = center_r;
+        uint16 dir_l = 0;
+        uint16 dir_r = 0;
+        bool left_moved = false;
+        bool right_moved = false;
+
+        if (left_row_valid) {
+            left_moved = advance_one_side_eight(Img_Store_p->bin_image, center_l, seeds_l, next_l, dir_l);
+        } else {
+            left_active = false;
+        }
+
+        if (right_row_valid) {
+            right_moved = advance_one_side_eight(Img_Store_p->bin_image, center_r, seeds_r, next_r, dir_r);
+        } else {
+            right_active = false;
+        }
+
+        if (left_moved) {
+            center_l = next_l;
+            Data_Path_p->dir_l[left_count - 1] = dir_l;
+        } else {
+            left_active = false;
+        }
+
+        if (right_moved) {
+            center_r = next_r;
+            Data_Path_p->dir_r[right_count - 1] = dir_r;
+        } else {
+            right_active = false;
+        }
+
+        if (!left_active && !right_active) {
+            break;
+        }
+    }
 
     Data_Path_p->NumSearch[0] = left_count;
     Data_Path_p->NumSearch[1] = right_count;
 
-    Data_Path_p->hightest = static_cast<uint16>(start_row);
-    const int min_count = std::min(left_count, right_count);
-    for (int i = 0; i < min_count; ++i) {
-        const int dx = my_abs(static_cast<int>(Data_Path_p->points_l[i][0]) - static_cast<int>(Data_Path_p->points_r[i][0]));
-        const int dy = my_abs(static_cast<int>(Data_Path_p->points_l[i][1]) - static_cast<int>(Data_Path_p->points_r[i][1]));
-        if (dx <= 2 && dy <= 2) {
-            Data_Path_p->hightest = static_cast<uint16>((Data_Path_p->points_l[i][1] + Data_Path_p->points_r[i][1]) / 2);
-            break;
+    if (Data_Path_p->hightest == static_cast<uint16>(start_row)) {
+        if (left_count > 0 && right_count > 0) {
+            Data_Path_p->hightest = static_cast<uint16>(std::min(static_cast<int>(Data_Path_p->points_l[left_count - 1][1]),
+                                                                 static_cast<int>(Data_Path_p->points_r[right_count - 1][1])));
+        } else if (left_count > 0) {
+            Data_Path_p->hightest = static_cast<uint16>(Data_Path_p->points_l[left_count - 1][1]);
+        } else if (right_count > 0) {
+            Data_Path_p->hightest = static_cast<uint16>(Data_Path_p->points_r[right_count - 1][1]);
         }
-    }
-    if (min_count > 0 && Data_Path_p->hightest == static_cast<uint16>(start_row)) {
-        Data_Path_p->hightest = static_cast<uint16>(std::min(static_cast<int>(Data_Path_p->points_l[min_count - 1][1]),
-                                                             static_cast<int>(Data_Path_p->points_r[min_count - 1][1])));
     }
 
     optimize_edge_lines(Data_Path_p,

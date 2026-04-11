@@ -7,341 +7,451 @@
 
 #include "/home/fhfh/Work/LS2K0300CAR/third_party/cpp-httplib-master/httplib.h"
 #include "/home/fhfh/Work/LS2K0300CAR/include/common_program.h"
+#include "/home/fhfh/Work/LS2K0300CAR/include/camera_calibration.h"
 #include "/home/fhfh/Work/LS2K0300CAR/include/json.hpp"
 
+Function_EN Function_EN_s;
+JSON_PIDConfigData JSON_PIDConfigData_s;
+Data_Path Data_Path_s;
+SYNC Sync;
+bool g_runtime_config_ok = false;
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-namespace {
+bool g_calibration_enabled = false;
+CameraCalibrationCorrector g_calibration_corrector;
 
-struct AppConfig {
-  std::string dataset_dir = "/home/fhfh/Work/LS2K0300CAR/document/img/20260409_141917";
-  std::string config_file = "/home/fhfh/Work/LS2K0300CAR/config/config_0.json";
-  std::string frontend_dir;
-  std::string host = "0.0.0.0";
-  int port = 8080;
-};
+namespace
+{
 
-struct FrameResult {
-  std::vector<unsigned char> original_jpg;
-  std::vector<unsigned char> otsu_jpg;
-  std::vector<unsigned char> track_jpg;
-  std::vector<unsigned char> all_jpg;
+    struct AppConfig
+    {
+        std::string dataset_dir = "/home/fhfh/Work/LS2K0300CAR/document/img/20260409_141917";
+        std::string config_file = "config/config_0.json";
+        std::string frontend_dir;
+        std::string host = "0.0.0.0";
+        int port = 3100;
+    };
 
-  int servo_angle = 0;
-  int motor_speed = 0;
-  int inflection_left = 0;
-  int inflection_right = 0;
-  int bend_left = 0;
-  int bend_right = 0;
-  int track_kind = 0;
-};
+    struct FrameResult
+    {
+        std::vector<unsigned char> original_jpg;
+        std::vector<unsigned char> otsu_jpg;
+        std::vector<unsigned char> track_jpg;
+        std::vector<unsigned char> all_jpg;
 
-bool ends_with_jpg(const std::string& name) {
-  if (name.size() < 4) {
-    return false;
-  }
-  const std::string suffix = name.substr(name.size() - 4);
-  return suffix == ".jpg" || suffix == ".JPG";
-}
+        int servo_angle = 0;
+        int motor_speed = 0;
+        int inflection_left = 0;
+        int inflection_right = 0;
+        int bend_left = 0;
+        int bend_right = 0;
+        int track_kind = 0;
+    };
 
-int parse_stem_index(const fs::path& p) {
-  try {
-    return std::stoi(p.stem().string());
-  } catch (...) {
-    return -1;
-  }
-}
-
-std::string resolve_frontend_dir(const std::string& cli_path) {
-  if (!cli_path.empty() && fs::exists(cli_path) && fs::is_directory(cli_path)) {
-    return cli_path;
-  }
-
-  const std::vector<std::string> candidates = {
-    "web/image_web_test",
-    "../web/image_web_test",
-    "../../web/image_web_test"
-  };
-
-  for (const auto& p : candidates) {
-    if (fs::exists(p) && fs::is_directory(p)) {
-      return p;
-    }
-  }
-  return "";
-}
-
-void fill_runtime_config_from_json(const json& cfg,
-                   Function_EN* function_en,
-                   Data_Path* data_path) {
-  JSON_FunctionConfigData function_cfg{};
-  JSON_TrackConfigData track_cfg{};
-
-  function_cfg.Uart_EN = cfg.at("UART_EN");
-  function_cfg.ImgCompress_EN = cfg.at("IMG_COMPRESS_EN");
-  function_cfg.Camera_EN = CameraKind(cfg.at("CAMERA_EN"));
-  function_cfg.ImageSave_EN = false;
-  function_cfg.VideoShow_EN = false;
-  function_cfg.DataPrint_EN = false;
-  function_cfg.AcrossIdentify_EN = cfg.at("ACROSS_IDENTIFY_EN");
-  function_cfg.CircleIdentify_EN = cfg.at("CIRCLE_IDENTIFY_EN");
-
-  track_cfg.Forward = cfg.at("FORWARD");
-  track_cfg.Default_Forward = cfg.at("FORWARD");
-  track_cfg.Path_Search_Start = cfg.at("PATH_SEARCH_START");
-  track_cfg.Path_Search_End = cfg.at("PATH_SEARCH_END");
-  track_cfg.Side_Search_Start = cfg.at("SIDE_SEARCH_START");
-  track_cfg.Side_Search_End = cfg.at("SIDE_SEARCH_END");
-
-  track_cfg.InflectionPointVectorDistance = cfg.at("POINT_DISTANCE");
-  track_cfg.BendPointVectorDistance = cfg.at("POINT_DISTANCE");
-  track_cfg.BendPointNum[0] = cfg.at("LITTLE_ANGLE_BEND_POINT_NUM");
-  track_cfg.BendPointNum[1] = cfg.at("BIG_ANGLE_BEND_POINT_NUM");
-  track_cfg.InflectionPointIdentifyAngle[0] = cfg.at("MIN_INFLECTION_POINT_ANGLE");
-  track_cfg.InflectionPointIdentifyAngle[1] = cfg.at("MAX_INFLECTION_POINT_ANGLE");
-  track_cfg.BendPointIdentifyAngle[0] = cfg.at("MIN_BEND_POINT_ANGLE");
-  track_cfg.BendPointIdentifyAngle[1] = cfg.at("MAX_BEND_POINT_ANGLE");
-
-  track_cfg.TrackWidth = cfg.at("TRACK_WIDTH");
-  track_cfg.CircleOutWidth = cfg.at("CIRCLE_OUT_WIDTH");
-  track_cfg.CommonMotorSpeed[0] = cfg.at("STRIGHT_TRACK_MOTOR_SPEED");
-  track_cfg.CommonMotorSpeed[1] = cfg.at("LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED");
-  track_cfg.CommonMotorSpeed[2] = cfg.at("BIG_ANGLE_BEND_TRACK_MOTOR_SPEED");
-  track_cfg.CommonMotorSpeed[3] = cfg.at("ACROSS_TRACK_MOTOR_SPEED");
-  track_cfg.CommonMotorSpeed[4] = cfg.at("CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE");
-  track_cfg.CommonMotorSpeed[5] = cfg.at("CIRCLE_TRACK_MOTOR_SPEED_INSIDE");
-  track_cfg.BridgeZoneMotorSpeed = cfg.at("BRIDGE_ZONE_MOTOR_SPEED");
-  track_cfg.CrosswalkZoneMotorSpeed = cfg.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE");
-  track_cfg.Circle_In_Prepare_Time = cfg.at("CIRCLE_IN_PREPARE_TIME");
-
-  function_en->JSON_FunctionConfigData_v.clear();
-  data_path->JSON_TrackConfigData_v.clear();
-  function_en->JSON_FunctionConfigData_v.push_back(function_cfg);
-  data_path->JSON_TrackConfigData_v.push_back(track_cfg);
-  function_en->Game_EN = true;
-  function_en->Gyroscope_EN = false;
-  function_en->Loop_Kind_EN = CAMERA_CATCH_LOOP;
-  function_en->Control_EN = false;
-
-  data_path->Track_Kind = STRIGHT_TRACK;
-  data_path->Circle_Track_Step = INIT;
-  data_path->Previous_Circle_Kind = STRIGHT_TRACK;
-}
-
-std::vector<unsigned char> encode_jpeg(const cv::Mat& image) {
-  if (image.empty()) {
-    return {};
-  }
-  std::vector<unsigned char> encoded;
-  std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 85};
-  cv::imencode(".jpg", image, encoded, params);
-  return encoded;
-}
-
-class OfflineImageProcessor {
-public:
-  bool init(const AppConfig& cfg, std::string* error) {
-    cfg_ = cfg;
-    frame_files_.clear();
-
-    if (!fs::exists(cfg_.dataset_dir)) {
-      if (error) {
-        *error = "Dataset dir not found: " + cfg_.dataset_dir;
-      }
-      return false;
+    bool ends_with_jpg(const std::string &name)
+    {
+        if (name.size() < 4)
+        {
+            return false;
+        }
+        const std::string suffix = name.substr(name.size() - 4);
+        return suffix == ".jpg" || suffix == ".JPG";
     }
 
-    for (const auto& entry : fs::directory_iterator(cfg_.dataset_dir)) {
-      if (!entry.is_regular_file()) {
-        continue;
-      }
-      const std::string filename = entry.path().filename().string();
-      if (ends_with_jpg(filename)) {
-        frame_files_.push_back(entry.path());
-      }
+    int parse_stem_index(const fs::path &p)
+    {
+        try
+        {
+            return std::stoi(p.stem().string());
+        }
+        catch (...)
+        {
+            return -1;
+        }
     }
 
-    std::sort(frame_files_.begin(), frame_files_.end(), [](const fs::path& a, const fs::path& b) {
+    std::string resolve_frontend_dir(const std::string &cli_path)
+    {
+        if (!cli_path.empty() && fs::exists(cli_path) && fs::is_directory(cli_path))
+        {
+            return cli_path;
+        }
+
+        const std::vector<std::string> candidates = {
+            "web/image_web_test",
+            "../web/image_web_test",
+            "../../web/image_web_test"};
+
+        for (const auto &p : candidates)
+        {
+            if (fs::exists(p) && fs::is_directory(p))
+            {
+                return p;
+            }
+        }
+        return "";
+    }
+
+    void fill_runtime_config_from_json(const json &cfg,
+                                       Function_EN *function_en,
+                                       Data_Path *data_path)
+    {
+        JSON_FunctionConfigData function_cfg{};
+        JSON_TrackConfigData track_cfg{};
+
+        function_cfg.Uart_EN = cfg.at("UART_EN");
+        function_cfg.ImgCompress_EN = cfg.at("IMG_COMPRESS_EN");
+        function_cfg.Camera_EN = CameraKind(cfg.at("CAMERA_EN"));
+        function_cfg.ImageSave_EN = false;
+        function_cfg.VideoShow_EN = false;
+        function_cfg.DataPrint_EN = false;
+        function_cfg.AcrossIdentify_EN = cfg.at("ACROSS_IDENTIFY_EN");
+        function_cfg.CircleIdentify_EN = cfg.at("CIRCLE_IDENTIFY_EN");
+
+        track_cfg.Forward = cfg.at("FORWARD");
+        track_cfg.Default_Forward = cfg.at("FORWARD");
+        track_cfg.Path_Search_Start = cfg.at("PATH_SEARCH_START");
+        track_cfg.Path_Search_End = cfg.at("PATH_SEARCH_END");
+        track_cfg.Side_Search_Start = cfg.at("SIDE_SEARCH_START");
+        track_cfg.Side_Search_End = cfg.at("SIDE_SEARCH_END");
+
+        track_cfg.InflectionPointVectorDistance = cfg.at("POINT_DISTANCE");
+        track_cfg.BendPointVectorDistance = cfg.at("POINT_DISTANCE");
+        track_cfg.BendPointNum[0] = cfg.at("LITTLE_ANGLE_BEND_POINT_NUM");
+        track_cfg.BendPointNum[1] = cfg.at("BIG_ANGLE_BEND_POINT_NUM");
+        track_cfg.InflectionPointIdentifyAngle[0] = cfg.at("MIN_INFLECTION_POINT_ANGLE");
+        track_cfg.InflectionPointIdentifyAngle[1] = cfg.at("MAX_INFLECTION_POINT_ANGLE");
+        track_cfg.BendPointIdentifyAngle[0] = cfg.at("MIN_BEND_POINT_ANGLE");
+        track_cfg.BendPointIdentifyAngle[1] = cfg.at("MAX_BEND_POINT_ANGLE");
+
+        track_cfg.TrackWidth = cfg.at("TRACK_WIDTH");
+        track_cfg.CircleOutWidth = cfg.at("CIRCLE_OUT_WIDTH");
+        track_cfg.CommonMotorSpeed[0] = cfg.at("STRIGHT_TRACK_MOTOR_SPEED");
+        track_cfg.CommonMotorSpeed[1] = cfg.at("LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED");
+        track_cfg.CommonMotorSpeed[2] = cfg.at("BIG_ANGLE_BEND_TRACK_MOTOR_SPEED");
+        track_cfg.CommonMotorSpeed[3] = cfg.at("ACROSS_TRACK_MOTOR_SPEED");
+        track_cfg.CommonMotorSpeed[4] = cfg.at("CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE");
+        track_cfg.CommonMotorSpeed[5] = cfg.at("CIRCLE_TRACK_MOTOR_SPEED_INSIDE");
+        track_cfg.BridgeZoneMotorSpeed = cfg.at("BRIDGE_ZONE_MOTOR_SPEED");
+        track_cfg.CrosswalkZoneMotorSpeed = cfg.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE");
+        track_cfg.Circle_In_Prepare_Time = cfg.at("CIRCLE_IN_PREPARE_TIME");
+
+        function_en->JSON_FunctionConfigData_v.clear();
+        data_path->JSON_TrackConfigData_v.clear();
+        function_en->JSON_FunctionConfigData_v.push_back(function_cfg);
+        data_path->JSON_TrackConfigData_v.push_back(track_cfg);
+        function_en->Game_EN = true;
+        function_en->Gyroscope_EN = false;
+        function_en->Loop_Kind_EN = CAMERA_CATCH_LOOP;
+        function_en->Control_EN = false;
+
+        data_path->Track_Kind = STRIGHT_TRACK;
+        data_path->Circle_Track_Step = INIT;
+        data_path->Previous_Circle_Kind = STRIGHT_TRACK;
+    }
+
+    std::vector<unsigned char> encode_jpeg(const cv::Mat &image)
+    {
+        if (image.empty())
+        {
+            return {};
+        }
+        std::vector<unsigned char> encoded;
+        std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 85};
+        cv::imencode(".jpg", image, encoded, params);
+        return encoded;
+    }
+
+    class OfflineImageProcessor
+    {
+    public:
+        bool init(const AppConfig &cfg, std::string *error)
+        {
+            cfg_ = cfg;
+            frame_files_.clear();
+
+            if (!fs::exists(cfg_.dataset_dir))
+            {
+                if (error)
+                {
+                    *error = "Dataset dir not found: " + cfg_.dataset_dir;
+                }
+                return false;
+            }
+
+            for (const auto &entry : fs::directory_iterator(cfg_.dataset_dir))
+            {
+                if (!entry.is_regular_file())
+                {
+                    continue;
+                }
+                const std::string filename = entry.path().filename().string();
+                if (ends_with_jpg(filename))
+                {
+                    frame_files_.push_back(entry.path());
+                }
+            }
+
+            std::sort(frame_files_.begin(), frame_files_.end(), [](const fs::path &a, const fs::path &b)
+                      {
       const int ia = parse_stem_index(a);
       const int ib = parse_stem_index(b);
       if (ia >= 0 && ib >= 0) {
         return ia < ib;
       }
-      return a.filename().string() < b.filename().string();
-    });
+      return a.filename().string() < b.filename().string(); });
 
-    if (frame_files_.empty()) {
-      if (error) {
-        *error = "No jpg found in: " + cfg_.dataset_dir;
-      }
-      return false;
+            if (frame_files_.empty())
+            {
+                if (error)
+                {
+                    *error = "No jpg found in: " + cfg_.dataset_dir;
+                }
+                return false;
+            }
+
+            std::ifstream ifs(cfg_.config_file);
+            if (!ifs.is_open())
+            {
+                if (error)
+                {
+                    *error = "Cannot open config file: " + cfg_.config_file;
+                }
+                return false;
+            }
+
+            json cfg_json;
+            try
+            {
+                ifs >> cfg_json;
+                fill_runtime_config_from_json(cfg_json, &function_en_, &data_path_);
+            }
+            catch (const std::exception &e)
+            {
+                if (error)
+                {
+                    *error = std::string("Config parse failed: ") + e.what();
+                }
+                return false;
+            }
+
+            return true;
+        }
+
+        int frame_count() const
+        {
+            return static_cast<int>(frame_files_.size());
+        }
+
+        std::string frame_name(int idx) const
+        {
+            return frame_files_.at(static_cast<size_t>(idx)).filename().string();
+        }
+
+        bool get_frame_result(int idx, FrameResult *out, std::string *error)
+        {
+            if (out == nullptr)
+            {
+                if (error)
+                {
+                    *error = "output pointer is null";
+                }
+                return false;
+            }
+
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (idx < 0 || idx >= frame_count())
+            {
+                if (error)
+                {
+                    *error = "idx out of range";
+                }
+                return false;
+            }
+
+            if (cache_idx_ == idx && cache_.has_value())
+            {
+                *out = *cache_;
+                return true;
+            }
+
+            Img_Store img_store;
+            img_store.ImgNum = idx;
+            img_store.Img_Color = cv::imread(frame_files_[static_cast<size_t>(idx)].string(), cv::IMREAD_COLOR);
+            if (img_store.Img_Color.empty())
+            {
+                if (error)
+                {
+                    *error = "Failed to read image: " + frame_files_[static_cast<size_t>(idx)].string();
+                }
+                return false;
+            }
+
+            img_process_.ImgCompress(img_store.Img_Color, true);
+            img_process_.imgPreProc(&img_store, &data_path_, &function_en_);
+            imgSearch_l_r(&img_store, &data_path_);
+            judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
+            // judge_.ServoDirAngle_Judge(&data_path_);
+            judge_.MotorSpeed_Judge(&img_store, &data_path_);
+            judge_.AngularVelocityTarget_Judge(&data_path_);
+            img_process_.ImgShow(&img_store, &data_path_, &function_en_);
+
+            FrameResult current;
+            current.original_jpg = encode_jpeg(img_store.Img_Color);
+            current.otsu_jpg = encode_jpeg(img_store.Img_OTSU);
+            current.track_jpg = encode_jpeg(img_store.Img_Track);
+            current.all_jpg = encode_jpeg(img_store.Img_All);
+
+            current.servo_angle = data_path_.ServoAngle;
+            current.motor_speed = data_path_.MotorSpeed;
+            current.inflection_left = data_path_.InflectionPointNum[0];
+            current.inflection_right = data_path_.InflectionPointNum[1];
+            current.bend_left = data_path_.BendPointNum[0];
+            current.bend_right = data_path_.BendPointNum[1];
+            current.track_kind = static_cast<int>(data_path_.Track_Kind);
+
+            cache_ = current;
+            cache_idx_ = idx;
+            *out = current;
+            return true;
+        }
+
+    private:
+        AppConfig cfg_;
+        std::vector<fs::path> frame_files_;
+        ImgProcess img_process_;
+        Judge judge_;
+        Function_EN function_en_;
+        Data_Path data_path_;
+
+        std::mutex mutex_;
+        std::optional<FrameResult> cache_;
+        int cache_idx_ = -1;
+    };
+
+    int parse_int_or_default(const std::string &text, int fallback)
+    {
+        try
+        {
+            return std::stoi(text);
+        }
+        catch (...)
+        {
+            return fallback;
+        }
     }
 
-    std::ifstream ifs(cfg_.config_file);
-    if (!ifs.is_open()) {
-      if (error) {
-        *error = "Cannot open config file: " + cfg_.config_file;
-      }
-      return false;
+    AppConfig parse_args(int argc, char **argv)
+    {
+        AppConfig cfg;
+        for (int i = 1; i < argc; ++i)
+        {
+            const std::string arg = argv[i];
+            if (arg == "--dataset" && i + 1 < argc)
+            {
+                cfg.dataset_dir = argv[++i];
+            }
+            else if (arg == "--config" && i + 1 < argc)
+            {
+                cfg.config_file = argv[++i];
+            }
+            else if (arg == "--frontend-dir" && i + 1 < argc)
+            {
+                cfg.frontend_dir = argv[++i];
+            }
+            else if (arg == "--host" && i + 1 < argc)
+            {
+                cfg.host = argv[++i];
+            }
+            else if (arg == "--port" && i + 1 < argc)
+            {
+                cfg.port = parse_int_or_default(argv[++i], 8080);
+            }
+        }
+        return cfg;
     }
-
-    json cfg_json;
-    try {
-      ifs >> cfg_json;
-      fill_runtime_config_from_json(cfg_json, &function_en_, &data_path_);
-    } catch (const std::exception& e) {
-      if (error) {
-        *error = std::string("Config parse failed: ") + e.what();
-      }
-      return false;
-    }
-
-    return true;
-  }
-
-  int frame_count() const {
-    return static_cast<int>(frame_files_.size());
-  }
-
-  std::string frame_name(int idx) const {
-    return frame_files_.at(static_cast<size_t>(idx)).filename().string();
-  }
-
-  bool get_frame_result(int idx, FrameResult* out, std::string* error) {
-    if (out == nullptr) {
-      if (error) {
-        *error = "output pointer is null";
-      }
-      return false;
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (idx < 0 || idx >= frame_count()) {
-      if (error) {
-        *error = "idx out of range";
-      }
-      return false;
-    }
-
-    if (cache_idx_ == idx && cache_.has_value()) {
-      *out = *cache_;
-      return true;
-    }
-
-    Img_Store img_store;
-    img_store.ImgNum = idx;
-    img_store.Img_Color = cv::imread(frame_files_[static_cast<size_t>(idx)].string(), cv::IMREAD_COLOR);
-    if (img_store.Img_Color.empty()) {
-      if (error) {
-        *error = "Failed to read image: " + frame_files_[static_cast<size_t>(idx)].string();
-      }
-      return false;
-    }
-
-    img_process_.ImgCompress(img_store.Img_Color, true);
-    img_process_.imgPreProc(&img_store, &data_path_, &function_en_);
-    imgSearch_l_r(&img_store, &data_path_);
-    judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
-    judge_.ServoDirAngle_Judge(&data_path_);
-    judge_.MotorSpeed_Judge(&img_store, &data_path_);
-    judge_.AngularVelocityTarget_Judge(&data_path_);
-    img_process_.ImgShow(&img_store, &data_path_, &function_en_);
-
-    FrameResult current;
-    current.original_jpg = encode_jpeg(img_store.Img_Color);
-    current.otsu_jpg = encode_jpeg(img_store.Img_OTSU);
-    current.track_jpg = encode_jpeg(img_store.Img_Track);
-    current.all_jpg = encode_jpeg(img_store.Img_All);
-
-    current.servo_angle = data_path_.ServoAngle;
-    current.motor_speed = data_path_.MotorSpeed;
-    current.inflection_left = data_path_.InflectionPointNum[0];
-    current.inflection_right = data_path_.InflectionPointNum[1];
-    current.bend_left = data_path_.BendPointNum[0];
-    current.bend_right = data_path_.BendPointNum[1];
-    current.track_kind = static_cast<int>(data_path_.Track_Kind);
-
-    cache_ = current;
-    cache_idx_ = idx;
-    *out = current;
-    return true;
-  }
-
-private:
-  AppConfig cfg_;
-  std::vector<fs::path> frame_files_;
-  ImgProcess img_process_;
-  Judge judge_;
-  Function_EN function_en_;
-  Data_Path data_path_;
-
-  std::mutex mutex_;
-  std::optional<FrameResult> cache_;
-  int cache_idx_ = -1;
-};
-
-int parse_int_or_default(const std::string& text, int fallback) {
-  try {
-    return std::stoi(text);
-  } catch (...) {
-    return fallback;
-  }
-}
-
-AppConfig parse_args(int argc, char** argv) {
-  AppConfig cfg;
-  for (int i = 1; i < argc; ++i) {
-    const std::string arg = argv[i];
-    if (arg == "--dataset" && i + 1 < argc) {
-      cfg.dataset_dir = argv[++i];
-    } else if (arg == "--config" && i + 1 < argc) {
-      cfg.config_file = argv[++i];
-    } else if (arg == "--frontend-dir" && i + 1 < argc) {
-      cfg.frontend_dir = argv[++i];
-    } else if (arg == "--host" && i + 1 < argc) {
-      cfg.host = argv[++i];
-    } else if (arg == "--port" && i + 1 < argc) {
-      cfg.port = parse_int_or_default(argv[++i], 8080);
-    }
-  }
-  return cfg;
-}
 
 } // namespace
 
-int main(int argc, char** argv) {
-  const AppConfig cfg = parse_args(argc, argv);
+int main(int argc, char **argv)
+{
+    // 5. 配置文件同步
+    Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s,&JSON_PIDConfigData_s);
+    g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
+    if (g_runtime_config_ok)
+    {
+        std::string calibrationError;
+        const std::string calibrationJsonPath = "config/calibration.json";
+        const std::string calibrationYamlPath = "config/calibration.yaml";
 
-  OfflineImageProcessor processor;
-  std::string init_error;
-  if (!processor.init(cfg, &init_error)) {
-    std::cerr << "[ImageWebTest] init failed: " << init_error << std::endl;
-    return 1;
-  }
+        if (g_calibration_enabled)
+        {
+            g_calibration_enabled = g_calibration_corrector.load(calibrationYamlPath, &calibrationError);
+            if (!g_calibration_enabled)
+            {
+                std::cerr << "[Calibration] YAML 加载失败: " << calibrationError << std::endl;
+            }
+            else
+            {
+                std::cout << "[Calibration] 已加载 YAML 标定参数: " << calibrationYamlPath << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "[Calibration] 图像标定使能关闭: " << calibrationJsonPath << std::endl;
+        }
+    }
+    else
+    {
+        std::cerr << "[Config] 配置同步失败" << std::endl;
+        std::cerr << "[Config] Function 配置数量: " << Function_EN_s.JSON_FunctionConfigData_v.size()
+                  << ", Track 配置数量: " << Data_Path_s.JSON_TrackConfigData_v.size() << std::endl;
+        if (Function_EN_s.JSON_FunctionConfigData_v.empty())
+        {
+            std::cerr << "[Config] JSON_FunctionConfigData_v 为空，请检查功能配置文件" << std::endl;
+        }
+        if (Data_Path_s.JSON_TrackConfigData_v.empty())
+        {
+            std::cerr << "[Config] JSON_TrackConfigData_v 为空，请检查赛道配置文件" << std::endl;
+        }
+        Function_EN_s.Game_EN = false;
+    }
+    
+    const AppConfig cfg = parse_args(argc, argv);
 
-  httplib::Server server;
-  const std::string frontend_dir = resolve_frontend_dir(cfg.frontend_dir);
-  if (!frontend_dir.empty()) {
-    server.set_mount_point("/ui", frontend_dir);
-    server.Get("/", [&](const httplib::Request&, httplib::Response& res) {
-      res.set_redirect("/ui/index.html");
-    });
-  } else {
-    server.Get("/", [&](const httplib::Request&, httplib::Response& res) {
-      res.set_content("Frontend not found. Use --frontend-dir to specify static files path.",
-              "text/plain; charset=UTF-8");
-    });
-  }
+    OfflineImageProcessor processor;
+    std::string init_error;
+    if (!processor.init(cfg, &init_error))
+    {
+        std::cerr << "[ImageWebTest] init failed: " << init_error << std::endl;
+        return 1;
+    }
 
-  server.Get("/api/meta", [&](const httplib::Request&, httplib::Response& res) {
+    httplib::Server server;
+    const std::string frontend_dir = resolve_frontend_dir(cfg.frontend_dir);
+    if (!frontend_dir.empty())
+    {
+        server.set_mount_point("/ui", frontend_dir);
+        server.Get("/", [&](const httplib::Request &, httplib::Response &res)
+                   { res.set_redirect("/ui/index.html"); });
+    }
+    else
+    {
+        server.Get("/", [&](const httplib::Request &, httplib::Response &res)
+                   { res.set_content("Frontend not found. Use --frontend-dir to specify static files path.",
+                                     "text/plain; charset=UTF-8"); });
+    }
+
+    server.Get("/api/meta", [&](const httplib::Request &, httplib::Response &res)
+               {
     json meta;
     meta["frame_count"] = processor.frame_count();
     meta["dataset"] = cfg.dataset_dir;
-    res.set_content(meta.dump(), "application/json; charset=UTF-8");
-  });
+    res.set_content(meta.dump(), "application/json; charset=UTF-8"); });
 
-  server.Get("/api/frame", [&](const httplib::Request& req, httplib::Response& res) {
+    server.Get("/api/frame", [&](const httplib::Request &req, httplib::Response &res)
+               {
     const int idx = parse_int_or_default(req.get_param_value("idx"), 0);
     FrameResult frame;
     std::string error;
@@ -360,10 +470,10 @@ int main(int argc, char** argv) {
     stat["inflection_right"] = frame.inflection_right;
     stat["bend_left"] = frame.bend_left;
     stat["bend_right"] = frame.bend_right;
-    res.set_content(stat.dump(), "application/json; charset=UTF-8");
-  });
+    res.set_content(stat.dump(), "application/json; charset=UTF-8"); });
 
-  server.Get("/api/image", [&](const httplib::Request& req, httplib::Response& res) {
+    server.Get("/api/image", [&](const httplib::Request &req, httplib::Response &res)
+               {
     const int idx = parse_int_or_default(req.get_param_value("idx"), 0);
     const std::string type = req.has_param("type") ? req.get_param_value("type") : "orig";
 
@@ -389,18 +499,20 @@ int main(int argc, char** argv) {
       res.set_content("empty image payload", "text/plain; charset=UTF-8");
       return;
     }
-    res.set_content(reinterpret_cast<const char*>(payload->data()), payload->size(), "image/jpeg");
-  });
+    res.set_content(reinterpret_cast<const char*>(payload->data()), payload->size(), "image/jpeg"); });
 
-  std::cout << "[ImageWebTest] dataset=" << cfg.dataset_dir << std::endl;
-  std::cout << "[ImageWebTest] config=" << cfg.config_file << std::endl;
-  if (!frontend_dir.empty()) {
-    std::cout << "[ImageWebTest] frontend=" << frontend_dir << std::endl;
-    std::cout << "[ImageWebTest] open http://127.0.0.1:" << cfg.port << "/ui/index.html" << std::endl;
-  } else {
-    std::cout << "[ImageWebTest] frontend=NOT_FOUND" << std::endl;
-    std::cout << "[ImageWebTest] open http://127.0.0.1:" << cfg.port << " (API only)" << std::endl;
-  }
-  server.listen(cfg.host, cfg.port);
-  return 0;
+    std::cout << "[ImageWebTest] dataset=" << cfg.dataset_dir << std::endl;
+    std::cout << "[ImageWebTest] config=" << cfg.config_file << std::endl;
+    if (!frontend_dir.empty())
+    {
+        std::cout << "[ImageWebTest] frontend=" << frontend_dir << std::endl;
+        std::cout << "[ImageWebTest] open http://127.0.0.1:" << cfg.port << "/ui/index.html" << std::endl;
+    }
+    else
+    {
+        std::cout << "[ImageWebTest] frontend=NOT_FOUND" << std::endl;
+        std::cout << "[ImageWebTest] open http://127.0.0.1:" << cfg.port << " (API only)" << std::endl;
+    }
+    server.listen(cfg.host, cfg.port);
+    return 0;
 }

@@ -107,6 +107,8 @@ target_link_libraries(main PUBLIC stdc++fs)
 if (NOT USE_EDGE_TOOLCHAIN)
     set(IMAGE_WEB_TEST_SRC
         ${PROJECT_SOURCE_DIR}/src/libimage_process.cpp
+        ${PROJECT_SOURCE_DIR}/src/camera_calibration.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision_transform.cpp
         ${PROJECT_SOURCE_DIR}/src/libdata_process.cpp
         ${PROJECT_SOURCE_DIR}/src/path_side_search.cpp
         ${PROJECT_SOURCE_DIR}/src/path_across.cpp

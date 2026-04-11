@@ -1,0 +1,30 @@
+{
+    "version": 1,
+    "enable": true,
+    "input_size": {
+        "width": 320,
+        "height": 240
+    },
+    "output_size": {
+        "width": 320,
+        "height": 240
+    },
+    "undistort": {
+        "enable": true,
+        "calibration_file": "config/calibration.yaml"
+    },
+    "inverse_perspective": {
+        "enable": true,
+        "matrix": [
+            -2.388857,
+            4.090252,
+            -701.530597,
+            0.057342,
+            2.329624,
+            -693.438730,
+            0.001596,
+            0.028233,
+            -7.590749
+        ]
+    }
+}

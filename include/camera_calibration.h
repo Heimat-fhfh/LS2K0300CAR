@@ -13,6 +13,12 @@ public:
     // 对输入图像执行去畸变校正，成功返回 true。
     bool correct(const cv::Mat &src, cv::Mat &dst);
 
+    // 对二值图执行去畸变，使用最近邻插值保持 0/255 二值特性。
+    bool correctBinary(const cv::Mat &src, cv::Mat &dst);
+
+    // 生成浮点去畸变映射表，便于与其它几何变换融合成单次 remap。
+    bool buildUndistortFloatMap(const cv::Size &frameSize, cv::Mat &mapX, cv::Mat &mapY);
+
 private:
     bool loadFromYaml(const std::string &configPath, std::string *errorMessage);
     bool loadFromJson(const std::string &configPath, std::string *errorMessage);

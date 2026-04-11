@@ -606,10 +606,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     switch(JSON_FileNum)
     {
-        case 0:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_0.json"; break; }
-        case 1:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_1.json"; break; }
-        case 2:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_2.json"; break; }
-        default:{ ConfigFilePath = "/home/root/loongCarMAX/config/config_0.json"; break; }
+        case 0:{ ConfigFilePath = "config/config_0.json"; break; }
+        case 1:{ ConfigFilePath = "config/config_1.json"; break; }
+        case 2:{ ConfigFilePath = "config/config_2.json"; break; }
+        default:{ ConfigFilePath = "config/config_0.json"; break; }
     }
 
     std::cout << "[Config] OPENING JSON FILE: " << ConfigFilePath << std::endl;
