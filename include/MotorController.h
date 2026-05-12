@@ -47,6 +47,8 @@ private:
     float maxDutyPercent_;     // 最大占空比限制（0-100%）
     uint16_t pwmMaxValue_;     // PWM设备的最大值
     bool isRunning_;           // 电机是否正在运行
+    bool currentDirection_;    // 当前方向（true=正转，false=反转），用于方向切换保护
+
 };
 
 #endif // MOTOR_CONTROLLER_H

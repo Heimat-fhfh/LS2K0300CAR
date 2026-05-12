@@ -146,6 +146,20 @@ public:
      * @param wheelRadius 车轮半径（米）
      */
     void setWheelRadius(double wheelRadius);
+
+    /**
+     * @brief 根据赛道中线坐标和图像中线坐标计算横向误差，并生成目标角速度与差速控制
+     * @param trackCenterX 赛道中线在图像中的x坐标
+     * @param imageCenterX 图像中线的x坐标（通常为图像宽度/2）
+     * @param baseSpeedMps 基础线速度（m/s）
+     * @param kpDegPerPixel 像素误差到角速度的比例增益（度/秒/像素）
+     * @param maxYawRateDeg 最大角速度限制（°/s）
+     */
+    void steerByCenterlineError(double trackCenterX,
+                                double imageCenterX,
+                                double baseSpeedMps,
+                                double kpDegPerPixel = 1.5,
+                                double maxYawRateDeg = 220.0);
     
     // ==================== 斜坡控制相关方法 ====================
     
@@ -180,6 +194,25 @@ public:
      * @param rightValue 右轮重置值
      */
     void resetRampLimiters(double leftValue = 0.0, double rightValue = 0.0);
+
+    // ==================== 开机速度缓升相关方法 ====================
+    
+    /**
+     * @brief 启用或禁用开机速度缓升
+     * @param enable 是否启用
+     */
+    void enableStartupRamp(bool enable = true);
+    
+    /**
+     * @brief 检查开机速度缓升是否启用
+     */
+    bool isStartupRampEnabled() const;
+    
+    /**
+     * @brief 设置开机缓升时间
+     * @param durationMs 缓升持续时间（毫秒）
+     */
+    void setStartupRampDuration(int durationMs);
 
 private:
     void run();
@@ -239,6 +272,10 @@ private:
     const Control::PID::Parameters leftParams;
     const Control::PID::Parameters rightParams;
     
+    // PID控制器实例
+    Control::PID leftPID;
+    Control::PID rightPID;
+    
     // 角速度PID参数
     Control::PID::Parameters angularVelocityParams;
     
@@ -271,4 +308,10 @@ private:
     // 上一次的输出值（用于斜坡计算）
     double lastLeftOutput_;
     double lastRightOutput_;
+    
+    // 开机速度缓升相关
+    std::atomic<bool> startupRampEnabled;       // 缓升是否启用
+    std::atomic<int> startupRampDurationMs;     // 缓升持续时间（毫秒）
+    std::chrono::steady_clock::time_point startupStartTime;  // 缓升开始时间
+    bool startupRampInitialized;                // 缓升是否已初始化
 };

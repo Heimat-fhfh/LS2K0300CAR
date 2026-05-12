@@ -18,28 +18,47 @@ void get_left(uint16 total_L,Data_Path *Data_Path_p)
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 	uint16 i = 0;
 	uint16 j = 0;
-	uint16 h = 0;
+
 	//初始化
 	for (i = 0;i < RESULT_ROW;i++)
 	{
 		Data_Path_p->l_border[i] = border_min;
 	}
-	h = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
-	//左边
+
+	// 将寻线结果映射到边界数组
 	for (j = 0; j < total_L; j++)
 	{
-        // printf("第%d点的y:%d,正在寻找的高度:%d\n", j,Data_Path_p->points_l[j][1],h);
-		if (Data_Path_p->points_l[j][1] == h)
+		uint16 y = Data_Path_p->points_l[j][1];  // Y坐标（行号）
+		uint16 x = Data_Path_p->points_l[j][0];  // X坐标
+		if (y < RESULT_ROW)
 		{
-			Data_Path_p->l_border[h] = Data_Path_p->points_l[j][0] + 1;
-            // printf("%d\n", j);
+			Data_Path_p->l_border[y] = x + 1;  // 左边界稍微向右偏移1像素
 		}
-		else continue; //每行只取一个点，没到下一行就不记录
-		h--;
-		if (h == 0)
+	}
+
+	// 对相邻已知点之间的行做线性插值，消除 border_min 间隙
+	uint16 prev_y = 0;
+	bool have_prev = false;
+	for (j = 0; j < total_L; j++)
+	{
+		uint16 y = Data_Path_p->points_l[j][1];
+		if (y >= RESULT_ROW) continue;
+		if (have_prev)
 		{
-			break;//到最后一行退出
+			int val_prev = (int)Data_Path_p->l_border[prev_y];
+			int val_curr = (int)Data_Path_p->points_l[j][0] + 1;
+			int dy = (int)y - (int)prev_y;
+			if (dy < -1)
+			{
+				for (uint16 r = y + 1; r < prev_y; r++)
+				{
+					int dr = (int)r - (int)prev_y;
+					Data_Path_p->l_border[r] = (uint16)(val_prev + dr * (val_curr - val_prev) / dy);
+				}
+			}
 		}
+		prev_y = y;
+		have_prev = true;
 	}
 }
 
@@ -49,22 +68,46 @@ void get_right(uint16 total_R,Data_Path *Data_Path_p)
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 	uint16 i = 0;
 	uint16 j = 0;
-	uint16 h = 0;
+
 	for (i = 0; i < RESULT_ROW; i++)
 	{
 		Data_Path_p->r_border[i] = border_max;//右边线初始化放到最右边，左边线放到最左边，这样八邻域闭合区域外的中线就会在中间，不会干扰得到的数据
 	}
-	h = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
-	//右边
+
+	// 将寻线结果映射到边界数组
 	for (j = 0; j < total_R; j++)
 	{
-		if (Data_Path_p->points_r[j][1] == h)
+		uint16 y = Data_Path_p->points_r[j][1];  // Y坐标（行号）
+		uint16 x = Data_Path_p->points_r[j][0];  // X坐标
+		if (y < RESULT_ROW)
 		{
-			Data_Path_p->r_border[h] = Data_Path_p->points_r[j][0] - 1;
+			Data_Path_p->r_border[y] = x - 1;  // 右边界稍微向左偏移1像素
 		}
-		else continue;//每行只取一个点，没到下一行就不记录
-		h--;
-		if (h == 0)break;//到最后一行退出
+	}
+
+	// 对相邻已知点之间的行做线性插值，消除 border_max 间隙
+	uint16 prev_y = 0;
+	bool have_prev = false;
+	for (j = 0; j < total_R; j++)
+	{
+		uint16 y = Data_Path_p->points_r[j][1];
+		if (y >= RESULT_ROW) continue;
+		if (have_prev)
+		{
+			int val_prev = (int)Data_Path_p->r_border[prev_y];
+			int val_curr = (int)Data_Path_p->points_r[j][0] - 1;
+			int dy = (int)y - (int)prev_y;
+			if (dy < -1)
+			{
+				for (uint16 r = y + 1; r < prev_y; r++)
+				{
+					int dr = (int)r - (int)prev_y;
+					Data_Path_p->r_border[r] = (uint16)(val_prev + dr * (val_curr - val_prev) / dy);
+				}
+			}
+		}
+		prev_y = y;
+		have_prev = true;
 	}
 }
 
@@ -462,19 +505,39 @@ bool find_seed_points_eight(const uint8 bin_image[image_h][image_w],
     bool l_found = false;
     bool r_found = false;
 
+    // 修复：放宽种子点搜索条件
+    // 原条件要求同时找到"黑→白"跳变（bin_image[x]==255 && bin_image[x-1]==0），
+    // 赛道边缘模糊或噪声干扰时容易找不到种子点。
+    // 改为：优先找"黑→白"跳变，找不到时直接找第一个白点
     for (int x = start_x; x > border_min; --x) {
-        if (bin_image[start_row][x] == 255 && bin_image[start_row][x - 1] == 0) {
-            start_point_l = cv::Point(x, start_row);
-            l_found = true;
-            break;
+        if (bin_image[start_row][x] == 255) {
+            if (bin_image[start_row][x - 1] == 0) {
+                // 找到黑→白跳变，这是最理想的种子点
+                start_point_l = cv::Point(x, start_row);
+                l_found = true;
+                break;
+            } else if (!l_found) {
+                // 记录第一个白点作为备选
+                start_point_l = cv::Point(x, start_row);
+                l_found = true;
+                // 继续搜索，看是否有更理想的跳变点
+            }
         }
     }
 
     for (int x = start_x; x < border_max; ++x) {
-        if (bin_image[start_row][x] == 255 && bin_image[start_row][x + 1] == 0) {
-            start_point_r = cv::Point(x, start_row);
-            r_found = true;
-            break;
+        if (bin_image[start_row][x] == 255) {
+            if (bin_image[start_row][x + 1] == 0) {
+                // 找到黑→白跳变，这是最理想的种子点
+                start_point_r = cv::Point(x, start_row);
+                r_found = true;
+                break;
+            } else if (!r_found) {
+                // 记录第一个白点作为备选
+                start_point_r = cv::Point(x, start_row);
+                r_found = true;
+                // 继续搜索，看是否有更理想的跳变点
+            }
         }
     }
 
@@ -606,8 +669,11 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
             }
         }
 
-        const bool left_row_valid = left_active && center_l.y > end_row && center_l.y <= start_row + 2;
-        const bool right_row_valid = right_active && center_r.y > end_row && center_r.y <= start_row + 2;
+        // 修复：放宽行有效范围，允许从起始行向上追踪到结束行
+        // 原条件 center_l.y <= start_row + 2 过于严格，导致边线追踪只能向上走2行
+        // 改为 center_l.y >= end_row，允许从起始行一直追踪到结束行
+        const bool left_row_valid = left_active && center_l.y >= end_row;
+        const bool right_row_valid = right_active && center_r.y >= end_row;
 
         Point next_l = center_l;
         Point next_r = center_r;

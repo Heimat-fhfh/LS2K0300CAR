@@ -15,7 +15,7 @@ void ReadInput_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functio
 // 摄像头捕获任务的算法处理函数
 void ProcessAlgo_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
-    // imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
+    imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
 
     // 仅对二值图去畸变，降低计算开销并直接服务后续寻线。
     // if (g_calibration_enabled && !Img_Store_p->Img_OTSU.empty())
@@ -27,12 +27,13 @@ void ProcessAlgo_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Funct
     //     }
     // }
 
-    // if (!Img_Store_p->Img_OTSU.empty())
-    // {
-    //     memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
-    //     // 将处理后的二值图像数据复制到二维数组中，供后续算法使用
-    // }
-    // imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
+    if (!Img_Store_p->Img_OTSU.empty())
+    {
+        memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
+        // 将处理后的二值图像数据复制到二维数组中，供后续算法使用
+    }
+    
+    imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
 }
 
 void OutputDisplay_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
@@ -40,7 +41,7 @@ void OutputDisplay_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Fun
     (void)Img_Store_p;
     (void)Data_Path_p;
     (void)Function_EN_p;
-    // imgProcess.ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
+    imgProcess.ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
     // displayMatOnIPS200(Img_Store_p->Img_OTSU);
 }
 
@@ -262,6 +263,14 @@ void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
         return;
     }
 
+    // 检查是否启用简单循迹模式，如果是则跳过原有控制逻辑
+    extern bool g_simple_tracking_enabled;
+    if (g_simple_tracking_enabled)
+    {
+        // 简单循迹模式已接管控制，跳过原有逻辑
+        return;
+    }
+
     // 上位机控制模式：视觉输出 -> 目标角速度差速控制。
     if (Function_EN_p->Control_EN == false)
     {
@@ -269,8 +278,21 @@ void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
         judge.MotorSpeed_Judge(Img_Store_p,Data_Path_p);
         judge.AngularVelocityTarget_Judge(Data_Path_p);
 
-        motorTask->setBaseSpeed(Data_Path_p->TargetBaseSpeedMps);
-        motorTask->setTargetAngularVelocity(Data_Path_p->TargetAngularVelocityDeg);
+        // 打印赛道中线与图像中线的偏差、目标角速度和左右轮速度
+        // printf(" 目标角速度: %.2f deg/s, 左轮速度: %.2f m/s, 右轮速度: %.2f m/s\n",
+        //        Data_Path_p->TargetAngularVelocityDeg,
+        //        Data_Path_p->TargetLeftSpeedMps,
+        //        Data_Path_p->TargetRightSpeedMps);
+
+        const double wheelbase = 0.158;
+        const double yaw_rad = Data_Path_p->TargetAngularVelocityDeg * PI / 180.0;
+        const double leftSpeed = Data_Path_p->TargetBaseSpeedMps - yaw_rad * (wheelbase * 0.5);
+        const double rightSpeed = Data_Path_p->TargetBaseSpeedMps + yaw_rad * (wheelbase * 0.5);
+
+        Data_Path_p->TargetLeftSpeedMps = leftSpeed;
+        Data_Path_p->TargetRightSpeedMps = rightSpeed;
+
+        motorTask->setTargetSpeed(leftSpeed, rightSpeed);
     }
     else
     {
@@ -308,14 +330,14 @@ void argument_config(void)
     motors = std::make_unique<DualMotorController>();
 
     // 4. PID参数设置
-    leftParams.Kp = 1.0;
-    leftParams.Ki = 0.4;
-    leftParams.Kd = 0.0;
+    leftParams.Kp = 0.8;
+    leftParams.Ki = 0.5;
+    leftParams.Kd = 0;
     leftParams.limitP = 0.9;
     leftParams.limitI = 0.7;
     leftParams.limitD = 0.0;
-    leftParams.limitIMin = -0.7;
-    leftParams.limitOutput = 0.7;
+    leftParams.limitIMin = -0.9;
+    leftParams.limitOutput = 0.9;
     leftParams.enableAntiWindup = true;
 
     rightParams = leftParams;
@@ -326,8 +348,8 @@ void argument_config(void)
     if (g_runtime_config_ok)
     {
         std::string calibrationError;
-        const std::string calibrationJsonPath = "config/calibration.json";
-        const std::string calibrationYamlPath = "config/calibration.yaml";
+        const std::string calibrationJsonPath = "../config/calibration.json";
+        const std::string calibrationYamlPath = "../config/calibration.yaml";
 
         if (g_calibration_enabled)
         {
@@ -471,14 +493,14 @@ int main_test_task(const MainTestConfig& test_config)
             buzzer.patternLongShort();
             std::this_thread::sleep_for(std::chrono::milliseconds(1200));
 
-            std::cout << "自定义模式（300ms 响 / 100ms 停，重复 3 次）" << std::endl;
-            buzzer.customPattern({300}, {100}, 3);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+            // std::cout << "自定义模式（300ms 响 / 100ms 停，重复 3 次）" << std::endl;
+            // buzzer.customPattern({300}, {100}, 3);
+            // std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
-            std::cout << "连续鸣叫 2 秒" << std::endl;
-            buzzer.patternContinuous();
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-            buzzer.stop();
+            // std::cout << "连续鸣叫 2 秒" << std::endl;
+            // buzzer.patternContinuous();
+            // std::this_thread::sleep_for(std::chrono::seconds(2));
+            // buzzer.stop();
         }
         catch (const std::exception& e)
         {

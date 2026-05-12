@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 MotorControlTask::MotorControlTask(
     const Control::PID::Parameters& leftParams,
@@ -20,6 +21,8 @@ MotorControlTask::MotorControlTask(
     , rampLimitingEnabled(false)          // 默认禁用斜坡限制
     , leftParams(leftParams)
     , rightParams(rightParams)
+    , leftPID(leftParams)
+    , rightPID(rightParams)
     , motors(motors)
     , leftEncoder(leftEncoder)
     , rightEncoder(rightEncoder)
@@ -35,7 +38,10 @@ MotorControlTask::MotorControlTask(
     , leftRampLimiter(0.8, 0.2)          // 默认加速度=0.5，减速度=0.5
     , rightRampLimiter(0.8, 0.2)         // 默认加速度=0.5，减速度=0.5
     , lastLeftOutput_(0.0)
-    , lastRightOutput_(0.0) {
+    , lastRightOutput_(0.0)
+    , startupRampEnabled(false)          // 默认禁用开机缓升
+    , startupRampDurationMs(1000)        // 默认缓升时间1秒
+    , startupRampInitialized(false) {
     
     if (!motors || !leftEncoder || !rightEncoder) {
         throw std::invalid_argument("MotorControlTask: Null pointer provided");
@@ -101,17 +107,18 @@ void MotorControlTask::stop() {
 void MotorControlTask::setTargetSpeed(double leftSpeed, double rightSpeed) {
     leftTargetSpeed.store(leftSpeed);
     rightTargetSpeed.store(rightSpeed);
-    printf("Target speeds updated - Left: %.3f m/s, Right: %.3f m/s\n", leftSpeed, rightSpeed);
+    
+    // printf("Target speeds updated - Left: %.3f m/s, Right: %.3f m/s\n", leftSpeed, rightSpeed);
 }
 
 void MotorControlTask::setLeftTargetSpeed(double speed) {
     leftTargetSpeed.store(speed);
-    printf("Left target speed updated to: %.3f m/s\n", speed);
+   // printf("Left target speed updated to: %.3f m/s\n", speed);
 }
 
 void MotorControlTask::setRightTargetSpeed(double speed) {
     rightTargetSpeed.store(speed);
-    printf("Right target speed updated to: %.3f m/s\n", speed);
+   // printf("Right target speed updated to: %.3f m/s\n", speed);
 }
 
 double MotorControlTask::getLeftTargetSpeed() const {
@@ -153,12 +160,6 @@ void MotorControlTask::run() {
     
     ControlState state = ControlState::INIT;
     
-    // 创建左右轮PID控制器
-    // Control::PIDWithDeadband leftPID(leftParams, 0.2);
-    // Control::PIDWithDeadband rightPID(rightParams, 0.2);
-    Control::PID leftPID(leftParams);leftPID.setIntegral(0.2); // 设置初始积分值，帮助快速响应
-    Control::PID rightPID(rightParams);rightPID.setIntegral(0.2); // 设置初始积分值，帮助快速响应
-
     // 创建角速度PID控制器（如果需要）
     Control::PID angularVelocityPID(angularVelocityParams);
     
@@ -180,6 +181,19 @@ void MotorControlTask::run() {
     // 精确计时
     auto next_time = std::chrono::steady_clock::now();
     const auto period = std::chrono::microseconds(static_cast<int>(controlPeriod * 1000000));
+    
+    // PID 预热阶段：空跑 10 帧，让 PID 建立微分历史，避免第一帧微分冲击导致速度暴涨
+    printf("PID warmup: running %d cycles with zero target...\n", 10);
+    for (int warmup = 0; warmup < 10; warmup++) {
+        next_time += period;
+        double leftSpeed = leftEncoder->readSpeed();
+        double rightSpeed = rightEncoder->readSpeed();
+        // 用 0 目标跑 PID，让 m_prevError 和 m_integral 有初始值
+        leftPID.calculate(0.0, leftSpeed, controlPeriod);
+        rightPID.calculate(0.0, rightSpeed, controlPeriod);
+        std::this_thread::sleep_until(next_time);
+    }
+    printf("PID warmup done.\n");
     
     while (state != ControlState::STOPPED && running.load()) {
         try {
@@ -228,6 +242,40 @@ void MotorControlTask::run() {
             // 获取当前目标速度
             double currentLeftTarget = leftTargetSpeed.load();
             double currentRightTarget = rightTargetSpeed.load();
+            
+            // ==================== 开机速度缓升 ====================
+            // 原理：在缓升持续时间内，将目标速度乘以一个从0线性增加到1的系数
+            // 这样即使外部突然设置一个很大的目标速度，实际给到PID的目标也是从0逐渐增大
+            bool rampUp = startupRampEnabled.load();
+            if (rampUp) {
+                // 首次进入缓升时记录开始时间
+                if (!startupRampInitialized) {
+                    startupStartTime = std::chrono::steady_clock::now();
+                    startupRampInitialized = true;
+                    printf("[StartupRamp] 开机速度缓升已激活，持续时间 %d ms\n", startupRampDurationMs.load());
+                }
+                
+                int durationMs = startupRampDurationMs.load();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - startupStartTime).count();
+                
+                double rampFactor = 1.0;
+                if (durationMs > 0 && elapsed < durationMs) {
+                    rampFactor = static_cast<double>(elapsed) / static_cast<double>(durationMs);
+                    rampFactor = std::clamp(rampFactor, 0.0, 1.0);
+                } else {
+                    // 缓升结束，自动禁用
+                    startupRampEnabled.store(false);
+                    startupRampInitialized = false;
+                    printf("[StartupRamp] 开机速度缓升完成 (elapsed=%ld ms)\n", elapsed);
+                }
+                
+                // 应用缓升系数：目标速度乘以 rampFactor
+                currentLeftTarget *= rampFactor;
+                currentRightTarget *= rampFactor;
+            } else {
+                startupRampInitialized = false;
+            }
             
             // 角速度控制逻辑
             bool angularControlEnabled = angularVelocityControlEnabled.load();
@@ -289,7 +337,7 @@ void MotorControlTask::run() {
                 rightTargetSpeed.store(rightTarget);
             }
             
-            // PID计算
+            // PID计算（输出单位：m/s）
             double leftOutput = leftPID.calculate(currentLeftTarget, leftSpeed);
             double rightOutput = rightPID.calculate(currentRightTarget, rightSpeed);
 
@@ -359,6 +407,29 @@ void MotorControlTask::setTargetAngularVelocity(double angularVelocity) {
     }
     
     targetAngularVelocity.store(angularVelocity);
+}
+
+void MotorControlTask::steerByCenterlineError(double trackCenterX,
+                                               double imageCenterX,
+                                               double baseSpeedMps,
+                                               double kpDegPerPixel,
+                                               double maxYawRateDeg)
+{
+    const double errorPx = trackCenterX - imageCenterX;
+    const double targetYaw = std::clamp(errorPx * kpDegPerPixel, -maxYawRateDeg, maxYawRateDeg);
+    const double clampedBaseSpeed = std::clamp(baseSpeedMps, -10.0, 10.0);
+
+    setTargetAngularVelocity(targetYaw);//
+    setBaseSpeed(clampedBaseSpeed);
+
+    const auto [leftSpeed, rightSpeed] = kinematicsDecomposition(clampedBaseSpeed, degToRad(targetYaw));
+    if (!isAngularVelocityControlEnabled()) {
+        setTargetSpeed(leftSpeed, rightSpeed);
+    }
+
+    fprintf(stderr,
+            "[MotorControlTask] steer error=%.2f px, targetYaw=%.2f deg/s, left=%.3f m/s, right=%.3f m/s\n",
+            errorPx, targetYaw, leftSpeed, rightSpeed);
 }
 
 double MotorControlTask::getTargetAngularVelocity() const {
@@ -541,4 +612,30 @@ void MotorControlTask::resetRampLimiters(double leftValue, double rightValue) {
     lastRightOutput_ = rightValue;
     
     printf("Ramp limiters reset - left: %.3f, right: %.3f\n", leftValue, rightValue);
+}
+
+// ==================== 开机速度缓升相关方法实现 ====================
+
+void MotorControlTask::enableStartupRamp(bool enable) {
+    startupRampEnabled.store(enable);
+    if (enable) {
+        startupRampInitialized = false;  // 下次进入 run() 循环时会重新初始化
+        printf("[StartupRamp] 开机速度缓升已%s\n", enable ? "启用" : "禁用");
+    } else {
+        printf("[StartupRamp] 开机速度缓升已禁用\n");
+    }
+}
+
+bool MotorControlTask::isStartupRampEnabled() const {
+    return startupRampEnabled.load();
+}
+
+void MotorControlTask::setStartupRampDuration(int durationMs) {
+    if (durationMs > 0) {
+        startupRampDurationMs.store(durationMs);
+        printf("[StartupRamp] 缓升时间设置为 %d ms\n", durationMs);
+    } else {
+        printf("[StartupRamp] 无效的缓升时间: %d ms，使用默认值 1000 ms\n", durationMs);
+        startupRampDurationMs.store(1000);
+    }
 }

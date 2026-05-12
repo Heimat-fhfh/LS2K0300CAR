@@ -161,7 +161,7 @@ bool VisionTransformPipeline::loadConfig(const std::string &configPath, std::str
         return false;
     }
     undistortEnable_ = undistortNode.value("enable", false);
-    calibrationFilePath_ = undistortNode.value("calibration_file", std::string("config/calibration.yaml"));
+    calibrationFilePath_ = undistortNode.value("calibration_file", std::string("../config/calibration.yaml"));
 
     const json inversePerspectiveNode = root.value("inverse_perspective", json::object());
     if (!inversePerspectiveNode.is_object())
