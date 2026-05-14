@@ -271,11 +271,19 @@ void compute_smoothed_servo_control(Data_Path* data_path,
         return;
     }
 
+    // 修复：添加限幅保护，防止 hightest + 10 超出图像范围
+    // 原代码 find_row = data_path->hightest + 10 可能超出 max_row，
+    // 导致后续 center_line[find_row] 访问越界
     int find_row = default_forward;
     if (find_row < data_path->hightest) {
         find_row = data_path->hightest + 10;
     }
     find_row = clip_int(find_row, min_row, max_row);
+    
+    // 额外保护：确保 find_row 在 center_line 有效范围内
+    if (find_row < 0 || find_row >= image_h) {
+        find_row = clip_int(default_forward, min_row, max_row);
+    }
 
     // 采用 1-2-3-2-1 的多行权重，兼顾响应速度和抗抖能力。
     const int row_offsets[5] = {-8, -4, 0, 4, 8};
@@ -294,4 +302,13 @@ void compute_smoothed_servo_control(Data_Path* data_path,
     data_path->findrow = find_row;
     data_path->ServoAngle = std::abs(servo_error);
     data_path->ServoDir = (servo_error < 0) ? 1 : -1;
+
+    //打印赛道中线与图像中线的像素偏差
+    // printf("像素偏差: %d px (赛道中线: %d, 图像中心: %d)\n", 
+    //        servo_error, 
+    //        (weight_sum > 0) ? (weighted_center / weight_sum) : static_cast<int>(data_path->center_line[find_row]), 
+    //        image_width / 2);
+    
+		
+	
 }

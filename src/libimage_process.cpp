@@ -3,7 +3,7 @@
 #include "AAAdefine.h"
 #include "vision_transform.h"
 #include <condition_variable>
-
+#include <display_show.h>
 using namespace std;
 using namespace cv;
 
@@ -17,7 +17,8 @@ bool EnsureVisionTransformReady()
 {
 	std::call_once(g_vision_transform_init_once, []() {
 		std::string errorMessage;
-		g_vision_transform_ready = g_vision_transform_pipeline.loadConfig("config/vision_transform.json", &errorMessage);
+		// 使用相对于项目根目录的绝对路径
+		g_vision_transform_ready = g_vision_transform_pipeline.loadConfig("../config/vision_transform.json", &errorMessage);
 		if (!g_vision_transform_ready)
 		{
 			std::cerr << "[VisionTransform] 配置加载失败，后续按原图处理: " << errorMessage << std::endl;
@@ -200,6 +201,9 @@ void CameraImgGet(Img_Store *Img_Store_p)
 	Img_Store_p->Img_Color = std::move(Img_Store_p->Img_CaptureBuffer[readIndex]);
 	Img_Store_p->Img_BufferReady[readIndex] = false;
 	Img_Store_p->Img_LastReadSeq = Img_Store_p->Img_FrameSeq;
+
+	//displayMatOnIPS200(Img_Store_p->Img_OTSU); // 在IPS200显示二值化图像，便于调试
+	
 }
 
 /**
@@ -250,6 +254,11 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
     threshold(blurred, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
     // threshold(Img_Store_p->Img_Gray, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
+
+	// 将Img_Track改为二值化图像的彩色版本，用于绘制线条
+	cv::Mat temp;
+	cv::cvtColor(Img_Store_p->Img_OTSU, temp, cv::COLOR_GRAY2BGR);
+	Img_Store_p->Img_Track = temp.clone();
 
 	const int imgWidth = Img_Store_p->Img_OTSU.cols;
 	const int imgHeight = Img_Store_p->Img_OTSU.rows;
@@ -605,29 +614,41 @@ void ImgProcess::ImgReferenceLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
 	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-	circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_l[0][0],Data_Path_p->points_l[0][1]), 6, Scalar(0, 255, 0), 1);
-	circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_r[0][0],Data_Path_p->points_r[0][1]), 6, Scalar(0, 255, 0), 1);
 
-	circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_l[1][0],Data_Path_p->points_l[1][1]), 6, Scalar(0, 255, 0), 1);
-	circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_r[1][0],Data_Path_p->points_r[1][1]), 6, Scalar(0, 255, 0), 1);
+	std::vector<Point> leftPoints;
+	std::vector<Point> rightPoints;
+	std::vector<Point> centerPoints;
+	leftPoints.reserve(image_h);
+	rightPoints.reserve(image_h);
+	centerPoints.reserve(image_h);
 
-	for (int i = 0; i < Data_Path_p->NumSearch[0]; i++)
+	static int debug_frame_counter = 0;
+	for (int i = 0; i < image_h; i++)
 	{
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_l[i][0],Data_Path_p->points_l[i][1]), 1, Scalar(0, 0, 255), FILLED);
-	}
-	for (int i = 0; i < Data_Path_p->NumSearch[1]; i++)
-	{
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_r[i][0],Data_Path_p->points_r[i][1]), 1, Scalar(255, 0, 0), FILLED);
+		if (i == Data_Path_p->hightest) {
+			debug_frame_counter++;
+		}
+
+		int leftX = Data_Path_p->l_border[i];
+		int rightX = Data_Path_p->r_border[i];
+		int centerX = (leftX + rightX) >> 1;
+		Data_Path_p->center_line[i] = static_cast<uint16>(centerX); // 求中线
+
+		if (leftX > border_min && rightX < border_max && rightX > leftX)
+		{
+			leftPoints.emplace_back(leftX, i);
+			rightPoints.emplace_back(rightX, i);
+			centerPoints.emplace_back(centerX, i);
+		}
 	}
 
-	for (int i = Data_Path_p->hightest; i < image_h-JSON_TrackConfigData.Path_Search_Start; i++)
-	{
-		// Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;//求中线
-
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->center_line[i],i), 1, Scalar(255, 140, 0), FILLED);//显示起点 显示中线	
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->l_border[i],i), 1, Scalar(0, 255, 255), FILLED);//显示起点 显示左边线
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->r_border[i],i), 1, Scalar(0, 255, 255), FILLED);//显示起点 显示右边线
+	if (!leftPoints.empty()) {
+		polylines(Img_Store_p->Img_Track, leftPoints, false, Scalar(0, 255, 0), 1);
 	}
-
-	
+	if (!rightPoints.empty()) {
+		polylines(Img_Store_p->Img_Track, rightPoints, false, Scalar(0, 255, 0), 1);
+	}
+	if (!centerPoints.empty()) {
+		polylines(Img_Store_p->Img_Track, centerPoints, false, Scalar(0, 255, 255), 1);
+	}
 }
