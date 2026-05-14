@@ -271,12 +271,12 @@ void compute_smoothed_servo_control(Data_Path* data_path,
         return;
     }
 
-    // 修复：添加限幅保护，防止 hightest + 10 超出图像范围
-    // 原代码 find_row = data_path->hightest + 10 可能超出 max_row，
+    // 修复：添加限幅保护，防止 search_print_h_max + 10 超出图像范围
+    // 原代码 find_row = data_path->search_print_h_max + 10 可能超出 max_row，
     // 导致后续 center_line[find_row] 访问越界
     int find_row = default_forward;
-    if (find_row < data_path->hightest) {
-        find_row = data_path->hightest + 10;
+    if (find_row < data_path->search_print_h_max) {
+        find_row = data_path->search_print_h_max + 10;
     }
     find_row = clip_int(find_row, min_row, max_row);
     

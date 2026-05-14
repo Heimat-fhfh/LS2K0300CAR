@@ -209,15 +209,16 @@ typedef struct Data_Path
     std::vector<JSON_TrackConfigData> JSON_TrackConfigData_v; // JSON文件存储的赛道识别设置参数
     
     
+    int NumSearch[2] = {0}; // 左右八邻域寻线坐标数量
     uint16 points_l[(uint16)USE_num][2] = { {  0 } };//左线
     uint16 points_r[(uint16)USE_num][2] = { {  0 } };//右线
+    uint16 dir_r[(uint16)USE_num] = { 0 };//用来存储右边生长方向
+    uint16 dir_l[(uint16)USE_num] = { 0 };//用来存储左边生长方向
+    uint16 search_print_h_max = 0;//最高点
+
     uint16 l_border[image_h];            //左线数组
     uint16 r_border[image_h];            //右线数组
     uint16 center_line[image_h];         //中线数组
-    uint16 dir_r[(uint16)USE_num] = { 0 };//用来存储右边生长方向
-    uint16 dir_l[(uint16)USE_num] = { 0 };//用来存储左边生长方向
-    uint16 hightest = 0;//最高点
-    int NumSearch[2] = {0}; // 左右八邻域寻线坐标数量
 
     // 赛道识别结果
     // 边线结果

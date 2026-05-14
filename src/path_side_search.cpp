@@ -160,7 +160,7 @@ void ImgPathSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     输入数据：
     - Img_Store_p->Img_OTSU：上一阶段生成的二值图像，是八邻域追踪的唯一图像来源。
     - Data_Path_p->JSON_TrackConfigData_v[0]：提供 Side_Search_Start / Side_Search_End 等搜索参数。
-    - Data_Path_p->SideCoordinate_Eight / points_l / points_r / dir_l / dir_r / NumSearch / hightest：
+    - Data_Path_p->SideCoordinate_Eight / points_l / points_r / dir_l / dir_r / NumSearch / search_print_h_max：
       用于存储和回传搜索过程中的边线点、方向与终止状态。
 
     输出数据：
@@ -168,7 +168,7 @@ void ImgPathSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     - Data_Path_p->points_l / points_r：左右边线点序列。
     - Data_Path_p->dir_l / dir_r：每一步的生长方向。
     - Data_Path_p->NumSearch[0] / NumSearch[1]：左右边线最终点数。
-    - Data_Path_p->hightest：左右边线相遇或达到有效终止条件时的最高点。
+    - Data_Path_p->search_print_h_max：左右边线相遇或达到有效终止条件时的最高点。
 */
 void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
@@ -413,14 +413,14 @@ void dataMove(Data_Path *Data_Path_p)
     }
     //————————————————————————————————————————————————————————————————————————————————————//
     j = 0;
-    for(i = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;i < Data_Path_p->hightest;i++)
+    for(i = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;i < Data_Path_p->search_print_h_max;i++)
     {
         Data_Path_p -> SideCoordinate[j][0] = Data_Path_p -> l_border[i];
         Data_Path_p -> SideCoordinate[j][1] = i;
         j++;
     }
     j = 0;
-    for(i = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;i < Data_Path_p->hightest;i++)
+    for(i = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;i < Data_Path_p->search_print_h_max;i++)
     {
         Data_Path_p -> SideCoordinate[j][2] = Data_Path_p -> r_border[i];
         Data_Path_p -> SideCoordinate[j][3] = i;
@@ -428,7 +428,7 @@ void dataMove(Data_Path *Data_Path_p)
     }
     //————————————————————————————————————————————————————————————————————————————————————//
     j = 0;
-    for(i = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;i < Data_Path_p->hightest;i++)
+    for(i = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;i < Data_Path_p->search_print_h_max;i++)
     {
         Data_Path_p -> TrackCoordinate[j][0] = Data_Path_p -> center_line[i];
         Data_Path_p -> TrackCoordinate[j][1] = i;
@@ -582,7 +582,7 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
     bool left_active = true;
     bool right_active = true;
 
-    Data_Path_p->hightest = static_cast<uint16>(start_row);
+    Data_Path_p->search_print_h_max = static_cast<uint16>(start_row);
     for (int step = 0; step < static_cast<int>(USE_num); ++step) {
         if (left_active && left_count < static_cast<int>(USE_num)) {
             Data_Path_p->points_l[left_count][0] = static_cast<uint16>(center_l.x);
@@ -601,7 +601,7 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
             const int rx = static_cast<int>(Data_Path_p->points_r[right_count - 1][0]);
             const int ry = static_cast<int>(Data_Path_p->points_r[right_count - 1][1]);
             if (my_abs(lx - rx) <= 2 && my_abs(ly - ry) <= 2) {
-                Data_Path_p->hightest = static_cast<uint16>((ly + ry) / 2);
+                Data_Path_p->search_print_h_max = static_cast<uint16>((ly + ry) / 2);
                 break;
             }
         }
@@ -650,43 +650,31 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
     Data_Path_p->NumSearch[0] = left_count;
     Data_Path_p->NumSearch[1] = right_count;
 
-    if (Data_Path_p->hightest == static_cast<uint16>(start_row)) {
+    if (Data_Path_p->search_print_h_max == static_cast<uint16>(start_row)) {
         if (left_count > 0 && right_count > 0) {
-            Data_Path_p->hightest = static_cast<uint16>(std::min(static_cast<int>(Data_Path_p->points_l[left_count - 1][1]),
+            Data_Path_p->search_print_h_max = static_cast<uint16>(std::min(static_cast<int>(Data_Path_p->points_l[left_count - 1][1]),
                                                                  static_cast<int>(Data_Path_p->points_r[right_count - 1][1])));
         } else if (left_count > 0) {
-            Data_Path_p->hightest = static_cast<uint16>(Data_Path_p->points_l[left_count - 1][1]);
+            Data_Path_p->search_print_h_max = static_cast<uint16>(Data_Path_p->points_l[left_count - 1][1]);
         } else if (right_count > 0) {
-            Data_Path_p->hightest = static_cast<uint16>(Data_Path_p->points_r[right_count - 1][1]);
+            Data_Path_p->search_print_h_max = static_cast<uint16>(Data_Path_p->points_r[right_count - 1][1]);
         }
     }
 
-    optimize_edge_lines(Data_Path_p,
-                        image_w,
-                        2.0F,
-                        5,
-                        static_cast<int>(USE_num));
+    // optimize_edge_lines(Data_Path_p,
+    //                     image_w,
+    //                     2.0F,
+    //                     5,
+    //                     static_cast<int>(USE_num));
 
     get_left(static_cast<uint16>(Data_Path_p->NumSearch[0]), Data_Path_p);
     get_right(static_cast<uint16>(Data_Path_p->NumSearch[1]), Data_Path_p);
+
+    for (int i = Data_Path_p->search_print_h_max; i < image_h-JSON_TrackConfigData.Path_Search_Start; i++)
+    {Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;}     //求中线
+
     dataMove(Data_Path_p);
 
-    if (!Img_Store_p->Img_Track.empty()) {
-        if (left_count > 0) {
-            circle(Img_Store_p->Img_Track,
-                   Point(Data_Path_p->points_l[0][0], Data_Path_p->points_l[0][1]),
-                   4,
-                   Scalar(255, 0, 255),
-                   1);
-        }
-        if (right_count > 0) {
-            circle(Img_Store_p->Img_Track,
-                   Point(Data_Path_p->points_r[0][0], Data_Path_p->points_r[0][1]),
-                   4,
-                   Scalar(255, 0, 255),
-                   1);
-        }
-    }
 }
 
 void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
