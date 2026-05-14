@@ -11,7 +11,7 @@
     },
     "undistort": {
         "enable": true,
-        "calibration_file": "../config/calibration.yaml"
+        "calibration_file": "config/calibration.yaml"
     },
     "inverse_perspective": {
         "enable": false,

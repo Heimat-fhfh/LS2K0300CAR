@@ -252,7 +252,7 @@ typedef struct Data_Path
     double TargetLeftSpeedMps = 0;        // 运动学分解得到的左轮目标速度（m/s）
     double TargetRightSpeedMps = 0;       // 运动学分解得到的右轮目标速度（m/s）
 
-    int findrow = 160;    // 寻路径行号
+    int findrow;
 
 }Data_Path;
 

@@ -2,7 +2,6 @@
 #include "common_program.h"
 #include "libdata_store.h"
 #include "path_refactor.h"
-#include <chrono>
 #include <cerrno>
 #include <cstring>
 
@@ -379,33 +378,19 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 */
 void Judge::AngularVelocityTarget_Judge(Data_Path *Data_Path_p)
 {
-    constexpr double kP = 1.2;
-    constexpr double kI = 0.02;
-    constexpr double kD = 0.05;
-    constexpr double kMaxYawRateDeg = 220.0;
+    // 经验参数：像素误差转角速度增益，可按车模响应继续微调。
+    constexpr double kYawRatePerPixel = 1.2;     // deg/s per pixel
+    constexpr double kMaxYawRateDeg = 220.0;     // deg/s
     constexpr double kBaseSpeedScale = 0.01;     // 旧速度档位(0-100)映射到 m/s
     constexpr double kMinBaseSpeedMps = 0.0;
     constexpr double kMaxBaseSpeedMps = 1.2;
     constexpr double kWheelbaseM = 0.158;
-    constexpr double kIntegralLimit = 1000.0;
 
-    static double lastError = 0.0;
-    static double integral = 0.0;
-    static auto lastTime = std::chrono::steady_clock::now();
-
-    const double errorPx = static_cast<double>(Data_Path_p->SteerErrorPx);
-    const auto now = std::chrono::steady_clock::now();
-    const double dt = std::chrono::duration_cast<std::chrono::duration<double>>(now - lastTime).count();
-    lastTime = now;
-
-    const double derivative = (dt > 1e-4) ? ((errorPx - lastError) / dt) : 0.0;
-    lastError = errorPx;
-
-    integral += errorPx * dt;
-    integral = std::clamp(integral, -kIntegralLimit, kIntegralLimit);
-
-    const double pidOutput = kP * errorPx + kI * integral + kD * derivative;
-    const double target_yaw = std::clamp(pidOutput, -kMaxYawRateDeg, kMaxYawRateDeg);
+    const double target_yaw = std::clamp(
+        static_cast<double>(Data_Path_p->SteerErrorPx) * kYawRatePerPixel,
+        -kMaxYawRateDeg,
+        kMaxYawRateDeg
+    );
 
     const double base_speed = std::clamp(
         static_cast<double>(Data_Path_p->MotorSpeed) * kBaseSpeedScale,
@@ -421,8 +406,6 @@ void Judge::AngularVelocityTarget_Judge(Data_Path *Data_Path_p)
     Data_Path_p->TargetBaseSpeedMps = base_speed;
     Data_Path_p->TargetLeftSpeedMps = v_left;
     Data_Path_p->TargetRightSpeedMps = v_right;
-
-   
 }
 
 
@@ -623,10 +606,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     switch(JSON_FileNum)
     {
-        case 0:{ ConfigFilePath = "../config/config_0.json"; break; }
-        case 1:{ ConfigFilePath = "../config/config_1.json"; break; }
-        case 2:{ ConfigFilePath = "../config/config_2.json"; break; }
-        default:{ ConfigFilePath = "../config/config_0.json"; break; }
+        case 0:{ ConfigFilePath = "config/config_0.json"; break; }
+        case 1:{ ConfigFilePath = "config/config_1.json"; break; }
+        case 2:{ ConfigFilePath = "config/config_2.json"; break; }
+        default:{ ConfigFilePath = "config/config_0.json"; break; }
     }
 
     std::cout << "[Config] OPENING JSON FILE: " << ConfigFilePath << std::endl;
