@@ -47,6 +47,16 @@ typedef enum TrackKind
 
 
 /*
+    跳变扫描检测结果类型
+*/
+typedef enum TransitionElementKind
+{
+    TRANSITION_ELEMENT_NONE = 0,
+    TRANSITION_ELEMENT_CIRCLE = 1,
+    TRANSITION_ELEMENT_CROSS = 2,
+} TransitionElementKind;
+
+/*
     圆环入环步骤
 */
 typedef enum CircleTrackStep
@@ -110,6 +120,10 @@ typedef struct JSON_TrackConfigData
     int BridgeZoneMotorSpeed = 0;   // 桥梁区域电机速度
     int CrosswalkZoneMotorSpeed = 0;    // 斑马线区域电机准备停车速度
     int Circle_In_Prepare_Time = 0;    // 准备入环限定时间
+    int TransitionScanEnable = 0;    // 跳变扫描检测使能
+    int TransitionMinRunLength = 10; // 连续2跳变最小行数
+    int TransitionMinColorLength = 5; // 跳变前颜色最小长度
+    int TransitionDebounceFrames = 5; // 防抖连续帧数
 
 }JSON_TrackConfigData;
 
@@ -220,6 +234,12 @@ typedef struct Data_Path
     TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.右圆环赛道外 4.右圆环赛道内 5.左圆环赛道外 6.左圆环赛道内 7.十字赛道 8.模型赛道
     CircleTrackStep Circle_Track_Step = INIT;  // 圆环入环步骤：1.准备入环 2.入环 3.出环
     TrackKind Previous_Circle_Kind; // 目前圆环类型
+    // 跳变扫描检测结果
+    int TransitionDetectKind;       // 当前确认的检测结果 (TransitionElementKind)
+    int TransitionDetectSide;       // 检测到的元素侧 (0=none, 1=left, 2=right)
+    int TransitionDebounceCounter;  // 防抖计数器
+    int TransitionCandidateKind;    // 当前帧候选类型
+    int TransitionCandidateSide;    // 当前帧候选侧
     // 控制参数
     int ServoDir = 0;  // 舵机方向
     int ServoAngle = 0;    // 舵机角度

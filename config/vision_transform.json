@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "enable": true,
+    "enable": false,
     "input_size": {
         "width": 320,
         "height": 240
@@ -14,7 +14,7 @@
         "calibration_file": "../config/calibration.yaml"
     },
     "inverse_perspective": {
-        "enable": true,
+        "enable": false,
         "matrix": [
             -2.388857,
             4.090252,

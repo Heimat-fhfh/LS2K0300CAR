@@ -81,6 +81,16 @@ class Judge
             Data_Path_p 路径相关数据指针
         */
         void HoughCircleSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
+
+        /*
+            跳变扫描赛道元素识别
+            使用横向跳变扫描识别圆环和十字赛道元素
+            @ 参数说明
+            Img_Store_p 图像存储指针
+            Data_Path_p 路径相关数据指针
+            Function_EN_p 函数使能指针
+        */
+        void TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p, Function_EN* Function_EN_p);
 };
 
 

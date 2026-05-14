@@ -100,6 +100,7 @@ extern std::atomic<bool> g_running;
 extern bool g_runtime_config_ok;
 extern CameraKind g_camera_kind;
 extern bool g_calibration_enabled;
+extern bool g_simple_tracking_enabled;
 extern JSON_PIDConfigData JSON_PIDConfigData_s;
 extern Function_EN Function_EN_s;
 extern Data_Path Data_Path_s;

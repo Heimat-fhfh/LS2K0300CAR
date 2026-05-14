@@ -20,6 +20,7 @@ std::atomic<bool> g_running(true);
 bool g_runtime_config_ok = false;
 CameraKind g_camera_kind = CameraKind::VIDEO_0;
 bool g_calibration_enabled = false;
+bool g_simple_tracking_enabled = false;
 
 JSON_PIDConfigData JSON_PIDConfigData_s;
 Function_EN Function_EN_s;
