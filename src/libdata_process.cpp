@@ -728,6 +728,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_TrackConfigData.CrosswalkZoneMotorSpeed = ConfigData.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE"); // 斑马线区域准备停车电机速度
     JSON_TrackConfigData.Circle_In_Prepare_Time = ConfigData.at("CIRCLE_IN_PREPARE_TIME");  // 准备入环限定时间
 
+    if (ConfigData.contains("TRANSITION_MIN_AREA")) {
+        JSON_TrackConfigData.TransitionMinArea = ConfigData.at("TRANSITION_MIN_AREA");
+    }
+
     // 同步配置到运行时容器（覆盖旧值，保持单配置生效）。
     Function_EN_p->JSON_FunctionConfigData_v.clear();
     Data_Path_p->JSON_TrackConfigData_v.clear();

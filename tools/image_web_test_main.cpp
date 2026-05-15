@@ -138,6 +138,11 @@ namespace
         track_cfg.CrosswalkZoneMotorSpeed = cfg.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE");
         track_cfg.Circle_In_Prepare_Time = cfg.at("CIRCLE_IN_PREPARE_TIME");
 
+        if (cfg.contains("TRANSITION_MIN_AREA"))
+        {
+            track_cfg.TransitionMinArea = cfg.at("TRANSITION_MIN_AREA");
+        }
+
         function_en->JSON_FunctionConfigData_v.clear();
         data_path->JSON_TrackConfigData_v.clear();
         function_en->JSON_FunctionConfigData_v.push_back(function_cfg);

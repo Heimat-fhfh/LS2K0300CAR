@@ -480,6 +480,7 @@ void ImgProcess::ImgShow(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_
 
 	ImgProcess::ImgInflectionPointDraw(Img_Store_p,Data_Path_p); 
 	ImgProcess::ImgBendPointDraw(Img_Store_p,Data_Path_p); 
+	ImgProcess::ImgTransitionScanDraw(Img_Store_p, Data_Path_p);
 	// ImgProcess::ImgForwardLine(Img_Store_p,Data_Path_p);
 	ImgProcess::ImgReferenceLine(Img_Store_p,Data_Path_p);
 	ImgProcess::ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
@@ -596,6 +597,75 @@ void ImgProcess::ImgReferenceLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 
 }
 
+/*
+    ImgTransitionScanDraw说明
+    跳变扫描检测结果绘制。
+    在 Img_Track 上绘制：
+    1. 每个有效跳变点（红=白→黑，绿=黑→白）
+    2. 2跳变行侧边标记
+    3. 隔离块矩形框
+    4. 检测结果文字
+*/
+void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_Path_p)
+{
+    if (Img_Store_p == nullptr || Data_Path_p == nullptr) return;
+    if (Img_Store_p->Img_Track.empty()) return;
+
+    JSON_TrackConfigData cfg = Data_Path_p->JSON_TrackConfigData_v[0];
+
+	const int min_area = std::max(10, cfg.TransitionMinArea);
+
+	Mat binary_src;
+	if (!Img_Store_p->Img_OTSU.empty()) {
+		binary_src = Img_Store_p->Img_OTSU;
+	} else {
+		binary_src = Mat(image_h, image_w, CV_8UC1, Img_Store_p->bin_image);
+	}
+
+	if (binary_src.empty()) {
+		return;
+	}
+
+	Mat binary = binary_src.clone();
+
+	vector<vector<Point>> contours;
+	vector<Vec4i> hierarchy;
+	findContours(binary, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+	int hole_count = 0;
+	for (size_t i = 0; i < contours.size() && i < hierarchy.size(); ++i) {
+		if (hierarchy[i][3] < 0) continue;
+		double area = contourArea(contours[i]);
+		if (area < min_area) continue;
+
+		drawContours(Img_Store_p->Img_Track, contours, static_cast<int>(i), Scalar(0, 0, 255), 2);
+
+		Moments mu = moments(contours[i]);
+		if (mu.m00 > 0.0) {
+			int cx = static_cast<int>(mu.m10 / mu.m00);
+			int cy = static_cast<int>(mu.m01 / mu.m00);
+			circle(Img_Store_p->Img_Track, Point(cx, cy), 2, Scalar(0, 255, 255), -1);
+		}
+		++hole_count;
+	}
+
+	const int candidate_kind = Data_Path_p->TransitionCandidateKind;
+	const int candidate_side = Data_Path_p->TransitionCandidateSide;
+	const char* kind_text = "NONE";
+	if (candidate_kind == TRANSITION_ELEMENT_CIRCLE) {
+		kind_text = (candidate_side == 1) ? "L-CIRCLE" : "R-CIRCLE";
+	} else if (candidate_kind == TRANSITION_ELEMENT_CROSS) {
+		kind_text = "CROSS";
+	}
+
+	char info_text[96];
+	const int debounce_frames = std::max(1, cfg.TransitionDebounceFrames);
+	snprintf(info_text, sizeof(info_text), "%s holes:%d",
+			 kind_text, hole_count);
+	putText(Img_Store_p->Img_Track, info_text, Point(5, image_h - 5),
+			FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
+
+}
 
 void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {

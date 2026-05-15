@@ -123,6 +123,7 @@ typedef struct JSON_TrackConfigData
     int TransitionScanEnable = 0;    // 跳变扫描检测使能
     int TransitionMinRunLength = 10; // 连续2跳变最小行数
     int TransitionMinColorLength = 5; // 跳变前颜色最小长度
+    int TransitionMinArea = 1000; // 独立黑色区域最小面积
     int TransitionDebounceFrames = 5; // 防抖连续帧数
 
 }JSON_TrackConfigData;
@@ -241,6 +242,17 @@ typedef struct Data_Path
     int TransitionDebounceCounter;  // 防抖计数器
     int TransitionCandidateKind;    // 当前帧候选类型
     int TransitionCandidateSide;    // 当前帧候选侧
+    // 跳变扫描可视化数据
+    int TransLeftCounts[image_h];   // 左侧每行跳变次数
+    int TransRightCounts[image_h];  // 右侧每行跳变次数
+    int TransLeftBlockStart;        // 左侧隔离块起始行
+    int TransLeftBlockEnd;          // 左侧隔离块结束行
+    int TransRightBlockStart;       // 右侧隔离块起始行
+    int TransRightBlockEnd;         // 右侧隔离块结束行
+    bool TransLeftBlockFound;       // 左侧是否找到隔离块
+    bool TransRightBlockFound;      // 右侧是否找到隔离块
+    int TransScanStartRow;          // 扫描起始行
+    int TransScanEndRow;            // 扫描结束行
     // 控制参数
     int ServoDir = 0;  // 舵机方向
     int ServoAngle = 0;    // 舵机角度
