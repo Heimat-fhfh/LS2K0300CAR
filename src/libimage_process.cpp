@@ -649,21 +649,6 @@ void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_P
 		++hole_count;
 	}
 
-	const int candidate_kind = Data_Path_p->TransitionCandidateKind;
-	const int candidate_side = Data_Path_p->TransitionCandidateSide;
-	const char* kind_text = "NONE";
-	if (candidate_kind == TRANSITION_ELEMENT_CIRCLE) {
-		kind_text = (candidate_side == 1) ? "L-CIRCLE" : "R-CIRCLE";
-	} else if (candidate_kind == TRANSITION_ELEMENT_CROSS) {
-		kind_text = "CROSS";
-	}
-
-	char info_text[96];
-	const int debounce_frames = std::max(1, cfg.TransitionDebounceFrames);
-	snprintf(info_text, sizeof(info_text), "%s holes:%d",
-			 kind_text, hole_count);
-	putText(Img_Store_p->Img_Track, info_text, Point(5, image_h - 5),
-			FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
 
 }
 
@@ -687,7 +672,7 @@ void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function
 
 	for (int i = Data_Path_p->search_print_h_max; i < image_h-JSON_TrackConfigData.Path_Search_Start; i++)
 	{
-		Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;//求中线
+		// Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;//求中线
 
 		circle(Img_Store_p->Img_Track, Point(Data_Path_p->center_line[i],i), 1, Scalar(0, 0, 0), FILLED);//显示起点 显示中线	
 		circle(Img_Store_p->Img_Track, Point(Data_Path_p->l_border[i],i), 1, Scalar(0, 255, 0), FILLED);//显示起点 显示左边线

@@ -236,23 +236,14 @@ typedef struct Data_Path
     TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.右圆环赛道外 4.右圆环赛道内 5.左圆环赛道外 6.左圆环赛道内 7.十字赛道 8.模型赛道
     CircleTrackStep Circle_Track_Step = INIT;  // 圆环入环步骤：1.准备入环 2.入环 3.出环
     TrackKind Previous_Circle_Kind; // 目前圆环类型
-    // 跳变扫描检测结果
+    
     int TransitionDetectKind;       // 当前确认的检测结果 (TransitionElementKind)
     int TransitionDetectSide;       // 检测到的元素侧 (0=none, 1=left, 2=right)
-    int TransitionDebounceCounter;  // 防抖计数器
-    int TransitionCandidateKind;    // 当前帧候选类型
-    int TransitionCandidateSide;    // 当前帧候选侧
-    // 跳变扫描可视化数据
-    int TransLeftCounts[image_h];   // 左侧每行跳变次数
-    int TransRightCounts[image_h];  // 右侧每行跳变次数
-    int TransLeftBlockStart;        // 左侧隔离块起始行
-    int TransLeftBlockEnd;          // 左侧隔离块结束行
-    int TransRightBlockStart;       // 右侧隔离块起始行
-    int TransRightBlockEnd;         // 右侧隔离块结束行
-    bool TransLeftBlockFound;       // 左侧是否找到隔离块
-    bool TransRightBlockFound;      // 右侧是否找到隔离块
-    int TransScanStartRow;          // 扫描起始行
-    int TransScanEndRow;            // 扫描结束行
+    std::vector<std::vector<cv::Point>> TransitionContours; // 存储跳变扫描检测到的轮廓坐标
+    std::vector<cv::Vec4i> TransitionHierarchy; // 存储跳变扫描检测到的轮廓层级信息
+
+
+
     // 控制参数
     int ServoDir = 0;  // 舵机方向
     int ServoAngle = 0;    // 舵机角度

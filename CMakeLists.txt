@@ -111,6 +111,7 @@ if (NOT USE_EDGE_TOOLCHAIN)
         ${PROJECT_SOURCE_DIR}/src/vision_transform.cpp
         ${PROJECT_SOURCE_DIR}/src/libdata_process.cpp
         ${PROJECT_SOURCE_DIR}/src/path_side_search.cpp
+        ${PROJECT_SOURCE_DIR}/src/track_element_scan.cpp
         ${PROJECT_SOURCE_DIR}/src/path_across.cpp
         ${PROJECT_SOURCE_DIR}/src/path_circle.cpp
         ${PROJECT_SOURCE_DIR}/src/path_refactor.cpp
