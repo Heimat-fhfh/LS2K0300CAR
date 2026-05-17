@@ -50,7 +50,7 @@ class ImgProcess
 {
     public:
         string TextTrackKind[5] = {"stright","bend","across","LCircle","RCircle"};
-        string TextLoopKind[6] = {"judge","common","right_across","left_across","L_circle","R_circle"};
+        string TextLoopKind[7] = {"camera_catch","judge","common","left_across","right_across","L_circle","R_circle"};
         string TextCircleTrackStep[5] = {"INPerpare1","IN","OUTPerpare","OUT","INIT"};
         string TextGyroscope[2] = {"FALSE","TRUE"};
         string TextModelTrackKind[5] = {"BRIDGE_ZONE","CROSSWALK_ZONE","DANGER_ZONE","RESCUE_ZONE","CHASE_ZONE"};

@@ -22,12 +22,13 @@ typedef enum CameraKind
 */
 typedef enum LoopKind
 {
-    JUDGE_LOOP = 0,    // 决策循环
-    COMMON_TRACK_LOOP = 1,   // 普通赛道循环
-    R_CIRCLE_TRACK_LOOP = 2,   // 右圆环赛道循环
-    L_CIRCLE_TRACK_LOOP = 3,   // 左圆环赛道循环
-    LEFT_ACROSS_TRACK_LOOP = 4,   // 左十字赛道循环
-    RIGHT_ACROSS_TRACK_LOOP = 5,   // 右十字赛道循环
+    CAMERA_CATCH_LOOP = 0,    // 图像循环
+    JUDGE_LOOP = 1,    // 决策循环
+    COMMON_TRACK_LOOP = 2,   // 普通赛道循环
+    LEFT_ACROSS_TRACK_LOOP = 3,   // 左十字赛道循环
+    RIGHT_ACROSS_TRACK_LOOP = 4,   // 右十字赛道循环
+    L_CIRCLE_TRACK_LOOP = 5,   // 左圆环赛道循环
+    R_CIRCLE_TRACK_LOOP = 6,   // 右圆环赛道循环
 }LoopKind;
 
 

@@ -77,13 +77,20 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
      * 如果存在左/右侧独立黑块, 并且右/左侧不存在拐点，则判定为圆环赛道循环；
      * 否则判定为普通赛道循环。
      */
-    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] > 0))
-    {
-        Data_Path_p->Loop_Kind = RIGHT_ACROSS_TRACK_LOOP;
-    }
-    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] > 0))
+
+    cout << "black_left_found: " << Data_Path_p->black_left_found
+         << ", InflectionPointNum[1]: " << Data_Path_p->InflectionPointNum[1]
+         << ", black_right_found: " << Data_Path_p->black_right_found
+         << ", InflectionPointNum[0]: " << Data_Path_p->InflectionPointNum[0]
+         << endl;
+    
+    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] > 1))
     {
         Data_Path_p->Loop_Kind = LEFT_ACROSS_TRACK_LOOP;
+    }
+    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] > 1))
+    {
+        Data_Path_p->Loop_Kind = RIGHT_ACROSS_TRACK_LOOP;
     }
     else if (Data_Path_p->black_left_found)
     {
