@@ -24,6 +24,12 @@ class Judge
 
 
         /*
+            对八邻域寻找到的数据和独立黑色区域寻找到的数据进行分析
+        */
+        void Search_Data_Analysis(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
+
+
+        /*
             计算舵机方向和角度
             @参数说明
             Data_Path_p 路径相关数据指针

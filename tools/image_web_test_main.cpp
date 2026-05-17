@@ -296,8 +296,12 @@ namespace
 
             img_process_.ImgCompress(img_store.Img_Color, true);
             img_process_.imgPreProc(&img_store, &data_path_, &function_en_);
+
             imgSearch_l_r(&img_store, &data_path_);
             judge_.TransitionScanDetect(&img_store, &data_path_, &function_en_);
+
+            judge_.Search_Data_Analysis(&img_store, &data_path_, &function_en_);
+
             // judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
             // judge_.ServoDirAngle_Judge(&data_path_);
             // judge_.MotorSpeed_Judge(&img_store, &data_path_);

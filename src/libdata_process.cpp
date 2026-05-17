@@ -31,14 +31,26 @@ std::vector<cv::Point2f> collect_side_points(const Data_Path* data_path, bool le
 }
 } // namespace
 
+/*
+    对八邻域寻找到的数据和独立黑色区域寻找到的数据进行分析
+*/
+void Judge::Search_Data_Analysis(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p)
+{
+    JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
+    // 第一步：从当前帧提取拐点和弯点信息，作为状态机输入。
+    Judge::InflectionPointSearch(Img_Store_p,Data_Path_p);
+    Judge::BendPointSearch(Img_Store_p,Data_Path_p);
+}
 /*
     TrackKind_Judge说明
     赛道循环类型决策
-    1.普通赛道循环类型
-    2.圆环赛道循环类型
-    3.十字赛道循环类型
-    4.AI赛道类型
+    COMMON_TRACK_LOOP = 2,   // 普通赛道循环
+    R_CIRCLE_TRACK_LOOP = 3,   // 右圆环赛道循环
+    L_CIRCLE_TRACK_LOOP = 4,   // 左圆环赛道循环
+    RIGHT_ACROSS_TRACK_LOOP = 5,   // 左十字赛道循环
+    RIGHT_ACROSS_TRACK_LOOP = 6,   // 右十字赛道循环
 */
 LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p)
 {
@@ -59,16 +71,13 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
 
     if(Function_EN_p -> Control_EN == false)
     {
-        // 第一步：从当前帧提取拐点和弯点信息，作为状态机输入。
-        Judge::InflectionPointSearch(Img_Store_p,Data_Path_p);
-        Judge::BendPointSearch(Img_Store_p,Data_Path_p);
         // 第二步：十字判断。
         // 若左右边线都有拐点，且没有被圆环退出状态干扰，则先按十字赛道处理。
         if((Data_Path_p -> InflectionPointNum[0] >= 1) && (Data_Path_p -> InflectionPointNum[1] >= 1) && JSON_FunctionConfigData.AcrossIdentify_EN == true && Function_EN_p -> Gyroscope_EN == false && (Data_Path_p -> Circle_Track_Step != OUT_PREPARE || Data_Path_p -> Circle_Track_Step != OUT))
         {
             // 记录十字状态的进入时刻，避免接下来的圆环判定立即覆盖十字结论。
             State_Across = Img_Store_p -> ImgNum;
-            Loop_Kind = ACROSS_TRACK_LOOP;
+            Loop_Kind = LEFT_ACROSS_TRACK_LOOP;
             Data_Path_p -> Track_Kind = ACROSS_TRACK;
             Data_Path_p -> Circle_Track_Step = INIT;
 
@@ -420,8 +429,8 @@ void Judge::InflectionPointSearch(Img_Store* Img_Store_p,Data_Path *Data_Path_p)
     Data_Path_p -> InflectionPointNum[0] = 0;
     Data_Path_p -> InflectionPointNum[1] = 0;
 
-    Data_Path_p->Vector_Add_Unit_Dir[0] = 0;
-    Data_Path_p->Vector_Add_Unit_Dir[1] = 0;
+    Data_Path_p -> Vector_Add_Unit_Dir[0] = 0;
+    Data_Path_p -> Vector_Add_Unit_Dir[1] = 0;
 
     const int dist_step = std::max(1, JSON_TrackConfigData.InflectionPointVectorDistance);
     const std::vector<cv::Point2f> left_points = collect_side_points(Data_Path_p, true);
@@ -433,14 +442,14 @@ void Judge::InflectionPointSearch(Img_Store* Img_Store_p,Data_Path *Data_Path_p)
                                                                           static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[1]),
                                                                           dist_step,
                                                                           10,
-                                                                          30,
+                                                                          20,
                                                                           true);
     const PathRefactorFeatureResult right_result = detect_feature_by_angle(right_points,
                                                                            static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[0]),
                                                                            static_cast<float>(JSON_TrackConfigData.InflectionPointIdentifyAngle[1]),
                                                                            dist_step,
                                                                            10,
-                                                                           30,
+                                                                           20,
                                                                            false);
 
     // 保留纵向趋势符号，供圆环准备入环判据使用。

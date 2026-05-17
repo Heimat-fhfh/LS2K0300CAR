@@ -194,7 +194,7 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
  * 2. JUDGE_LOOP 负责识别当前赛道并更新下一阶段状态
  * 3. COMMON_TRACK_LOOP 负责普通赛道的方向/速度计算
  * 4. L_CIRCLE_TRACK_LOOP / R_CIRCLE_TRACK_LOOP 负责圆环补线
- * 5. ACROSS_TRACK_LOOP 负责十字赛道处理
+ * 5. RIGHT_ACROSS_TRACK_LOOP 负责十字赛道处理
  *
  * @param Img_Store_p 图像存储指针
  * @param Data_Path_p 路径数据指针
@@ -229,7 +229,7 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
             RunCircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
             break;
         }
-        case ACROSS_TRACK_LOOP:
+        case RIGHT_ACROSS_TRACK_LOOP:
         {
             // 十字循环：执行十字赛道的特殊处理逻辑，然后回到图像循环。
             RunAcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);

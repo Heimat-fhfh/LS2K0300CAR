@@ -126,7 +126,7 @@ int main() {
             Function_EN_p -> Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换至串口发送循环
         }
         
-        while( Function_EN_p -> Loop_Kind_EN == ACROSS_TRACK_LOOP )
+        while( Function_EN_p -> Loop_Kind_EN == RIGHT_ACROSS_TRACK_LOOP )
         {
             AcrossTrack(Img_Store_p,Data_Path_p);
             imgSearch_l_r(Img_Store_p,Data_Path_p);

@@ -30,8 +30,11 @@ bool isBoundaryApproxStraight(const uint16 boundary[], int row_start, int row_en
         max_curvature = std::max(max_curvature, curvature);
         
         cout << "Row " << y << ": x=" << boundary[y] << " curvature=" << curvature << endl;
-        if (max_curvature > 0.9) {
+        if (max_curvature >= 0.8) {
+            
+            cout << "Row " << y-1 << ": x=" << boundary[y-1] << endl;
             return false;
+
         } // 曲率阈值
     }
     return true;
@@ -43,7 +46,6 @@ bool isBoundaryApproxStraight(const uint16 boundary[], int row_start, int row_en
 /*
     TransitionScanDetect 说明
     使用已有的 OTSU/二值图，轮廓层级检测被白色包围的黑色区域，
-    再结合对侧边线直线度进行圆环/十字分类。
 */
 void Judge::TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p,
                                   Function_EN* Function_EN_p)
@@ -75,8 +77,8 @@ void Judge::TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p,
     Data_Path_p->TransitionHierarchy.clear();
     findContours(binary_img, Data_Path_p->TransitionContours, Data_Path_p->TransitionHierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
 
-    bool left_found = false;
-    bool right_found = false;
+    Data_Path_p->black_left_found = false;
+    Data_Path_p->black_right_found = false;
 
     for (size_t i = 0; i < Data_Path_p->TransitionContours.size() && i < Data_Path_p->TransitionHierarchy.size(); ++i) {
         if (Data_Path_p->TransitionHierarchy[i][3] < 0) continue;  // skip outer contours
@@ -93,37 +95,11 @@ void Judge::TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p,
         // int center_x = static_cast<int>(Data_Path_p->center_line[cy]);
         int center_x = image_w / 2; // 使用图像中心作为参考线
         if (cx < center_x) {
-            left_found = true;
+            Data_Path_p->black_left_found = true;
         } else {
-            right_found = true;
+            Data_Path_p->black_right_found = true;
         }
     }
 
-    int candidate_kind = TRANSITION_ELEMENT_NONE;
-    int candidate_side = 0;
-
-    if (left_found || right_found) {
-        if (left_found) {
-            candidate_side = 1;
-            int row_start = image_h - cfg.Side_Search_Start;
-            int row_end = Data_Path_p->search_print_h_max;
-            candidate_kind = isBoundaryApproxStraight(Data_Path_p->r_border, row_start, row_end)
-                                 ? TRANSITION_ELEMENT_CIRCLE
-                                 : TRANSITION_ELEMENT_CROSS;
-            
-        } else if (right_found) {
-            candidate_side = 2;
-            int row_start = image_h - cfg.Side_Search_Start;
-            int row_end = Data_Path_p->search_print_h_max;
-            candidate_kind = isBoundaryApproxStraight(Data_Path_p->l_border, row_start, row_end)
-                                 ? TRANSITION_ELEMENT_CIRCLE
-                                 : TRANSITION_ELEMENT_CROSS;
-        } else {
-            cout << "TransitionScanDetect: found contour but could not determine side" << endl;
-        }
-    }
-    string side_str = (candidate_side == 1) ? "LEFT" : (candidate_side == 2) ? "RIGHT" : "NONE";
-    string kind_str = (candidate_kind == TRANSITION_ELEMENT_CIRCLE) ? "CIRCLE" : "CROSS";
-    if(candidate_side == 0) kind_str = "NONE";  
-    cout << "TransitionScanDetect candidate: kind=" << kind_str << " side=" << side_str << endl;
+    
 }

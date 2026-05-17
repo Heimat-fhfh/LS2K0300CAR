@@ -27,7 +27,8 @@ typedef enum LoopKind
     COMMON_TRACK_LOOP = 2,   // 普通赛道循环
     R_CIRCLE_TRACK_LOOP = 3,   // 右圆环赛道循环
     L_CIRCLE_TRACK_LOOP = 4,   // 左圆环赛道循环
-    ACROSS_TRACK_LOOP = 5,   // 十字赛道循环
+    LEFT_ACROSS_TRACK_LOOP = 5,   // 左十字赛道循环
+    RIGHT_ACROSS_TRACK_LOOP = 6,   // 右十字赛道循环
 }LoopKind;
 
 
@@ -213,36 +214,37 @@ typedef struct Data_Path
     int NumSearch[2] = {0}; // 左右八邻域寻线坐标数量
     uint16 points_l[(uint16)USE_num][2] = { {  0 } };//左线
     uint16 points_r[(uint16)USE_num][2] = { {  0 } };//右线
-    uint16 dir_r[(uint16)USE_num] = { 0 };//用来存储右边生长方向
-    uint16 dir_l[(uint16)USE_num] = { 0 };//用来存储左边生长方向
-    uint16 search_print_h_max = 0;//最高点
+    int SideCoordinate_Eight[(uint16)USE_num][4] = {0};   // 左右边线坐标(八邻域)
 
     uint16 l_border[image_h];            //左线数组
     uint16 r_border[image_h];            //右线数组
-    uint16 center_line[image_h];         //中线数组
-
-    // 赛道识别结果
-    // 边线结果
     int SideCoordinate[(uint16)USE_num][4] = {0};   // 左右边线坐标(中线寻线法)
-    int SideCoordinate_Eight[(uint16)USE_num][4] = {0};   // 左右边线坐标(八邻域)
+
+    uint16 center_line[image_h];         //中线数组
     int TrackCoordinate[(uint16)USE_num][2] = {0};   // 路径线坐标
-    
+
+    uint16 dir_r[(uint16)USE_num] = { 0 };//用来存储右边生长方向
+    uint16 dir_l[(uint16)USE_num] = { 0 };//用来存储左边生长方向
+
+    uint16 search_print_h_max = 0;//最高点
+
     int InflectionPointCoordinate[(uint16)USE_num][4] = {0};  // 左右边线元素拐点坐标
     int BendPointCoordinate[(uint16)USE_num][4] = {0};  // 左右边线弯点坐标
 
     int Vector_Add_Unit_Dir[2];   // 左右拐点上下两向量纵坐标加和方向
     int InflectionPointNum[2] = {0};    // 元素拐点数量
     int BendPointNum[2] = {0};    // 边线弯点数量
-    TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.右圆环赛道外 4.右圆环赛道内 5.左圆环赛道外 6.左圆环赛道内 7.十字赛道 8.模型赛道
-    CircleTrackStep Circle_Track_Step = INIT;  // 圆环入环步骤：1.准备入环 2.入环 3.出环
-    TrackKind Previous_Circle_Kind; // 目前圆环类型
     
+    bool black_left_found = false;   // 独立黑色区域寻找到左边标志
+    bool black_right_found = false;  // 独立黑色区域寻找到右边标志
     int TransitionDetectKind;       // 当前确认的检测结果 (TransitionElementKind)
     int TransitionDetectSide;       // 检测到的元素侧 (0=none, 1=left, 2=right)
     std::vector<std::vector<cv::Point>> TransitionContours; // 存储跳变扫描检测到的轮廓坐标
     std::vector<cv::Vec4i> TransitionHierarchy; // 存储跳变扫描检测到的轮廓层级信息
 
-
+    TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.右圆环赛道外 4.右圆环赛道内 5.左圆环赛道外 6.左圆环赛道内 7.十字赛道 8.模型赛道
+    CircleTrackStep Circle_Track_Step = INIT;  // 圆环入环步骤：1.准备入环 2.入环 3.出环
+    TrackKind Previous_Circle_Kind; // 目前圆环类型
 
     // 控制参数
     int ServoDir = 0;  // 舵机方向

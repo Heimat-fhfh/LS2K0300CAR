@@ -8,3 +8,4 @@ train_data/
 onnxruntime/
 yolo/upload/pictures/**
 yolo/upload/model/**
+LS2K0300CAR.zip
