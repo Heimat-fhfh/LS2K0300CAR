@@ -39,7 +39,7 @@ typedef enum TrackKind
 {
     STRIGHT_TRACK = 0,   // 直赛道
     BEND_TRACK = 1,   // 弯赛道
-    L_ACROSS_TRACK = 2,   // 十字赛道
+    L_ACROSS_TRACK = 2,   // 左十字赛道
     R_ACROSS_TRACK = 3,   // 右十字赛道
     L_CIRCLE_TRACK = 4,   // 左圆环赛道
     R_CIRCLE_TRACK = 5,   // 右圆环赛道
@@ -242,6 +242,7 @@ typedef struct Data_Path
     std::vector<cv::Vec4i> TransitionHierarchy; // 存储跳变扫描检测到的轮廓层级信息
 
     LoopKind Loop_Kind; // 当前帧赛道类型
+    TrackKind Temp_Track_Kind; // 模型赛道类型
     TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.十字赛道 4.左圆环 5.右圆环
     static constexpr int kTrackKindHistorySize = 25;
     TrackKind TrackKindHistory[kTrackKindHistorySize] = {};
