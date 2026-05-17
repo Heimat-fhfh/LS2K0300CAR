@@ -11,6 +11,8 @@
 	"RESCUE_ZONE_LABLE_DETECTION_EN" : false,
 	"DANGER_ZONE_CONE_DETECTION_EN" : true,
 
+    "Track_width": 216,
+	
 	"FORWARD" : 80,
 	"PATH_SEARCH_START" : 15,
 	"PATH_SEARCH_END" : 165,

@@ -49,8 +49,9 @@ void CameraImgGet(Img_Store *Img_Store_p);
 class ImgProcess
 {
     public:
-        string TextTrackKind[8] = {"stright","bend","RCircleOutside","RCircleInside","LCircleOutside","LCircleInside","across","MODEL_TRACK"};
-        string TextCircleTrackStep[5] = {"INPerpare","IN","OUTPerpare","OUT","INIT"};
+        string TextTrackKind[5] = {"stright","bend","across","LCircle","RCircle"};
+        string TextLoopKind[6] = {"judge","common","right_across","left_across","L_circle","R_circle"};
+        string TextCircleTrackStep[5] = {"INPerpare1","IN","OUTPerpare","OUT","INIT"};
         string TextGyroscope[2] = {"FALSE","TRUE"};
         string TextModelTrackKind[5] = {"BRIDGE_ZONE","CROSSWALK_ZONE","DANGER_ZONE","RESCUE_ZONE","CHASE_ZONE"};
         string TextControl[2] = {"FALSE","TRUE"};

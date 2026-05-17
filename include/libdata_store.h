@@ -22,13 +22,12 @@ typedef enum CameraKind
 */
 typedef enum LoopKind
 {
-    CAMERA_CATCH_LOOP = 0,   // 图像循环
-    JUDGE_LOOP = 1,    // 决策循环
-    COMMON_TRACK_LOOP = 2,   // 普通赛道循环
-    R_CIRCLE_TRACK_LOOP = 3,   // 右圆环赛道循环
-    L_CIRCLE_TRACK_LOOP = 4,   // 左圆环赛道循环
-    LEFT_ACROSS_TRACK_LOOP = 5,   // 左十字赛道循环
-    RIGHT_ACROSS_TRACK_LOOP = 6,   // 右十字赛道循环
+    JUDGE_LOOP = 0,    // 决策循环
+    COMMON_TRACK_LOOP = 1,   // 普通赛道循环
+    R_CIRCLE_TRACK_LOOP = 2,   // 右圆环赛道循环
+    L_CIRCLE_TRACK_LOOP = 3,   // 左圆环赛道循环
+    LEFT_ACROSS_TRACK_LOOP = 4,   // 左十字赛道循环
+    RIGHT_ACROSS_TRACK_LOOP = 5,   // 右十字赛道循环
 }LoopKind;
 
 
@@ -39,11 +38,10 @@ typedef enum TrackKind
 {
     STRIGHT_TRACK = 0,   // 直赛道
     BEND_TRACK = 1,   // 弯赛道
-    R_CIRCLE_TRACK_OUTSIDE = 2,   // 右圆环赛道外
-    R_CIRCLE_TRACK_INSIDE = 3,   // 右圆环赛道内
-    L_CIRCLE_TRACK_OUTSIDE = 4,   // 左圆环赛道外
-    L_CIRCLE_TRACK_INSIDE = 5,   // 左圆环赛道内
-    ACROSS_TRACK = 6,   // 十字赛道
+    L_ACROSS_TRACK = 2,   // 十字赛道
+    R_ACROSS_TRACK = 3,   // 右十字赛道
+    L_CIRCLE_TRACK = 4,   // 左圆环赛道
+    R_CIRCLE_TRACK = 5,   // 右圆环赛道
 }TrackKind;
 
 
@@ -104,6 +102,7 @@ typedef struct JSON_FunctionConfigData
 */
 typedef struct JSON_TrackConfigData
 {
+    int Track_width;
     int Forward;    // 前瞻点
     int Default_Forward;    // 默认前瞻点，用于前瞻点初始化
     int Path_Search_Start;  // 寻路径起始点
@@ -146,25 +145,24 @@ typedef struct Img_Store
     uint64_t Img_FrameSeq = 0;      // 最新帧序号(生产者递增)
     uint64_t Img_LastReadSeq = 0;   // 消费者已读取帧序号
     bool CameraThreadRunning = false; // 摄像头采集线程运行状态
-    cv::Mat Img_Color;  // 使用
-    cv::Mat Img_Color_Unpivot = cv::Mat(RESULT_ROW, RESULT_COL, CV_8UC3);
-    cv::Mat Img_Gray;     // 使用
-    cv::Mat Img_Gray_Unpivot; 
-    cv::Mat Img_OTSU;     // 使用
-    cv::Mat Img_OTSU_Unpivot;   // 使用 
 
-
-    cv::Mat Img_Track;    // 使用
-    cv::Mat Img_Track_Unpivot = cv::Mat(RESULT_ROW, RESULT_COL, CV_8UC3); 
-    cv::Mat Img_Text;   // 使用
-    cv::Mat Img_All;    // 使用
-    cv::Mat Dilate_Kernel = getStructuringElement(cv::MORPH_CROSS,cv::Size(2,2));  // 边线形态学膨胀核大小
-    cv::Mat Erode_Kernel = getStructuringElement(cv::MORPH_CROSS,cv::Size(2,2));  // 边线形态学腐蚀核大小
     int ImgNum = 0;
-    uint8 original_image[image_h][image_w];
+
     uint8 bin_image[image_h][image_w];
-    uint8 PerImg_ip[RESULT_ROW][RESULT_COL];    
+
+    uint8 PerImg_ip[RESULT_ROW][RESULT_COL];    // 逆透视
     std::vector<std::vector<InversePerspectiveMap>> mapping;
+
+    cv::Mat Img_Color; 
+    cv::Mat Img_Color_Unpivot = cv::Mat(RESULT_ROW, RESULT_COL, CV_8UC3);
+    cv::Mat Img_Gray;    
+    cv::Mat Img_Gray_Unpivot; 
+    cv::Mat Img_OTSU;    
+    cv::Mat Img_OTSU_Unpivot;
+    cv::Mat Img_Track;   
+    cv::Mat Img_Track_Unpivot = cv::Mat(RESULT_ROW, RESULT_COL, CV_8UC3); 
+    cv::Mat Img_Text;  
+    cv::Mat Img_All;   
 
     Img_Store() = default;
     // 从数组加载数据
@@ -242,7 +240,12 @@ typedef struct Data_Path
     std::vector<std::vector<cv::Point>> TransitionContours; // 存储跳变扫描检测到的轮廓坐标
     std::vector<cv::Vec4i> TransitionHierarchy; // 存储跳变扫描检测到的轮廓层级信息
 
-    TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.右圆环赛道外 4.右圆环赛道内 5.左圆环赛道外 6.左圆环赛道内 7.十字赛道 8.模型赛道
+    LoopKind Loop_Kind; // 当前帧赛道类型
+    TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.十字赛道 4.左圆环 5.右圆环
+    static constexpr int kTrackKindHistorySize = 25;
+    TrackKind TrackKindHistory[kTrackKindHistorySize] = {};
+    int TrackKindHistoryIndex = 0;
+    int TrackKindHistoryCount = 0;
     CircleTrackStep Circle_Track_Step = INIT;  // 圆环入环步骤：1.准备入环 2.入环 3.出环
     TrackKind Previous_Circle_Kind; // 目前圆环类型
 

@@ -110,6 +110,8 @@ namespace
         function_cfg.AcrossIdentify_EN = cfg.at("ACROSS_IDENTIFY_EN");
         function_cfg.CircleIdentify_EN = cfg.at("CIRCLE_IDENTIFY_EN");
 
+        track_cfg.Track_width = cfg.at("Track_width");
+
         track_cfg.Forward = cfg.at("FORWARD");
         track_cfg.Default_Forward = cfg.at("FORWARD");
         track_cfg.Path_Search_Start = cfg.at("PATH_SEARCH_START");
@@ -301,8 +303,8 @@ namespace
             judge_.TransitionScanDetect(&img_store, &data_path_, &function_en_);
 
             judge_.Search_Data_Analysis(&img_store, &data_path_, &function_en_);
-
-            // judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
+            judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
+            
             // judge_.ServoDirAngle_Judge(&data_path_);
             // judge_.MotorSpeed_Judge(&img_store, &data_path_);
             // judge_.AngularVelocityTarget_Judge(&data_path_);

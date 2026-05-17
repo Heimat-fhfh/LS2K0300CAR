@@ -11,6 +11,8 @@
     "ACROSS_IDENTIFY_EN": true,
     "CIRCLE_IDENTIFY_EN": true,
     
+    "Track_width": 216,
+
     "FORWARD": 100,
     "PATH_SEARCH_START": 25,
     "PATH_SEARCH_END": 163,
