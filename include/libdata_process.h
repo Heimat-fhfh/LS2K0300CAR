@@ -22,6 +22,10 @@ class Judge
         */
         LoopKind TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
 
+        /**
+         * 根据赛道类型决策进行图像二次分析调整补线等操作
+         */
+        void TrackKind_Based_DataProcess(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
 
         /*
             对八邻域寻找到的数据和独立黑色区域寻找到的数据进行分析

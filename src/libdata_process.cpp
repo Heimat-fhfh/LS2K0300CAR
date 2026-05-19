@@ -49,6 +49,7 @@ void push_track_kind_history(Data_Path* data_path, TrackKind kind) {
 }
 } // namespace
 
+
 /*
     对八邻域寻找到的数据和独立黑色区域寻找到的数据进行分析
 */
@@ -57,10 +58,35 @@ void Judge::Search_Data_Analysis(Img_Store* Img_Store_p,Data_Path *Data_Path_p,F
     JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
-    // 第一步：从当前帧提取拐点和弯点信息，作为状态机输入。
     Judge::InflectionPointSearch(Img_Store_p,Data_Path_p);
     Judge::BendPointSearch(Img_Store_p,Data_Path_p);
+
+    
+
+
 }
+
+void Judge::TrackKind_Based_DataProcess(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p)
+{
+    JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+
+    switch (Data_Path_p->Loop_Kind) {
+        case LEFT_ACROSS_TRACK_LOOP:
+        case RIGHT_ACROSS_TRACK_LOOP:
+            // 十字赛道循环的特殊处理逻辑
+            break;
+        case LEFT_CIRCLE_TRACK_LOOP:
+        case RIGHT_CIRCLE_TRACK_LOOP:
+            // 圆环赛道循环的特殊处理逻辑
+            break;
+        case COMMON_TRACK_LOOP:
+        default:
+            // 普通赛道循环的处理逻辑
+            break;
+    }
+}
+
 /*
     TrackKind_Judge说明
     赛道循环类型决策
@@ -70,7 +96,8 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
     JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
-    static int Judge_Num = 0;    // 决策循环帧数计数器 
+    static int Judge_Num = 0;    // 决策循环帧数计数器
+    static int TrackKindCount[6] = {0};    // 赛道类型计数器，顺序为：直赛道、弯赛道、左十字赛道、右十字赛道、左圆环赛道、右圆环赛道
     
     /**
      * 如果存在左/右侧独立黑块，并且右/左侧存在拐点，则判定为十字赛道循环；
@@ -81,24 +108,99 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
     if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] > 1))
     {
         Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
+        TrackKindCount[L_ACROSS_TRACK]++;
+        if (TrackKindCount[L_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+            Data_Path_p->Track_Kind = L_ACROSS_TRACK;
+            Data_Path_p->Loop_Kind = LEFT_ACROSS_TRACK_LOOP;
+            // 清空其他赛道类型计数器
+            for (int i = 0; i < 6; ++i) {
+                if (i != L_ACROSS_TRACK) {
+                    TrackKindCount[i] = 0;
+                }
+            }
+        }
     }
     else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] > 1))
     {
         Data_Path_p->Temp_Track_Kind = R_ACROSS_TRACK;
+        TrackKindCount[R_ACROSS_TRACK]++;
+        if (TrackKindCount[R_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+            Data_Path_p->Track_Kind = R_ACROSS_TRACK;
+            Data_Path_p->Loop_Kind = RIGHT_ACROSS_TRACK_LOOP;
+            // 清空其他赛道类型计数器
+            for (int i = 0; i < 6; ++i) {
+                if (i != R_ACROSS_TRACK) {
+                    TrackKindCount[i] = 0;
+                }
+            }
+        }
     }
     else if (Data_Path_p->black_left_found)
     {
         Data_Path_p->Temp_Track_Kind = L_CIRCLE_TRACK;
+        TrackKindCount[L_CIRCLE_TRACK]++;
+        if (TrackKindCount[L_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+            Data_Path_p->Track_Kind = L_CIRCLE_TRACK;
+            Data_Path_p->Loop_Kind = LEFT_CIRCLE_TRACK_LOOP;
+            // 清空其他赛道类型计数器
+            for (int i = 0; i < 6; ++i) {
+                if (i != L_CIRCLE_TRACK) {
+                    TrackKindCount[i] = 0;
+                }
+            }
+        }
     }
     else if (Data_Path_p->black_right_found)
     {
         Data_Path_p->Temp_Track_Kind = R_CIRCLE_TRACK;
+        TrackKindCount[R_CIRCLE_TRACK]++;
+        if (TrackKindCount[R_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+            Data_Path_p->Track_Kind = R_CIRCLE_TRACK;
+            Data_Path_p->Loop_Kind = RIGHT_CIRCLE_TRACK_LOOP;
+            // 清空其他赛道类型计数器
+            for (int i = 0; i < 6; ++i) {
+                if (i != R_CIRCLE_TRACK) {
+                    TrackKindCount[i] = 0;
+                }
+            }
+        }
     }
+    else if (Data_Path_p->BendPointNum[0] > JSON_TrackConfigData.BendPointNum[0] 
+        && Data_Path_p->BendPointNum[0] < JSON_TrackConfigData.BendPointNum[1]
+        && Data_Path_p->BendPointNum[1] > JSON_TrackConfigData.BendPointNum[0]
+        && Data_Path_p->BendPointNum[1] < JSON_TrackConfigData.BendPointNum[1])
+    {
+        Data_Path_p->Temp_Track_Kind = BEND_TRACK;
+        TrackKindCount[BEND_TRACK]++;
+        if (TrackKindCount[BEND_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+            Data_Path_p->Track_Kind = BEND_TRACK;
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+            // 清空其他赛道类型计数器
+            for (int i = 0; i < 6; ++i) {
+                if (i != BEND_TRACK) {
+                    TrackKindCount[i] = 0;
+                }
+            }
+        }
+     }
     else
     {
         Data_Path_p->Temp_Track_Kind = STRIGHT_TRACK;
+        TrackKindCount[STRIGHT_TRACK]++;
+        if (TrackKindCount[STRIGHT_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+            Data_Path_p->Track_Kind = STRIGHT_TRACK;
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+            // 清空其他赛道类型计数器
+            for (int i = 0; i < 6; ++i) {
+                if (i != STRIGHT_TRACK) {
+                    TrackKindCount[i] = 0;
+                }
+            }
+        }
     }
+    
 
+    Judge_Num++;
     return Data_Path_p->Loop_Kind;
 }
 
@@ -491,7 +593,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "DATA_PRINT_EN", "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN","Track_width", "FORWARD", "PATH_SEARCH_START",
         "PATH_SEARCH_END", "SIDE_SEARCH_START", "SIDE_SEARCH_END", "POINT_DISTANCE", "LITTLE_ANGLE_BEND_POINT_NUM",
         "BIG_ANGLE_BEND_POINT_NUM", "MIN_INFLECTION_POINT_ANGLE", "MAX_INFLECTION_POINT_ANGLE", "MIN_BEND_POINT_ANGLE",
-        "MAX_BEND_POINT_ANGLE", "TRACK_WIDTH", "CIRCLE_OUT_WIDTH", "STRIGHT_TRACK_MOTOR_SPEED",
+        "MAX_BEND_POINT_ANGLE", "TRACK_WIDTH", "TRACK_KIND_COUNT_THRESHOLD","CIRCLE_OUT_WIDTH", "STRIGHT_TRACK_MOTOR_SPEED",
         "LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED", "BIG_ANGLE_BEND_TRACK_MOTOR_SPEED", "ACROSS_TRACK_MOTOR_SPEED",
         "CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE", "CIRCLE_TRACK_MOTOR_SPEED_INSIDE", "BRIDGE_ZONE_MOTOR_SPEED",
         "CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE", "CIRCLE_IN_PREPARE_TIME"
@@ -550,6 +652,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_TrackConfigData.BendPointIdentifyAngle[1] = ConfigData.at("MAX_BEND_POINT_ANGLE"); 
 
     JSON_TrackConfigData.TrackWidth = ConfigData.at("TRACK_WIDTH");   // 获取赛道宽度参数
+    JSON_TrackConfigData.TrackKindCountThreshold = ConfigData.at("TRACK_KIND_COUNT_THRESHOLD");   // 获取赛道类型计数阈值
     JSON_TrackConfigData.CircleOutWidth = ConfigData.at("CIRCLE_OUT_WIDTH");    // 获取圆环出环补线时终点离中线距离
 
     JSON_TrackConfigData.CommonMotorSpeed[0] = ConfigData.at("STRIGHT_TRACK_MOTOR_SPEED");  // 获取直道电机速度

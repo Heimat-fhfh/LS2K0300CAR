@@ -129,6 +129,7 @@ namespace
         track_cfg.BendPointIdentifyAngle[1] = cfg.at("MAX_BEND_POINT_ANGLE");
 
         track_cfg.TrackWidth = cfg.at("TRACK_WIDTH");
+        track_cfg.TrackKindCountThreshold = cfg.at("TRACK_KIND_COUNT_THRESHOLD");
         track_cfg.CircleOutWidth = cfg.at("CIRCLE_OUT_WIDTH");
         track_cfg.CommonMotorSpeed[0] = cfg.at("STRIGHT_TRACK_MOTOR_SPEED");
         track_cfg.CommonMotorSpeed[1] = cfg.at("LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED");
@@ -305,7 +306,8 @@ namespace
             judge_.Search_Data_Analysis(&img_store, &data_path_, &function_en_);
             judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
             
-            
+
+
             // judge_.ServoDirAngle_Judge(&data_path_);
             // judge_.MotorSpeed_Judge(&img_store, &data_path_);
             // judge_.AngularVelocityTarget_Judge(&data_path_);

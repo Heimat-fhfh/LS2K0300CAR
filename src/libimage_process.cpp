@@ -635,6 +635,10 @@ void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_P
 		++hole_count;
 	}
 
+	circle((Img_Store_p -> Img_Track),Data_Path_p -> leftmost_point, 6,Scalar(255,0,255),1);	// 独立黑块最左侧位置
+	circle((Img_Store_p -> Img_Track),Data_Path_p -> rightmost_point, 6,Scalar(255,0,255),1);	// 独立黑块最右侧位置
+
+
 
 }
 

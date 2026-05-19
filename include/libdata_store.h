@@ -27,8 +27,8 @@ typedef enum LoopKind
     COMMON_TRACK_LOOP = 2,   // 普通赛道循环
     LEFT_ACROSS_TRACK_LOOP = 3,   // 左十字赛道循环
     RIGHT_ACROSS_TRACK_LOOP = 4,   // 右十字赛道循环
-    L_CIRCLE_TRACK_LOOP = 5,   // 左圆环赛道循环
-    R_CIRCLE_TRACK_LOOP = 6,   // 右圆环赛道循环
+    LEFT_CIRCLE_TRACK_LOOP = 5,   // 左圆环赛道循环
+    RIGHT_CIRCLE_TRACK_LOOP = 6,   // 右圆环赛道循环
 }LoopKind;
 
 
@@ -103,6 +103,7 @@ typedef struct JSON_FunctionConfigData
 */
 typedef struct JSON_TrackConfigData
 {
+    int TrackKindCountThreshold;   // 赛道类型计数阈值
     int Track_width;
     int Forward;    // 前瞻点
     int Default_Forward;    // 默认前瞻点，用于前瞻点初始化
@@ -202,6 +203,7 @@ typedef struct Function_EN
     bool Control_EN = false; // 控制权转移使能
 }Function_EN;
 
+
 /*
     路径相关数据
 */
@@ -240,6 +242,8 @@ typedef struct Data_Path
     int TransitionDetectSide;       // 检测到的元素侧 (0=none, 1=left, 2=right)
     std::vector<std::vector<cv::Point>> TransitionContours; // 存储跳变扫描检测到的轮廓坐标
     std::vector<cv::Vec4i> TransitionHierarchy; // 存储跳变扫描检测到的轮廓层级信息
+    cv::Point leftmost_point ; // 独立黑块最左侧位置
+    cv::Point rightmost_point; // 独立黑块最右侧位置
 
     LoopKind Loop_Kind; // 当前帧赛道类型
     TrackKind Temp_Track_Kind; // 模型赛道类型

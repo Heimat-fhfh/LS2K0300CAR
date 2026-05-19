@@ -92,13 +92,20 @@ void Judge::TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p,
         int cy = static_cast<int>(mu.m01 / mu.m00);
         if (cy < 0 || cy >= image_h) continue;
 
-        // int center_x = static_cast<int>(Data_Path_p->center_line[cy]);
         int center_x = image_w / 2; // 使用图像中心作为参考线
         if (cx < center_x) {
             Data_Path_p->black_left_found = true;
         } else {
             Data_Path_p->black_right_found = true;
         }
+
+        // 更新最左侧和最右侧位置
+        Data_Path_p->leftmost_point = *std::min_element(Data_Path_p->TransitionContours[i].begin(), Data_Path_p->TransitionContours[i].end(),
+        [](const Point& a, const Point& b) { return a.x < b.x; });
+        Data_Path_p->rightmost_point = *std::max_element(Data_Path_p->TransitionContours[i].begin(), Data_Path_p->TransitionContours[i].end(),
+        [](const Point& a, const Point& b) { return a.x < b.x; });
+
+        break; // 只需要找到一个符合条件的黑块即可
     }
 
     
