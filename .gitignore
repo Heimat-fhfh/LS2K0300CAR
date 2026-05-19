@@ -1,4 +1,4 @@
-.rubbish
+.rubbish/
 build/
 build_host/
 document/
@@ -9,3 +9,4 @@ onnxruntime/
 yolo/upload/pictures/**
 yolo/upload/model/**
 LS2K0300CAR.zip
+.clangd
