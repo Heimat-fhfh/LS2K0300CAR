@@ -25,10 +25,8 @@ typedef enum LoopKind
     CAMERA_CATCH_LOOP = 0,    // 图像循环
     JUDGE_LOOP = 1,    // 决策循环
     COMMON_TRACK_LOOP = 2,   // 普通赛道循环
-    LEFT_ACROSS_TRACK_LOOP = 3,   // 左十字赛道循环
-    RIGHT_ACROSS_TRACK_LOOP = 4,   // 右十字赛道循环
-    LEFT_CIRCLE_TRACK_LOOP = 5,   // 左圆环赛道循环
-    RIGHT_CIRCLE_TRACK_LOOP = 6,   // 右圆环赛道循环
+    ACROSS_TRACK_LOOP = 3,   // 十字赛道循环
+    CIRCLE_TRACK_LOOP = 4,   // 圆环赛道循环
 }LoopKind;
 
 
@@ -56,17 +54,30 @@ typedef enum TransitionElementKind
     TRANSITION_ELEMENT_CROSS = 2,
 } TransitionElementKind;
 
+/* 
+    十字步骤    
+*/
+typedef enum AcrossTrackStep
+{
+    ACROSS_PREPARE = 0, // 准备进入十字
+    ACROSS = 1, // 十字内
+    ACROSS_OUT = 2, // 出十字
+    INIT_ACRSS = 3,   // 占位
+} AcrossTrackStep;
+
 /*
     圆环入环步骤
 */
 typedef enum CircleTrackStep
 {
     IN_PREPARE = 0, // 准备入环
-    IN = 1, // 入环
-    OUT_PREPARE = 2,     // 准备出环
-    OUT = 3,    // 出环
-    OUT_2_STRIGHT = 4,  // 出环转直道
-    INIT = 5,   // 占位
+    IN_PREPARE_2 = 1, // 准备入环2，增加一个准备阶段提高识别率
+    IN = 2, // 入环,
+    IN_CIRCLE = 3, // 圆环内
+    OUT_PREPARE = 4,     // 准备出环
+    OUT_STRIGHT = 5,  // 出环转直道
+    OUT = 6,    // 出环
+    INIT_CIRCLE = 7,   // 占位
 }CircleTrackStep;
 
 /*
@@ -106,6 +117,7 @@ typedef struct JSON_TrackConfigData
     int TrackKindCountThreshold;   // 赛道类型计数阈值
     int Track_width;
     int Forward;    // 前瞻点
+    int Forward_Distance;   // 前瞻点对应实际距离
     int Default_Forward;    // 默认前瞻点，用于前瞻点初始化
     int Path_Search_Start;  // 寻路径起始点
     int Path_Search_End;    // 寻路径结束点
@@ -199,7 +211,6 @@ typedef struct Function_EN
     std::vector<JSON_FunctionConfigData> JSON_FunctionConfigData_v;   // JSON文件存储的工程功能设置参数
     bool Game_EN;   // 比赛开始
     bool Gyroscope_EN;    // 陀螺仪状态使能：当陀螺仪积分到一定角度时出环
-    LoopKind Loop_Kind_EN;  // 循环类型使能：0.图像循环 1.普通赛道循环 2.圆环赛道循环 3.十字赛道循环
     bool Control_EN = false; // 控制权转移使能
 }Function_EN;
 
@@ -245,20 +256,15 @@ typedef struct Data_Path
     cv::Point leftmost_point ; // 独立黑块最左侧位置
     cv::Point rightmost_point; // 独立黑块最右侧位置
 
-    LoopKind Loop_Kind; // 当前帧赛道类型
-    TrackKind Temp_Track_Kind; // 模型赛道类型
+    LoopKind Loop_Kind; // 赛道类型
+    TrackKind Temp_Track_Kind; // 当前帧模型赛道类型
     TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.十字赛道 4.左圆环 5.右圆环
     static constexpr int kTrackKindHistorySize = 25;
     TrackKind TrackKindHistory[kTrackKindHistorySize] = {};
     int TrackKindHistoryIndex = 0;
     int TrackKindHistoryCount = 0;
-    CircleTrackStep Circle_Track_Step = INIT;  // 圆环入环步骤：1.准备入环 2.入环 3.出环
-    TrackKind Previous_Circle_Kind; // 目前圆环类型
-
-    // 控制参数
-    int ServoDir = 0;  // 舵机方向
-    int ServoAngle = 0;    // 舵机角度
-    int MotorSpeed = 0;    // 电机速度
+    CircleTrackStep Circle_Track_Step = INIT_CIRCLE;  // 圆环入环步骤：1.准备入环 2.入环 3.
+    AcrossTrackStep Across_Track_Step = INIT_ACRSS;  // 十字赛道步骤：1.准备进入十字 2.十字内 3.出十字
 
     // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask 角速度模式）
     int SteerErrorPx = 0;                 // 带符号的横向误差（像素）
@@ -267,7 +273,10 @@ typedef struct Data_Path
     double TargetLeftSpeedMps = 0;        // 运动学分解得到的左轮目标速度（m/s）
     double TargetRightSpeedMps = 0;       // 运动学分解得到的右轮目标速度（m/s）
 
-    int findrow;
+    // 控制参数
+    int ServoDir = 0;  // 舵机方向
+    int ServoAngle = 0;    // 舵机角度
+    
 
 }Data_Path;
 

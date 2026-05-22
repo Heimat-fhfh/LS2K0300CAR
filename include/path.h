@@ -38,16 +38,14 @@ void AcrossTrack(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 // 圆环准备入环步骤：补线
 void CircleTrack_Step_IN_Prepare(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
-// 圆环准备入环步骤：补线
-void CircleTrack_Step_IN_Prepare_Stright(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
+void CircleTrack_Step_IN_Prepare_2(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
 // 圆环入环步骤：补线
 void CircleTrack_Step_IN(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
+void CircleTrack_Step_OUT_PREPARE(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
+
 // 圆环出环步骤：补线
 void CircleTrack_Step_OUT(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
-
-// 圆环出环后直线补线
-void Circle2CommonTrack(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
 #endif

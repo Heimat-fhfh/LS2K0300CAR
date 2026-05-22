@@ -256,9 +256,9 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
     // threshold(Img_Store_p->Img_Gray, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
 	// 将Img_Track改为二值化图像的彩色版本，用于绘制线条
-	cv::Mat temp;
-	cv::cvtColor(Img_Store_p->Img_OTSU, temp, cv::COLOR_GRAY2BGR);
-	Img_Store_p->Img_Track = temp.clone();
+	// cv::Mat temp;
+	// cv::cvtColor(Img_Store_p->Img_OTSU, temp, cv::COLOR_GRAY2BGR);
+	// Img_Store_p->Img_Track = temp.clone();
 
 	const int imgWidth = Img_Store_p->Img_OTSU.cols;
 	const int imgHeight = Img_Store_p->Img_OTSU.rows;
@@ -422,17 +422,6 @@ void ImgProcess::ImgSave(Img_Store *Img_Store_p)
 }
 
 
-/*
-	ImgForwardLine说明
-	前瞻点画线
-*/
-void ImgProcess::ImgForwardLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
-{
-	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    line((Img_Store_p -> Img_Track),Point(160,300),Point((Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),Scalar(255,0,0),3);
-	putText((Img_Store_p -> Img_Track),to_string(abs(160-(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]))),Point((Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),FONT_HERSHEY_COMPLEX,0.6,(255,255,255),1);
-}
-
 
 /*
 	ImgCompress说明
@@ -588,6 +577,17 @@ void ImgProcess::ImgBendPointDraw(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 	}
 }
 
+/*
+	ImgForwardLine说明
+	前瞻点画线
+*/
+void ImgProcess::ImgForwardLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
+{
+	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+    line((Img_Store_p -> Img_Track),Point(160,300),Point((Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),Scalar(255,0,0),3);
+	putText((Img_Store_p -> Img_Track),to_string(abs(160-(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]))),Point((Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),FONT_HERSHEY_COMPLEX,0.6,(255,255,255),1);
+}
+
 
 /*
 	ImgReferenceLine说明
@@ -612,6 +612,8 @@ void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_P
 {
     if (Img_Store_p == nullptr || Data_Path_p == nullptr) return;
     if (Img_Store_p->Img_Track.empty()) return;
+	if (!Data_Path_p->black_left_found && !Data_Path_p->black_right_found) return; // 仅在找到时绘制独立黑块，避免干扰正常边线显示
+
 
     JSON_TrackConfigData cfg = Data_Path_p->JSON_TrackConfigData_v[0];
 
@@ -637,8 +639,6 @@ void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_P
 
 	circle((Img_Store_p -> Img_Track),Data_Path_p -> leftmost_point, 6,Scalar(255,0,255),1);	// 独立黑块最左侧位置
 	circle((Img_Store_p -> Img_Track),Data_Path_p -> rightmost_point, 6,Scalar(255,0,255),1);	// 独立黑块最右侧位置
-
-
 
 }
 

@@ -671,7 +671,11 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
     get_right(static_cast<uint16>(Data_Path_p->NumSearch[1]), Data_Path_p);
 
     for (int i = Data_Path_p->search_print_h_max; i < image_h-JSON_TrackConfigData.Path_Search_Start; i++)
-    {Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;}     //求中线
+    {
+        Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;
+    }     //求中线
+    // cout << "search_print_h_max: " << Data_Path_p->search_print_h_max << endl;
+
 
     dataMove(Data_Path_p);
 

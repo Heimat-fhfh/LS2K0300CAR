@@ -74,7 +74,6 @@ class CameraCalibrationCorrector;
 
 void argument_config(void);
 int motor_control_task();
-void pit_callback(void);
 void sigint_handler(int signum);
 void cleanup();
 int main_init_task();

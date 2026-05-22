@@ -5,156 +5,136 @@ using namespace std;
 using namespace std::chrono;
 using namespace std::this_thread;
 
-void ReadInput_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    (void)Img_Store_p;
-    (void)Function_EN_p;
-    Data_Path_p->JSON_TrackConfigData_v[0].Forward = Data_Path_p->JSON_TrackConfigData_v[0].Default_Forward; // 前瞻点初始化
-}
-
-// 摄像头捕获任务的算法处理函数
-void ProcessAlgo_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    // imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
-
-    // 仅对二值图去畸变，降低计算开销并直接服务后续寻线。
-    // if (g_calibration_enabled && !Img_Store_p->Img_OTSU.empty())
-    // {
-    //     cv::Mat correctedBinary;
-    //     if (g_calibration_corrector.correct(Img_Store_p->Img_OTSU, correctedBinary))
-    //     {
-    //         Img_Store_p->Img_OTSU = std::move(correctedBinary);
-    //     }
-    // }
-
-    // if (!Img_Store_p->Img_OTSU.empty())
-    // {
-    //     memcpy(Img_Store_p->bin_image[0], Img_Store_p->Img_OTSU.data, image_h * image_w * sizeof(uint8));
-    //     // 将处理后的二值图像数据复制到二维数组中，供后续算法使用
-    // }
-    // imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
-}
-
-void OutputDisplay_CameraCatch(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    (void)Img_Store_p;
-    (void)Data_Path_p;
-    (void)Function_EN_p;
-    // imgProcess.ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
-    // displayMatOnIPS200(Img_Store_p->Img_OTSU);
-}
-
 void RunCameraCatchTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
-    ReadInput_CameraCatch(Img_Store_p,Data_Path_p,Function_EN_p);
-    ProcessAlgo_CameraCatch(Img_Store_p,Data_Path_p,Function_EN_p);
-    OutputDisplay_CameraCatch(Img_Store_p,Data_Path_p,Function_EN_p);
-}
-
-void ReadInput_JudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    (void)Img_Store_p;
-    (void)Data_Path_p;
-    (void)Function_EN_p;
-}
-
-void ProcessAlgo_JudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    Function_EN_p->Loop_Kind_EN = judge.TrackKind_Judge(Img_Store_p,Data_Path_p,Function_EN_p);  // 切换至赛道循环
-}
-
-void OutputDisplay_JudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    (void)Img_Store_p;
-    (void)Data_Path_p;
-    (void)Function_EN_p;
-}
-
-void RunJudgeTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    ReadInput_JudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
-    ProcessAlgo_JudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
-    OutputDisplay_JudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
-}
-
-void ReadInput_CommonTrackTask(Function_EN *Function_EN_p)
-{
-    (void)Function_EN_p;
-}
-
-void ProcessAlgo_CommonTrackTask(Function_EN *Function_EN_p)
-{
-    Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP;
-}
-
-void OutputDisplay_CommonTrackTask(Function_EN *Function_EN_p)
-{
-    (void)Function_EN_p;
-}
-
-void RunCommonTrackTask(Function_EN *Function_EN_p)
-{
-    ReadInput_CommonTrackTask(Function_EN_p);
-    ProcessAlgo_CommonTrackTask(Function_EN_p);
-    OutputDisplay_CommonTrackTask(Function_EN_p);
-}
-
-void ReadInput_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    (void)Img_Store_p;
-    (void)Data_Path_p;
-    (void)Function_EN_p;
+    // imgProcess.ImgCompress(Img_Store_p->Img_Color, false);   // 图像压缩
+    imgProcess.imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
+    imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
+    judge.TransitionScanDetect(Img_Store_p, Data_Path_p, Function_EN_p); // 独立黑块检测
 }
 
 void ProcessAlgo_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
     // 圆环赛道状态机只在本轮周期内完成“补线 + 寻线 + 回到图像循环”的闭环。
     // 其中 Circle_Track_Step 由决策模块提前写入，这里只负责按步骤执行对应补线算法。
+    static int status_change_count = 0; // 状态变化计数器，用于监控状态持续时间
     switch(Data_Path_p->Circle_Track_Step)
     {
         case IN_PREPARE:
         {
             // 准备入环：根据当前圆环方向先做预补线，避免进入环口时边线断裂。
-            CircleTrack_Step_IN_Prepare(Img_Store_p,Data_Path_p);   // 准备入环补线
+            if (!Data_Path_p->black_left_found && !Data_Path_p->black_right_found) {
+                status_change_count++;
+                if (status_change_count > 2) { // 如果连续多帧都未找到黑块，进入下一阶段继续补线提高识别率
+                    Data_Path_p->Circle_Track_Step = IN_PREPARE_2;
+                    status_change_count = 0; // 重置计数器
+                }
+            }else {
+                status_change_count = 0; // 如果找到黑块，重置计数器
+                CircleTrack_Step_IN_Prepare(Img_Store_p,Data_Path_p);   // 准备入环补线
+            }
+            
+            break;
+        }
+        case IN_PREPARE_2:
+        {
+            // 准备入环2：增加一个准备阶段提高识别率，继续补线并观察状态变化。
+            if (Data_Path_p->l_border[0] > 10 && Data_Path_p->r_border[0] < 310) {
+                status_change_count++;
+                if (status_change_count > 2) {
+                    Data_Path_p->Circle_Track_Step = IN;
+                    status_change_count = 0; // 重置计数器
+                }
+            } else {
+                status_change_count = 0;
+                CircleTrack_Step_IN_Prepare_2(Img_Store_p,Data_Path_p);   // 准备入环补线
+            }
             break;
         }
         case IN:
         {
             // 入环：沿已确认的圆环方向继续补线，保证进入环内后仍能稳定寻线。
-            CircleTrack_Step_IN(Img_Store_p,Data_Path_p);   // 入环补线
+            if (Data_Path_p->l_border[0] > 10 && Data_Path_p->r_border[0] < 310) {
+                status_change_count++;
+                if (status_change_count > 2) {
+                    Data_Path_p->Circle_Track_Step = IN_CIRCLE;
+                    status_change_count = 0; // 重置计数器
+                }
+            } else {
+                status_change_count = 0;
+                CircleTrack_Step_IN(Img_Store_p,Data_Path_p);   // 入环补线
+            }
+            break;
+        }
+        case IN_CIRCLE:
+        {
+            // 圆环内
+            // 入环：沿已确认的圆环方向继续补线，保证进入环内后仍能稳定寻线。
+            if (Data_Path_p->InflectionPointNum[0] > 0 || Data_Path_p->InflectionPointNum[1] > 0) {
+                status_change_count++;
+                if (status_change_count > 2) {
+                    Data_Path_p->Circle_Track_Step = OUT_PREPARE;
+                    status_change_count = 0; // 重置计数器
+                }
+            } else {
+                status_change_count = 0;
+            }
+            break;
+        }
+        case OUT_PREPARE:
+        {
+            if (Data_Path_p->InflectionPointNum[0] <= 0 || Data_Path_p->InflectionPointNum[1] <= 0) {
+                status_change_count++;
+                if (status_change_count > 2) {
+                    Data_Path_p->Circle_Track_Step = OUT_STRIGHT;
+                    status_change_count = 0; // 重置计数器
+                }
+            } else {
+                status_change_count = 0;
+                CircleTrack_Step_OUT_PREPARE(Img_Store_p,Data_Path_p);   // 准备出环补线
+            }
+            break;
+        }
+        case OUT_STRIGHT:
+        {
+            if (Data_Path_p->InflectionPointNum[0] > 0 || Data_Path_p->InflectionPointNum[1] > 0) {
+                status_change_count++;
+                if (status_change_count > 2) {
+                    Data_Path_p->Circle_Track_Step = OUT;
+                    status_change_count = 0; // 重置计数器
+                }
+            } else {
+                status_change_count = 0;
+            }
             break;
         }
         case OUT:
         {
-            // 出环：完成从环内到环外的补线过渡，给后续恢复普通寻线提供连续边线。
-            CircleTrack_Step_OUT(Img_Store_p,Data_Path_p);   // 出环补线
+            if (Data_Path_p->l_border[0] > 10 && Data_Path_p->r_border[0] < 310) {
+                status_change_count++;
+                if (status_change_count > 2) {
+                    Data_Path_p->Circle_Track_Step = IN_CIRCLE;
+                    status_change_count = 0; // 重置计数器
+                }
+            } else {
+                status_change_count = 0;
+                CircleTrack_Step_OUT(Img_Store_p,Data_Path_p);
+            }
+            Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
             break;
         }
         default:
         {
-            // INIT / OUT_2_STRIGHT 等非补线阶段直接跳过，由普通图像循环接管。
             break;
         }
     }
-
-    // 补线结束后重新寻线，输出给下一帧的决策模块使用。
-    imgSearch_l_r(Img_Store_p,Data_Path_p);
-    // 圆环任务只占用一个周期，执行完立即切回图像循环，等待下一次状态机判定。
-    Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换回图像循环
 }
 
-void OutputDisplay_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
-{
-    (void)Img_Store_p;
-    (void)Data_Path_p;
-    (void)Function_EN_p;
-}
 
 void RunCircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
-    ReadInput_CircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
+    RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p);
     ProcessAlgo_CircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
-    OutputDisplay_CircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
 }
 
 void ReadInput_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
@@ -168,7 +148,7 @@ void ProcessAlgo_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,F
 {
     AcrossTrack(Img_Store_p,Data_Path_p);
     imgSearch_l_r(Img_Store_p,Data_Path_p);
-    Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP; // 切换回图像循环
+    Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP; // 切换回图像循环
 }
 
 void OutputDisplay_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
@@ -202,34 +182,32 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
  */
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
-    switch (Function_EN_p->Loop_Kind_EN)
+    switch (Data_Path_p->Loop_Kind)
     {
         case CAMERA_CATCH_LOOP:
         {
             // 图像循环：先完成预处理、二值化和基础寻线，为后续识别提供输入。
             RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p);
-            break;
+            Data_Path_p->Loop_Kind = JUDGE_LOOP;
         }
         case JUDGE_LOOP:
         {
             // 决策循环：根据拐点、弯点和状态位判断当前属于哪类赛道。
-            RunJudgeTask(Img_Store_p,Data_Path_p,Function_EN_p);
-            break;
+            Data_Path_p->Loop_Kind = judge.TrackKind_Judge(Img_Store_p,Data_Path_p,Function_EN_p);  // 切换至赛道循环
         }
         case COMMON_TRACK_LOOP:
         {
             // 普通赛道循环：输出常规路径控制结果，并立即回到图像循环。
-            RunCommonTrackTask(Function_EN_p);
+            Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
             break;
         }
-        case L_CIRCLE_TRACK_LOOP:
-        case R_CIRCLE_TRACK_LOOP:
+        case CIRCLE_TRACK_LOOP:
         {
             // 圆环循环：根据当前 Circle_Track_Step 执行对应补线策略。
             RunCircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
             break;
         }
-        case RIGHT_ACROSS_TRACK_LOOP:
+        case ACROSS_TRACK_LOOP:
         {
             // 十字循环：执行十字赛道的特殊处理逻辑，然后回到图像循环。
             RunAcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p);
@@ -238,7 +216,7 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
         default:
         {
             // 兜底保护：遇到非法状态时回到图像循环，避免状态机卡死。
-            Function_EN_p->Loop_Kind_EN = CAMERA_CATCH_LOOP;
+            Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
             break;
         }
     }
@@ -262,21 +240,15 @@ void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
         return;
     }
 
-    // 上位机控制模式：视觉输出 -> 目标角速度差速控制。
-    if (Function_EN_p->Control_EN == false)
-    {
-        judge.ServoDirAngle_Judge(Data_Path_p);
-        judge.MotorSpeed_Judge(Img_Store_p,Data_Path_p);
-        judge.AngularVelocityTarget_Judge(Data_Path_p);
+    judge.MotorSpeed_Judge(Img_Store_p,Data_Path_p);
+    judge.AngularVelocityTarget_Judge(Data_Path_p);
 
+
+    // 上位机控制模式：视觉输出 -> 目标角速度差速控制。
+    if (Function_EN_p->Control_EN == true)
+    {
         motorTask->setBaseSpeed(Data_Path_p->TargetBaseSpeedMps);
         motorTask->setTargetAngularVelocity(Data_Path_p->TargetAngularVelocityDeg);
-    }
-    else
-    {
-        // 非上位机控制时，清零角速度目标，防止残留指令。
-        motorTask->setTargetAngularVelocity(0.0);
-        motorTask->setBaseSpeed(0.0);
     }
 }
 
@@ -349,7 +321,7 @@ void argument_config(void)
         g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
         Function_EN_s.Game_EN = true;
         // 默认从图像循环开始，等待第一帧完成赛道状态判定后再切换到对应任务。
-        Function_EN_s.Loop_Kind_EN = CAMERA_CATCH_LOOP;
+        Data_Path_s.Loop_Kind = CAMERA_CATCH_LOOP;
     }
     else
     {
@@ -670,8 +642,3 @@ int main_test_task(const MainTestConfig& test_config)
     return EXIT_SUCCESS;
 }
 
-void pit_callback()
-{
-    encoder_get_count(ENCODER_1);
-    encoder_get_count(ENCODER_2);
-}

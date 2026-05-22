@@ -21,25 +21,10 @@ class Judge
             返回赛道循环类型
         */
         LoopKind TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
-
-        /**
-         * 根据赛道类型决策进行图像二次分析调整补线等操作
-         */
-        void TrackKind_Based_DataProcess(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
-
         /*
             对八邻域寻找到的数据和独立黑色区域寻找到的数据进行分析
         */
         void Search_Data_Analysis(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
-
-
-        /*
-            计算舵机方向和角度
-            @参数说明
-            Data_Path_p 路径相关数据指针
-        */
-        void ServoDirAngle_Judge(Data_Path *Data_Path_p);
-
 
         /*
             电机速度决策

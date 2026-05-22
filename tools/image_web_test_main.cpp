@@ -152,12 +152,12 @@ namespace
         data_path->JSON_TrackConfigData_v.push_back(track_cfg);
         function_en->Game_EN = true;
         function_en->Gyroscope_EN = false;
-        function_en->Loop_Kind_EN = CAMERA_CATCH_LOOP;
+        data_path->Loop_Kind = CAMERA_CATCH_LOOP;
         function_en->Control_EN = false;
 
         data_path->Track_Kind = STRIGHT_TRACK;
-        data_path->Circle_Track_Step = INIT;
-        data_path->Previous_Circle_Kind = STRIGHT_TRACK;
+        data_path->Circle_Track_Step = INIT_CIRCLE;
+        data_path->Track_Kind = STRIGHT_TRACK;
     }
 
     std::vector<unsigned char> encode_jpeg(const cv::Mat &image)
@@ -306,7 +306,7 @@ namespace
             judge_.Search_Data_Analysis(&img_store, &data_path_, &function_en_);
             judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
             
-
+            ProcessTrackTaskPerFrame();
 
             // judge_.ServoDirAngle_Judge(&data_path_);
             // judge_.MotorSpeed_Judge(&img_store, &data_path_);
@@ -321,7 +321,7 @@ namespace
             current.all_jpg = encode_jpeg(img_store.Img_All);
 
             current.servo_angle = data_path_.ServoAngle;
-            current.motor_speed = data_path_.MotorSpeed;
+            current.motor_speed = data_path_.TargetBaseSpeedMps;
             current.inflection_left = data_path_.InflectionPointNum[0];
             current.inflection_right = data_path_.InflectionPointNum[1];
             current.bend_left = data_path_.BendPointNum[0];

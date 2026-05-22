@@ -120,7 +120,7 @@ int main()
     motorTask->setWheelbase(0.158);
     motorTask->start();
 
-    // 5. 初始化摄像头并启动图像采集线程
+    // 5. 初始化摄像头并启动图像采集线程    
     VideoCapture Camera;
     CameraInit(Camera, g_camera_kind, 320, 240, 120);
     Img_Store Img_Store_s;
@@ -146,6 +146,7 @@ int main()
         const auto captureStart = std::chrono::steady_clock::now();
         CameraImgGet(&Img_Store_s);
         captureCost = std::chrono::steady_clock::now() - captureStart;
+
         if (!g_running.load())
         {
             printf("退出信号已接收，正在停止摄像头捕获线程...\n");
@@ -155,20 +156,18 @@ int main()
         if (Img_Store_s.Img_Color.empty())
         {
             printf("Warning: Captured image is empty, skipping this frame.\n");
-            perfRecorder.record(std::chrono::steady_clock::now() - frameStart,
-                                captureCost,
-                                undistortCost,
-                                undistortExecuted);
             continue;
         }
 
         tempCapture.saveFrameIfNeeded(Img_Store_s.Img_Color);
 
         FrameTaskAfterRead(&Img_Store_s);
-        perfRecorder.record(std::chrono::steady_clock::now() - frameStart,
-                            captureCost,
-                            undistortCost,
-                            undistortExecuted);
+
+        
+        // perfRecorder.record(std::chrono::steady_clock::now() - frameStart,
+        //                     captureCost,
+        //                     undistortCost,
+        //                     undistortExecuted);
     }
 
     perfRecorder.flush();

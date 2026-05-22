@@ -61,31 +61,8 @@ void Judge::Search_Data_Analysis(Img_Store* Img_Store_p,Data_Path *Data_Path_p,F
     Judge::InflectionPointSearch(Img_Store_p,Data_Path_p);
     Judge::BendPointSearch(Img_Store_p,Data_Path_p);
 
-    
-
-
 }
 
-void Judge::TrackKind_Based_DataProcess(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p)
-{
-    JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
-    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-
-    switch (Data_Path_p->Loop_Kind) {
-        case LEFT_ACROSS_TRACK_LOOP:
-        case RIGHT_ACROSS_TRACK_LOOP:
-            // 十字赛道循环的特殊处理逻辑
-            break;
-        case LEFT_CIRCLE_TRACK_LOOP:
-        case RIGHT_CIRCLE_TRACK_LOOP:
-            // 圆环赛道循环的特殊处理逻辑
-            break;
-        case COMMON_TRACK_LOOP:
-        default:
-            // 普通赛道循环的处理逻辑
-            break;
-    }
-}
 
 /*
     TrackKind_Judge说明
@@ -104,14 +81,13 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
      * 如果存在左/右侧独立黑块, 并且右/左侧不存在拐点，则判定为圆环赛道循环；
      * 否则判定为普通赛道循环。
      */
-    
     if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] > 1))
     {
         Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
         TrackKindCount[L_ACROSS_TRACK]++;
         if (TrackKindCount[L_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = L_ACROSS_TRACK;
-            Data_Path_p->Loop_Kind = LEFT_ACROSS_TRACK_LOOP;
+            Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != L_ACROSS_TRACK) {
@@ -126,7 +102,7 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
         TrackKindCount[R_ACROSS_TRACK]++;
         if (TrackKindCount[R_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = R_ACROSS_TRACK;
-            Data_Path_p->Loop_Kind = RIGHT_ACROSS_TRACK_LOOP;
+            Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != R_ACROSS_TRACK) {
@@ -141,7 +117,7 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
         TrackKindCount[L_CIRCLE_TRACK]++;
         if (TrackKindCount[L_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = L_CIRCLE_TRACK;
-            Data_Path_p->Loop_Kind = LEFT_CIRCLE_TRACK_LOOP;
+            Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != L_CIRCLE_TRACK) {
@@ -156,7 +132,7 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
         TrackKindCount[R_CIRCLE_TRACK]++;
         if (TrackKindCount[R_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = R_CIRCLE_TRACK;
-            Data_Path_p->Loop_Kind = RIGHT_CIRCLE_TRACK_LOOP;
+            Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != R_CIRCLE_TRACK) {
@@ -205,26 +181,6 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
 }
 
 /*
-    ServoDirAngle_Judge说明
-    计算舵机方向和舵机角度
-*/
-void Judge::ServoDirAngle_Judge(Data_Path *Data_Path_p)
-{
-    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-
-    // 使用平滑前瞻替代单行前瞻，降低舵机角在噪声边线上的抖动。
-    compute_smoothed_servo_control(Data_Path_p,
-                                   image_w,
-                                   JSON_TrackConfigData.Forward,
-                                   image_h - 1,
-                                   0);
-
-    // 带符号转向误差：沿用历史方向定义，右转为正，左转为负。
-    Data_Path_p->SteerErrorPx = (Data_Path_p->ServoDir == 1) ? Data_Path_p->ServoAngle : -Data_Path_p->ServoAngle;
-}
-
-
-/*
     MotorSpeed_Judge说明
     电机速度决策
 */
@@ -243,64 +199,11 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
         // 直道速度决策
         case STRIGHT_TRACK:
         {
-            // 准备入环的直线部分的速度决策
-            if(Data_Path_p -> ServoAngle > 30 || Data_Path_p -> Circle_Track_Step == IN_PREPARE)
-            {
-                Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[4];
-            }
-            // 准备出环、出环进直线的直线部分的速度决策
-            else if(Data_Path_p -> ServoAngle > 30 || Data_Path_p -> Circle_Track_Step == OUT_PREPARE || Data_Path_p -> Circle_Track_Step == OUT_2_STRIGHT)
-            {
-                Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[5];
-            }
-            // 真正的直道的速度决策
-            else
-            {
-                Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[0];
-            }
-            break;
+            Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[0];
         }
         case BEND_TRACK:
         {
-            // 小弯道速度决策
-            if(Data_Path_p -> BendPointNum[0] <= JSON_TrackConfigData.BendPointNum[1] || Data_Path_p -> BendPointNum[1] <= JSON_TrackConfigData.BendPointNum[1])
-            {
-                // 准备入环的小弯道部分的速度决策
-                if(Data_Path_p -> Circle_Track_Step == IN_PREPARE)
-                {
-                    Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[4];
-                }
-                // 准备出环、出环进直线的小弯道部分的速度决策
-                else if(Data_Path_p -> Circle_Track_Step == OUT_PREPARE || Data_Path_p -> Circle_Track_Step == OUT_2_STRIGHT)
-                {
-                    Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[5];
-                }
-                // 其他小弯道部分的速度决策
-                else
-                {
-                    Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[1];
-                }
-            }
-            // 大弯道速度决策
-            else
-            {
-                // 准备入环的大弯道部分的速度决策
-                if(Data_Path_p -> Circle_Track_Step == IN_PREPARE)
-                {
-                    Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[4];
-                }
-                // 准备出环、出环进直线的大弯道部分的速度决策
-                else if(Data_Path_p -> Circle_Track_Step == OUT_PREPARE || Data_Path_p -> Circle_Track_Step == OUT_2_STRIGHT)
-                {
-                    Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[5];
-                }
-                // 其他大弯道部分的速度决策
-                else
-                {
-                    Data_Path_p -> MotorSpeed = JSON_TrackConfigData.CommonMotorSpeed[2];
-                }
-            }
-            break;
+            Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[1];
         }
     }
 }
@@ -312,34 +215,15 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 */
 void Judge::AngularVelocityTarget_Judge(Data_Path *Data_Path_p)
 {
-    // 经验参数：像素误差转角速度增益，可按车模响应继续微调。
-    constexpr double kYawRatePerPixel = 1.2;     // deg/s per pixel
-    constexpr double kMaxYawRateDeg = 220.0;     // deg/s
-    constexpr double kBaseSpeedScale = 0.01;     // 旧速度档位(0-100)映射到 m/s
-    constexpr double kMinBaseSpeedMps = 0.0;
-    constexpr double kMaxBaseSpeedMps = 1.2;
-    constexpr double kWheelbaseM = 0.158;
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+    float k = 0.45f / (JSON_TrackConfigData.Forward*1.4634f - 90.291f);     // 每像素对应实际距离
+    Data_Path_p->SteerErrorPx = Data_Path_p->center_line[JSON_TrackConfigData.Forward-JSON_TrackConfigData.Path_Search_Start] - image_w / 2;
 
-    const double target_yaw = std::clamp(
-        static_cast<double>(Data_Path_p->SteerErrorPx) * kYawRatePerPixel,
-        -kMaxYawRateDeg,
-        kMaxYawRateDeg
-    );
-
-    const double base_speed = std::clamp(
-        static_cast<double>(Data_Path_p->MotorSpeed) * kBaseSpeedScale,
-        kMinBaseSpeedMps,
-        kMaxBaseSpeedMps
-    );
-
-    const double yaw_rad = target_yaw * PI / 180.0;
-    const double v_left = base_speed - yaw_rad * (kWheelbaseM * 0.5);
-    const double v_right = base_speed + yaw_rad * (kWheelbaseM * 0.5);
-
-    Data_Path_p->TargetAngularVelocityDeg = target_yaw;
-    Data_Path_p->TargetBaseSpeedMps = base_speed;
-    Data_Path_p->TargetLeftSpeedMps = v_left;
-    Data_Path_p->TargetRightSpeedMps = v_right;
+    float error = Data_Path_p->SteerErrorPx * k;    // 转向误差对应的实际距离
+    float L = 0.6f;
+    float R = (L*L+error*error)/(2*error);
+    float omega = Data_Path_p->TargetBaseSpeedMps / R;   // 目标角速度
+    Data_Path_p->TargetAngularVelocityDeg = omega*180.0f/PI;   // 度/秒
 }
 
 
@@ -485,7 +369,7 @@ void Judge::Protect_Thread(Data_Path * Data_Path_p)
     }
     while(Protect_EN == true)
     {
-        Data_Path_p -> MotorSpeed = 0;
+        Data_Path_p -> TargetBaseSpeedMps = 0;
     }
 }
 

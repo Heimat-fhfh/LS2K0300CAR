@@ -84,17 +84,5 @@ void optimize_edge_lines(Data_Path* data_path,
                          int blur_kernel,
                          int max_points_per_side);
 
-// 方向控制平滑主入口。
-// 在默认前瞻点附近做多行加权，降低舵机角噪声。
-// data_path: 路径结构体。
-// image_width: 图像宽度。
-// default_forward: 默认前瞻行。
-// max_row/min_row: 前瞻行限幅。
-// 输出会更新 Data_Path::findrow / ServoAngle / ServoDir。
-void compute_smoothed_servo_control(Data_Path* data_path,
-                                    int image_width,
-                                    int default_forward,
-                                    int max_row,
-                                    int min_row);
 
 #endif
