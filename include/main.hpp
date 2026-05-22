@@ -108,7 +108,7 @@ extern Judge judge;
 extern SYNC Sync;
 extern CameraCalibrationCorrector g_calibration_corrector;
 
-void FrameTaskAfterRead(Img_Store *Img_Store_p);
+void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, Judge *judge_p);
 int CameraOnlyInitAndTestLoop();
 void argument_config(void);
 void sigint_handler(int signum);

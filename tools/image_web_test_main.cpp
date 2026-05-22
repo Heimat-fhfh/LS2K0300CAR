@@ -10,6 +10,8 @@
 #include "/home/fhfh/Work/LS2K0300CAR/include/camera_calibration.h"
 #include "/home/fhfh/Work/LS2K0300CAR/include/json.hpp"
 
+void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, Judge *judge_p);
+
 Function_EN Function_EN_s;
 JSON_PIDConfigData JSON_PIDConfigData_s;
 Data_Path Data_Path_s;
@@ -297,16 +299,16 @@ namespace
                 return false;
             }
 
-            img_process_.ImgCompress(img_store.Img_Color, true);
-            img_process_.imgPreProc(&img_store, &data_path_, &function_en_);
+            // img_process_.ImgCompress(img_store.Img_Color, true);
+            // img_process_.imgPreProc(&img_store, &data_path_, &function_en_);
 
-            imgSearch_l_r(&img_store, &data_path_);
-            judge_.TransitionScanDetect(&img_store, &data_path_, &function_en_);
+            // imgSearch_l_r(&img_store, &data_path_);
+            // judge_.TransitionScanDetect(&img_store, &data_path_, &function_en_);
 
-            judge_.Search_Data_Analysis(&img_store, &data_path_, &function_en_);
-            judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
+            // judge_.Search_Data_Analysis(&img_store, &data_path_, &function_en_);
+            // judge_.TrackKind_Judge(&img_store, &data_path_, &function_en_);
             
-            ProcessTrackTaskPerFrame();
+            ProcessTrackTaskPerFrame(&img_store, &data_path_, &function_en_, &judge_);
 
             // judge_.ServoDirAngle_Judge(&data_path_);
             // judge_.MotorSpeed_Judge(&img_store, &data_path_);

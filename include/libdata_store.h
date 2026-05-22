@@ -256,7 +256,7 @@ typedef struct Data_Path
     cv::Point leftmost_point ; // 独立黑块最左侧位置
     cv::Point rightmost_point; // 独立黑块最右侧位置
 
-    LoopKind Loop_Kind; // 赛道类型
+    LoopKind Loop_Kind = CAMERA_CATCH_LOOP; // 赛道类型
     TrackKind Temp_Track_Kind; // 当前帧模型赛道类型
     TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.十字赛道 4.左圆环 5.右圆环
     static constexpr int kTrackKindHistorySize = 25;

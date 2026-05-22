@@ -161,7 +161,7 @@ int main()
 
         tempCapture.saveFrameIfNeeded(Img_Store_s.Img_Color);
 
-        FrameTaskAfterRead(&Img_Store_s);
+        ProcessTrackTaskPerFrame(&Img_Store_s, &Data_Path_s, &Function_EN_s, &judge);
 
         
         // perfRecorder.record(std::chrono::steady_clock::now() - frameStart,

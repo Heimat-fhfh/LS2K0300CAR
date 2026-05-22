@@ -179,8 +179,9 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
  * @param Img_Store_p 图像存储指针
  * @param Data_Path_p 路径数据指针
  * @param Function_EN_p 功能使能状态指针
+ * @param judge_p 判断器指针
  */
-void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
 {
     switch (Data_Path_p->Loop_Kind)
     {
@@ -193,7 +194,9 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
         case JUDGE_LOOP:
         {
             // 决策循环：根据拐点、弯点和状态位判断当前属于哪类赛道。
-            Data_Path_p->Loop_Kind = judge.TrackKind_Judge(Img_Store_p,Data_Path_p,Function_EN_p);  // 切换至赛道循环
+            judge_p->Search_Data_Analysis(Img_Store_p, Data_Path_p, Function_EN_p);
+
+            Data_Path_p->Loop_Kind = judge_p->TrackKind_Judge(Img_Store_p, Data_Path_p, Function_EN_p);  // 切换至赛道循环
         }
         case COMMON_TRACK_LOOP:
         {
@@ -231,8 +234,9 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
  * @param Img_Store_p 图像存储指针
  * @param Data_Path_p 路径数据指针
  * @param Function_EN_p 功能使能状态指针
+ * @param judge_p 判断器指针
  */
-void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
+void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
 {
     (void)Img_Store_p;
     if (!motorTask || !motorTask->isRunning())
@@ -240,8 +244,8 @@ void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
         return;
     }
 
-    judge.MotorSpeed_Judge(Img_Store_p,Data_Path_p);
-    judge.AngularVelocityTarget_Judge(Data_Path_p);
+    judge_p->MotorSpeed_Judge(Img_Store_p,Data_Path_p);
+    judge_p->AngularVelocityTarget_Judge(Data_Path_p);
 
 
     // 上位机控制模式：视觉输出 -> 目标角速度差速控制。
@@ -252,14 +256,14 @@ void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
     }
 }
 
-void FrameTaskAfterRead(Img_Store *Img_Store_p)
+void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
 {
-    if (!Function_EN_s.Game_EN)
+    if (!Function_EN_p->Game_EN)
     {
         return;
     }
-    ProcessTrackTaskPerFrame(Img_Store_p,&Data_Path_s,&Function_EN_s);
-    ApplyDifferentialControl(Img_Store_p,&Data_Path_s,&Function_EN_s);
+    ProcessTrackTaskPerFrame(Img_Store_p,Data_Path_p,Function_EN_p,judge_p);
+    ApplyDifferentialControl(Img_Store_p,Data_Path_p,Function_EN_p,judge_p);
 }
 
 void argument_config(void)
