@@ -11,8 +11,8 @@
 #define black_pixel	0
 
 #define bin_jump_num	1//跳过的点数
-#define border_max	image_w-1-3 //边界最大值
-#define border_min	3	//边界最小值	
+#define border_max	image_w-3 //边界最大值
+#define border_min	2	//边界最小值	
 
 #define USE_num	image_h*4
 

@@ -62,7 +62,8 @@ typedef enum AcrossTrackStep
     ACROSS_PREPARE = 0, // 准备进入十字
     ACROSS = 1, // 十字内
     ACROSS_OUT = 2, // 出十字
-    INIT_ACRSS = 3,   // 占位
+    ACROSS_OUT_2 = 3, // 出十字2
+    INIT_ACROSS = 4,   // 占位
 } AcrossTrackStep;
 
 /*
@@ -264,7 +265,7 @@ typedef struct Data_Path
     int TrackKindHistoryIndex = 0;
     int TrackKindHistoryCount = 0;
     CircleTrackStep Circle_Track_Step = INIT_CIRCLE;  // 圆环入环步骤：1.准备入环 2.入环 3.
-    AcrossTrackStep Across_Track_Step = INIT_ACRSS;  // 十字赛道步骤：1.准备进入十字 2.十字内 3.出十字
+    AcrossTrackStep Across_Track_Step = INIT_ACROSS;  // 十字赛道步骤：1.准备进入十字 2.十字内 3.出十字
 
     // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask 角速度模式）
     int SteerErrorPx = 0;                 // 带符号的横向误差（像素）

@@ -5,65 +5,173 @@
 using namespace std;
 using namespace cv;
 
-/*
-    AcrossTrack说明
-    十字赛道
-*/
-void AcrossTrack(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
-{
-    ImgProcess ImgProcess;
-	Point a,b;
-	// 赛道二值化图像 赛道彩色图像
-	if(Data_Path_p -> InflectionPointNum[0]-1 >= 2)
-	{
-		// 左边线中断点补线绘制：十字四点均存在
-		a = Point((Data_Path_p -> InflectionPointCoordinate[0][0]),(Data_Path_p -> InflectionPointCoordinate[0][1]));
-		b = Point((Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[0]-1][0]),(Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[0]-1][1]));
-		line((Img_Store_p -> Img_Track),a,b,Scalar(128,0,128),4);
-		line((Img_Store_p -> Img_OTSU),a,b,Scalar(0),4);	
-		// drawLine(Img_Store_p->bin_image[0],a,b);
 
-		a = Point((Data_Path_p -> SideCoordinate_Eight[0][0]),(Data_Path_p -> SideCoordinate_Eight[0][1]));
-		line((Img_Store_p -> Img_OTSU),a,b,Scalar(0),4);
-		line((Img_Store_p -> Img_Track),a,b,Scalar(128,0,128),4);
-		// drawLine(Img_Store_p->bin_image[0],a,b);
-	}
-	else
-	{
-		a = Point((Data_Path_p -> SideCoordinate_Eight[0][0]),(Data_Path_p -> SideCoordinate_Eight[0][1]));
-		b = Point((Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[0]-1][0]),(Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[0]-1][1]));
-		// 左边线中断点补线绘制：十字只存在上两点
-		line((Img_Store_p -> Img_OTSU),a,b,Scalar(0),4);
-		line((Img_Store_p -> Img_Track),a,b,Scalar(128,0,128),4);
-		// drawLine(Img_Store_p->bin_image[0],a,b);
-	}
+void AcrossTrack_Step_ACROSS_PREPARE(Img_Store *Img_Store_p,Data_Path *Data_Path_p){
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
-    if(Data_Path_p -> InflectionPointNum[1]-1 >= 2)
-	{
-		// 右边线中断点补线绘制：十字四点均存在
-		a = Point((Data_Path_p -> InflectionPointCoordinate[0][2]),(Data_Path_p -> InflectionPointCoordinate[0][3]));
-		b = Point((Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[1]-1][2]),(Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[1]-1][3]));
-		line((Img_Store_p -> Img_OTSU),a,b,Scalar(0),4);
-		line((Img_Store_p -> Img_Track),a,b,Scalar(128,0,128),4);
-		// drawLine(Img_Store_p->bin_image[0],a,b);
-
-		a = Point((Data_Path_p -> SideCoordinate_Eight[0][2]),(Data_Path_p -> SideCoordinate_Eight[0][3]));
-		b = Point((Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[1]-1][2]),(Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[1]-1][3]));
-		line((Img_Store_p -> Img_OTSU),a,b,Scalar(0),4);
-		line((Img_Store_p -> Img_Track),a,b,Scalar(128,0,128),4);
-		// drawLine(Img_Store_p->bin_image[0],a,b);	
-	}
-	else
-	{
-		// 右边线中断点补线绘制：十字只存在上两点
-		a = Point((Data_Path_p -> SideCoordinate_Eight[0][2]),(Data_Path_p -> SideCoordinate_Eight[0][3]));
-		b = Point((Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[1]-1][2]),(Data_Path_p -> InflectionPointCoordinate[Data_Path_p -> InflectionPointNum[1]-1][3]));
-		line((Img_Store_p -> Img_OTSU),a,b,Scalar(0),4);
-		line((Img_Store_p -> Img_Track),a,b,Scalar(128,0,128),4);
-		// drawLine(Img_Store_p->bin_image[0],a,b);
+	switch (Data_Path_p->Track_Kind){
+		case R_ACROSS_TRACK:
+		{
+			line(Img_Store_p->Img_OTSU,Point(image_w/2+JSON_TrackConfigData.Track_width/2,image_h-JSON_TrackConfigData.Path_Search_Start),
+			Data_Path_p->leftmost_point,Scalar(0),2);
+			for(int i = Data_Path_p->leftmost_point.x; i > Data_Path_p->leftmost_point.x-JSON_TrackConfigData.Track_width/2; i--){
+				if(Img_Store_p->bin_image[Data_Path_p->leftmost_point.y][i] == 0){
+					line(Img_Store_p->Img_OTSU,Point(image_w/2-JSON_TrackConfigData.Track_width/2,image_h-JSON_TrackConfigData.Path_Search_Start),
+					Point(i,Data_Path_p->leftmost_point.y),Scalar(0),2);
+					break;
+				}
+			}
+			imgSearch_l_r(Img_Store_p,Data_Path_p);
+			break;
+		}
+		case L_ACROSS_TRACK:
+		{
+			line(Img_Store_p->Img_OTSU,Point(image_w/2-JSON_TrackConfigData.Track_width/2,image_h-JSON_TrackConfigData.Path_Search_Start),
+			Data_Path_p->rightmost_point,Scalar(0),2);
+			for(int i = Data_Path_p->rightmost_point.x; i < Data_Path_p->rightmost_point.x+JSON_TrackConfigData.Track_width/2; i++){
+				if(Img_Store_p->bin_image[Data_Path_p->rightmost_point.y][i] == 0){
+					line(Img_Store_p->Img_OTSU,Point(image_w/2+JSON_TrackConfigData.Track_width/2,image_h-JSON_TrackConfigData.Path_Search_Start),
+					Point(i,Data_Path_p->rightmost_point.y),Scalar(0),2);
+					break;
+				}
+			}
+			imgSearch_l_r(Img_Store_p,Data_Path_p);
+			break;
+		}
 	}
 }
 
+void Points_to_line_drew(cv::Mat *img, Point points[], int num, int line_bottom=0, int line_top=image_h) {
+    if (num < 2 || img == nullptr || img->empty()) {
+        return;
+    }
+    
+    // 计算拟合直线
+    double sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
+    
+    for (int i = 0; i < num; i++) {
+        sum_x += points[i].x;
+        sum_y += points[i].y;
+        sum_xy += points[i].x * points[i].y;
+        sum_x2 += points[i].x * points[i].x;
+    }
+    
+    // 计算斜率和截距
+    double denominator = num * sum_x2 - sum_x * sum_x;
+    if (fabs(denominator) < 1e-6) {
+        // Vertical line case
+        double x = sum_x / num;
+        Point pt1(x, line_bottom);
+        Point pt2(x, line_top);
+        line(*img, pt1, pt2, Scalar(0, 0, 255), 2);
+        return;
+    }
+    
+    double slope = (num * sum_xy - sum_x * sum_y) / denominator;
+    double intercept = (sum_y - slope * sum_x) / num;
+    
+    // 计算线段端点
+    Point pt1, pt2;
+    
+    // 使用 line_bottom 和 line_top 作为 y 坐标
+    // 默认值: line_bottom = 0, line_top = img->rows
+    int y1 = line_bottom;
+    int y2 = line_top;
+    
+    // 计算相应的 x 坐标
+    int x1 = static_cast<int>((y1 - intercept) / slope);
+    int x2 = static_cast<int>((y2 - intercept) / slope);
+    
+    pt1 = Point(x1, y1);
+    pt2 = Point(x2, y2);
+    
+    // Clip points to image boundaries
+    pt1.x = max(0, min(pt1.x, img->cols - 1));
+    pt2.x = max(0, min(pt2.x, img->cols - 1));
+    pt1.y = max(0, min(pt1.y, img->rows - 1));
+    pt2.y = max(0, min(pt2.y, img->rows - 1));
+    
+    // Draw the fitted line
+    line(*img, pt1, pt2, Scalar(0), 2);
+    
+}
 
+void AcrossTrack_Step_ACROSS_OUT(Img_Store *Img_Store_p,Data_Path *Data_Path_p){
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
+	int left_border_num = 0, right_border_num = 0;
+    Point left_border_point_bottom(0,0), left_border_point_top(0,0);
+    Point right_border_point_bottom(0,0), right_border_point_top(0,0);
+
+    // 计算搜索范围
+    int start_row = image_h - JSON_TrackConfigData.Path_Search_Start;
+    int end_row = Data_Path_p->search_print_h_max;
+
+    // 搜索左边界
+    for (int i = start_row; i >= end_row; i--) {
+        if (Data_Path_p->l_border[i] <= 5) {
+            left_border_num++;
+            
+            // 记录边界点
+            if (left_border_num == 1) {
+                left_border_point_bottom = Point(Data_Path_p->l_border[i], i);
+            }
+            left_border_point_top = Point(Data_Path_p->l_border[i], i);
+        }
+    }
+
+    // 搜索右边界
+    for (int i = start_row; i >= end_row; i--) {
+        if (Data_Path_p->r_border[i] >= image_w - 5) {
+            right_border_num++;
+            
+            // 记录边界点
+            if (right_border_num == 1) {
+                right_border_point_bottom = Point(Data_Path_p->r_border[i], i);
+            }
+            right_border_point_top = Point(Data_Path_p->r_border[i], i);
+        }
+    }
+
+	if(left_border_point_bottom.y < Data_Path_p->InflectionPointCoordinate[0][1]){		// 边界左侧底部点在拐点上方
+		Point points[5];
+		int y = Data_Path_p->InflectionPointCoordinate[0][1];
+		for(int i = 0;i<5; i++){
+			points[i] = Point(Data_Path_p->l_border[y], y);
+			y++;
+		}
+		Points_to_line_drew(&Img_Store_p->Img_OTSU, points, 5, image_h-JSON_TrackConfigData.Path_Search_Start, Data_Path_p->search_print_h_max);
+		imgSearch_l_r(Img_Store_p,Data_Path_p);
+	}else{
+		Point points[5];
+		int y = Data_Path_p->InflectionPointCoordinate[0][1];
+		for(int i = 0;i<5; i++){
+			points[i] = Point(Data_Path_p->l_border[y], y);
+			y--;
+		}
+		// Points_to_line_drew(&Img_Store_p->Img_OTSU, points, 5, image_h-JSON_TrackConfigData.Path_Search_Start, Data_Path_p->search_print_h_max);
+		// imgSearch_l_r(Img_Store_p,Data_Path_p);
+	}
+
+	if(right_border_point_bottom.y < Data_Path_p->InflectionPointCoordinate[0][3]){		// 边界右侧底部点在拐点上方
+		Point points[5];
+		int y = Data_Path_p->InflectionPointCoordinate[0][3];
+		for(int i = 0;i<5; i++){
+			points[i] = Point(Data_Path_p->r_border[y], y);
+			y++;
+		}
+		Points_to_line_drew(&Img_Store_p->Img_OTSU, points, 5, image_h-JSON_TrackConfigData.Path_Search_Start, Data_Path_p->search_print_h_max);
+		imgSearch_l_r(Img_Store_p,Data_Path_p);
+	}else{
+		Point points[5];
+		int y = Data_Path_p->InflectionPointCoordinate[0][3];
+		for(int i = 0;i<5; i++){
+			points[i] = Point(Data_Path_p->r_border[y], y);
+			y--;
+		}
+		// Points_to_line_drew(&Img_Store_p->Img_OTSU, points, 5, image_h-JSON_TrackConfigData.Path_Search_Start, Data_Path_p->search_print_h_max);
+		// imgSearch_l_r(Img_Store_p,Data_Path_p);
+	}
+
+}
 

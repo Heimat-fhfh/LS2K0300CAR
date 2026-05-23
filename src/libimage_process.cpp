@@ -451,8 +451,9 @@ void ImgProcess::ImgText(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_
 	(Img_Store_p -> Img_Text) = Mat(200,ImgWidth,CV_8UC3,Scalar(0,0,0));	// 显示文字画布
 
 	putText((Img_Store_p -> Img_Text),TextTrackKind[int(Data_Path_p -> Temp_Track_Kind)],Point(5,25),FONT_HERSHEY_COMPLEX,1,(255),2);
-	putText((Img_Store_p -> Img_Text),TextLoopKind[int(Data_Path_p -> Loop_Kind)],Point(5,65),FONT_HERSHEY_COMPLEX,1,(255),2);	
-	// putText((Img_Store_p -> Img_Text),TextCircleTrackStep[int(Data_Path_p -> Circle_Track_Step)],Point(5,105),FONT_HERSHEY_COMPLEX,1,(255),2);
+	putText((Img_Store_p -> Img_Text),TextTrackKind[int(Data_Path_p -> Track_Kind)],Point(5,65),FONT_HERSHEY_COMPLEX,1,(255),2);
+	putText((Img_Store_p -> Img_Text),TextLoopKind[int(Data_Path_p -> Loop_Kind)],Point(5,105),FONT_HERSHEY_COMPLEX,1,(255),2);	
+	putText((Img_Store_p -> Img_Text),TextCircleTrackStep[int(Data_Path_p -> Circle_Track_Step)],Point(5,145),FONT_HERSHEY_COMPLEX,1,(255),2);
 }
 
 

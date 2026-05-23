@@ -38,14 +38,14 @@ void CircleTrack_Step_IN_Prepare_2(Img_Store *Img_Store_p,Data_Path *Data_Path_p
         case L_CIRCLE_TRACK:
         {
             line(Img_Store_p->Img_OTSU, Point(image_w/2-JSON_TrackConfigData.Track_width/2, image_h-JSON_TrackConfigData.Path_Search_Start),
-            Point(image_w/2-JSON_TrackConfigData.Track_width/2, Data_Path_p->InflectionPointCoordinate[0][1]), Scalar(0), 2);
+            Point(Data_Path_p->InflectionPointCoordinate[0][0], Data_Path_p->InflectionPointCoordinate[0][1]), Scalar(0), 2);
             imgSearch_l_r(Img_Store_p,Data_Path_p);
             break;
         }
         case R_CIRCLE_TRACK:
         {
             line(Img_Store_p->Img_OTSU, Point(image_w/2+JSON_TrackConfigData.Track_width/2, image_h-JSON_TrackConfigData.Path_Search_Start),
-            Point(image_w/2+JSON_TrackConfigData.Track_width/2, Data_Path_p->InflectionPointCoordinate[0][3]), Scalar(0), 2);
+            Point(Data_Path_p->InflectionPointCoordinate[0][2], Data_Path_p->InflectionPointCoordinate[0][3]), Scalar(0), 2);
             imgSearch_l_r(Img_Store_p,Data_Path_p);
             break;
          }

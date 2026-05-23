@@ -81,64 +81,77 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
      * 如果存在左/右侧独立黑块, 并且右/左侧不存在拐点，则判定为圆环赛道循环；
      * 否则判定为普通赛道循环。
      */
-    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] > 1))
+    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] >= 1 && Data_Path_p->InflectionPointNum[0] >= 1))
     {
         Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
         TrackKindCount[L_ACROSS_TRACK]++;
         if (TrackKindCount[L_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = L_ACROSS_TRACK;
             Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
+            Data_Path_p->Across_Track_Step = ACROSS_PREPARE;   // 十字赛道步骤机状态初始化为准备进入十字
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != L_ACROSS_TRACK) {
                     TrackKindCount[i] = 0;
                 }
             }
+        }else{
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
-    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] > 1))
+    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] >= 1 && Data_Path_p->InflectionPointNum[1] >= 1))
     {
         Data_Path_p->Temp_Track_Kind = R_ACROSS_TRACK;
         TrackKindCount[R_ACROSS_TRACK]++;
         if (TrackKindCount[R_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = R_ACROSS_TRACK;
             Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
+            Data_Path_p->Across_Track_Step = ACROSS_PREPARE;   // 十字赛道步骤机状态初始化为准备进入十字
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != R_ACROSS_TRACK) {
                     TrackKindCount[i] = 0;
                 }
             }
+        }else{
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
-    else if (Data_Path_p->black_left_found)
+    else if (Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] <= 1 && Data_Path_p->InflectionPointNum[0] >= 1)
     {
         Data_Path_p->Temp_Track_Kind = L_CIRCLE_TRACK;
         TrackKindCount[L_CIRCLE_TRACK]++;
         if (TrackKindCount[L_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = L_CIRCLE_TRACK;
             Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
+            Data_Path_p->Circle_Track_Step = IN_PREPARE;   // 圆环赛道步骤机状态初始化为准备入环
+            cout << "圆环循环" << endl;
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != L_CIRCLE_TRACK) {
                     TrackKindCount[i] = 0;
                 }
             }
+        }else{
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
-    else if (Data_Path_p->black_right_found)
+    else if (Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] <= 1 && Data_Path_p->InflectionPointNum[1] >= 1)
     {
         Data_Path_p->Temp_Track_Kind = R_CIRCLE_TRACK;
         TrackKindCount[R_CIRCLE_TRACK]++;
         if (TrackKindCount[R_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
             Data_Path_p->Track_Kind = R_CIRCLE_TRACK;
             Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
+            Data_Path_p->Circle_Track_Step = IN_PREPARE;   // 圆环赛道步骤机状态初始化为准备入环
             // 清空其他赛道类型计数器
             for (int i = 0; i < 6; ++i) {
                 if (i != R_CIRCLE_TRACK) {
                     TrackKindCount[i] = 0;
                 }
             }
+        }else{
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
     else if (Data_Path_p->BendPointNum[0] > JSON_TrackConfigData.BendPointNum[0] 
@@ -157,6 +170,8 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
                     TrackKindCount[i] = 0;
                 }
             }
+        }else{
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
      }
     else
@@ -172,10 +187,11 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
                     TrackKindCount[i] = 0;
                 }
             }
+        }else{
+            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
     
-
     Judge_Num++;
     return Data_Path_p->Loop_Kind;
 }
