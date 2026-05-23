@@ -13,59 +13,87 @@ int my_abs(int value)
 }
 
 // 获取左边界
-void get_left(uint16 total_L,Data_Path *Data_Path_p)
+// 获取左边界
+void get_left(uint16 total_L, Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-	uint16 i = 0;
-	uint16 j = 0;
-	uint16 h = 0;
-	//初始化
-	for (i = 0;i < RESULT_ROW;i++)
-	{
-		Data_Path_p->l_border[i] = border_min;
-	}
-	h = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
-	//左边
-	for (j = 0; j < total_L; j++)
-	{
-        // printf("第%d点的y:%d,正在寻找的高度:%d\n", j,Data_Path_p->points_l[j][1],h);
-		if (Data_Path_p->points_l[j][1] == h)
-		{
-			Data_Path_p->l_border[h] = Data_Path_p->points_l[j][0] + 1;
-            // printf("%d\n", j);
-		}
-		else continue; //每行只取一个点，没到下一行就不记录
-		h--;
-		if (h == 0)
-		{
-			break;//到最后一行退出
-		}
-	}
+    uint16 i = 0;
+    uint16 j = 0;
+    uint16 h = 0;
+    
+    // 初始化
+    for (i = 0; i < RESULT_ROW; i++)
+    {
+        Data_Path_p->l_border[i] = border_min;
+    }
+    
+    h = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
+    
+    // 左边
+    for (j = 0; j < total_L; j++)
+    {
+        if (Data_Path_p->points_l[j][1] == h)
+        {
+            uint16 current_x = Data_Path_p->points_l[j][0] + 1;
+            uint16 center_x = image_w / 2;  // 图像宽度宏定义 image_w
+            
+            // 如果当前行还没有设置边界，或者当前点比已记录的点更靠近中心，则更新
+            if (Data_Path_p->l_border[h] == border_min ||
+                abs((int)current_x - (int)center_x) < abs((int)Data_Path_p->l_border[h] - (int)center_x))
+            {
+                Data_Path_p->l_border[h] = current_x;
+            }
+        }
+        else if (Data_Path_p->points_l[j][1] < h)
+        {
+            // 当 y 坐标小于当前高度 h 时，说明这一行已经处理完毕，移动到上一行
+            h--;
+            // 回退 j 以便重新检查当前 point 在新 h 下是否匹配
+            if (h == 0) break;
+            j--;  // 重新处理同一个点，因为它的 y 可能等于新的 h
+        }
+    }
 }
 
 // 获取右边界
-void get_right(uint16 total_R,Data_Path *Data_Path_p)
+void get_right(uint16 total_R, Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-	uint16 i = 0;
-	uint16 j = 0;
-	uint16 h = 0;
-	for (i = 0; i < RESULT_ROW; i++)
-	{
-		Data_Path_p->r_border[i] = border_max;//右边线初始化放到最右边，左边线放到最左边，这样八邻域闭合区域外的中线就会在中间，不会干扰得到的数据
-	}
-	h = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
-	//右边
-	for (j = 0; j < total_R; j++)
-	{
-		if (Data_Path_p->points_r[j][1] == h)
-		{
-			Data_Path_p->r_border[h] = Data_Path_p->points_r[j][0] - 1;
-		}
-		else continue;//每行只取一个点，没到下一行就不记录
-		h--;
-		if (h == 0)break;//到最后一行退出
-	}
+    uint16 i = 0;
+    uint16 j = 0;
+    uint16 h = 0;
+    
+    for (i = 0; i < RESULT_ROW; i++)
+    {
+        Data_Path_p->r_border[i] = border_max;  // 右边线初始化放到最右边
+    }
+    
+    h = RESULT_ROW - JSON_TrackConfigData.Path_Search_Start;
+    
+    // 右边
+    for (j = 0; j < total_R; j++)
+    {
+        if (Data_Path_p->points_r[j][1] == h)
+        {
+            uint16 current_x = Data_Path_p->points_r[j][0] - 1;
+            uint16 center_x = image_w / 2;  // 图像宽度宏定义 image_w
+            
+            // 如果当前行还没有设置边界，或者当前点比已记录的点更靠近中心，则更新
+            if (Data_Path_p->r_border[h] == border_max ||
+                abs((int)current_x - (int)center_x) < abs((int)Data_Path_p->r_border[h] - (int)center_x))
+            {
+                Data_Path_p->r_border[h] = current_x;
+            }
+        }
+        else if (Data_Path_p->points_r[j][1] < h)
+        {
+            // 当 y 坐标小于当前高度 h 时，说明这一行已经处理完毕，移动到上一行
+            h--;
+            // 回退 j 以便重新检查同一个点在新 h 下是否匹配
+            if (h == 0) break;
+            j--;  // 重新处理同一个点
+        }
+    }
 }
 
 /*

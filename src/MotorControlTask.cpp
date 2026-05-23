@@ -32,10 +32,11 @@ MotorControlTask::MotorControlTask(
     , workerThread(nullptr)
     , rtPriority(50)
     , rtPolicy(SCHED_FIFO)
-    , leftRampLimiter(0.8, 0.2)          // 默认加速度=0.5，减速度=0.5
-    , rightRampLimiter(0.8, 0.2)         // 默认加速度=0.5，减速度=0.5
+    , leftRampLimiter(0.5, 0.5)
+    , rightRampLimiter(0.5, 0.5)
     , lastLeftOutput_(0.0)
-    , lastRightOutput_(0.0) {
+    , lastRightOutput_(0.0)
+    , motorMaxDuty(50.0f) {
     
     if (!motors || !leftEncoder || !rightEncoder) {
         throw std::invalid_argument("MotorControlTask: Null pointer provided");
@@ -45,20 +46,7 @@ MotorControlTask::MotorControlTask(
         throw std::invalid_argument("MotorControlTask: Invalid control period");
     }
     
-    // 初始化角速度PID参数
-    angularVelocityParams.Kp = 1.0;      // 适中的反应速度
-    angularVelocityParams.Ki = 0.5;      // 较温和的误差消除
-    angularVelocityParams.Kd = 0.05;     // 微弱的阻尼，防止超调
-    
-    angularVelocityParams.limitP = 80.0;  // 允许比例项产生较大的修正
-    angularVelocityParams.limitI = 100.0;  // 限制积分项，防止严重超调
-    angularVelocityParams.limitD = 30.0;  // 限制微分震荡
-    
-    // 总输出限幅：
-    // 如果偏差很大，允许 PID 在目标值基础上最多补偿 ±50°/s
-    angularVelocityParams.limitOutput = 120.0; 
-    angularVelocityParams.limitIMin = -120.0;
-    angularVelocityParams.enableAntiWindup = true; // 必须开启
+    // 角速度PID参数由 setAngularVelocityParams() 设置
 }
 
 MotorControlTask::~MotorControlTask() {
@@ -163,7 +151,7 @@ void MotorControlTask::run() {
     Control::PID angularVelocityPID(angularVelocityParams);
     
     // 设置电机限制
-    motors->setMaxDutyLimits(50.0f);
+    motors->setMaxDutyLimits(static_cast<float>(motorMaxDuty));
     
     // 监控变量
     const int maxErrorCount = 10;
@@ -416,6 +404,16 @@ void MotorControlTask::setWheelRadius(double wheelRadius) {
     printf("Wheel radius updated to: %.3f m\n", wheelRadius);
 }
 
+void MotorControlTask::setMotorMaxDuty(double duty) {
+    if (duty <= 0.0 || duty > 100.0) {
+        printf("Warning: Invalid motor max duty: %.3f\n", duty);
+        return;
+    }
+    
+    motorMaxDuty = duty;
+    printf("Motor max duty updated to: %.3f\n", duty);
+}
+
 bool MotorControlTask::isValidAngularVelocity(double angularVelocity) const {
     return !std::isnan(angularVelocity) && !std::isinf(angularVelocity) && 
            angularVelocity >= -1000.0 && angularVelocity <= 1000.0;
@@ -493,6 +491,12 @@ void MotorControlTask::RampLimiter::setLimits(double maxAcceleration, double max
 
 std::pair<double, double> MotorControlTask::RampLimiter::getLimits() const {
     return {maxAcceleration_, maxDeceleration_};
+}
+
+void MotorControlTask::setAngularVelocityParams(const Control::PID::Parameters& params) {
+    angularVelocityParams = params;
+    printf("Angular velocity PID params updated: Kp=%.3f, Ki=%.3f, Kd=%.3f\n",
+           params.Kp, params.Ki, params.Kd);
 }
 
 // ==================== 斜坡控制相关方法实现 ====================

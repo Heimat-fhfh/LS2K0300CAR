@@ -75,13 +75,47 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
 
     static int Judge_Num = 0;    // 决策循环帧数计数器
     static int TrackKindCount[6] = {0};    // 赛道类型计数器，顺序为：直赛道、弯赛道、左十字赛道、右十字赛道、左圆环赛道、右圆环赛道
-    
+
+    int left_border_num = 0, right_border_num = 0;
+    Point left_border_point_bottom(0,0), left_border_point_top(0,0);
+    Point right_border_point_bottom(0,0), right_border_point_top(0,0);
+
+    // 计算搜索范围
+    int start_row = image_h - JSON_TrackConfigData.Path_Search_Start;
+    int end_row = Data_Path_p->search_print_h_max;
+
+    // 搜索左边界
+    for (int i = start_row; i >= end_row; i--) {
+        if (Data_Path_p->l_border[i] <= 5) {
+            left_border_num++;
+            
+            // 记录边界点
+            if (left_border_num == 1) {
+                left_border_point_bottom = Point(Data_Path_p->l_border[i], i);
+            }
+            left_border_point_top = Point(Data_Path_p->l_border[i], i);
+        }
+    }
+
+    // 搜索右边界
+    for (int i = start_row; i >= end_row; i--) {
+        if (Data_Path_p->r_border[i] >= image_w - 5) {
+            right_border_num++;
+            
+            // 记录边界点
+            if (right_border_num == 1) {
+                right_border_point_bottom = Point(Data_Path_p->r_border[i], i);
+            }
+            right_border_point_top = Point(Data_Path_p->r_border[i], i);
+        }
+    }
+
     /**
      * 如果存在左/右侧独立黑块，并且右/左侧存在拐点，则判定为十字赛道循环；
      * 如果存在左/右侧独立黑块, 并且右/左侧不存在拐点，则判定为圆环赛道循环；
      * 否则判定为普通赛道循环。
      */
-    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] >= 1 && Data_Path_p->InflectionPointNum[0] >= 1))
+    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] >= 1 && Data_Path_p->InflectionPointNum[0] >= 1 && left_border_num+right_border_num >= 30))
     {
         Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
         TrackKindCount[L_ACROSS_TRACK]++;
@@ -99,7 +133,7 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
             Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
-    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] >= 1 && Data_Path_p->InflectionPointNum[1] >= 1))
+    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] >= 1 && Data_Path_p->InflectionPointNum[1] >= 1 && left_border_num+right_border_num >= 30))
     {
         Data_Path_p->Temp_Track_Kind = R_ACROSS_TRACK;
         TrackKindCount[R_ACROSS_TRACK]++;
@@ -117,7 +151,7 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
             Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
-    else if (Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] <= 1 && Data_Path_p->InflectionPointNum[0] >= 1)
+    else if (Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] <= 1 && Data_Path_p->InflectionPointNum[0] >= 1 && left_border_num >= 10)
     {
         Data_Path_p->Temp_Track_Kind = L_CIRCLE_TRACK;
         TrackKindCount[L_CIRCLE_TRACK]++;
@@ -136,7 +170,7 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
             Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
         }
     }
-    else if (Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] <= 1 && Data_Path_p->InflectionPointNum[1] >= 1)
+    else if (Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] <= 1 && Data_Path_p->InflectionPointNum[1] >= 1 && right_border_num >= 10)
     {
         Data_Path_p->Temp_Track_Kind = R_CIRCLE_TRACK;
         TrackKindCount[R_CIRCLE_TRACK]++;
@@ -408,6 +442,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     JSON_FunctionConfigData JSON_FunctionConfigData;
     JSON_TrackConfigData JSON_TrackConfigData;
+    JSON_SpeedPIDConfigData JSON_LeftSpeedPIDConfigData;
+    JSON_SpeedPIDConfigData JSON_RightSpeedPIDConfigData;
+    JSON_AngularVelocityPIDConfigData JSON_AngularVelocityPIDConfigData;
+    JSON_VehicleConfigData JSON_VehicleConfigData;
 
     int JSON_FileNum;
     const char* ConfigFilePath;
@@ -489,14 +527,21 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     }
 
     const std::vector<std::string> required_keys = {
-        "SPEED_L", "SPEED_R", "UART_EN", "IMG_COMPRESS_EN", "CAMERA_EN", "IMAGE_SAVE_EN", "VIDEO_SHOW_EN",
+        "UART_EN", "IMG_COMPRESS_EN", "CAMERA_EN", "IMAGE_SAVE_EN", "VIDEO_SHOW_EN",
         "DATA_PRINT_EN", "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN","Track_width", "FORWARD", "PATH_SEARCH_START",
         "PATH_SEARCH_END", "SIDE_SEARCH_START", "SIDE_SEARCH_END", "POINT_DISTANCE", "LITTLE_ANGLE_BEND_POINT_NUM",
         "BIG_ANGLE_BEND_POINT_NUM", "MIN_INFLECTION_POINT_ANGLE", "MAX_INFLECTION_POINT_ANGLE", "MIN_BEND_POINT_ANGLE",
         "MAX_BEND_POINT_ANGLE", "TRACK_WIDTH", "TRACK_KIND_COUNT_THRESHOLD","CIRCLE_OUT_WIDTH", "STRIGHT_TRACK_MOTOR_SPEED",
         "LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED", "BIG_ANGLE_BEND_TRACK_MOTOR_SPEED", "ACROSS_TRACK_MOTOR_SPEED",
         "CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE", "CIRCLE_TRACK_MOTOR_SPEED_INSIDE", "BRIDGE_ZONE_MOTOR_SPEED",
-        "CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE", "CIRCLE_IN_PREPARE_TIME"
+        "CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE", "CIRCLE_IN_PREPARE_TIME",
+        "LEFT_PID_KP", "LEFT_PID_KI", "LEFT_PID_KD", "LEFT_PID_LIMIT_P", "LEFT_PID_LIMIT_I", "LEFT_PID_LIMIT_D",
+        "LEFT_PID_LIMIT_OUTPUT", "LEFT_PID_LIMIT_I_MIN", "LEFT_PID_ANTI_WINDUP",
+        "RIGHT_PID_KP", "RIGHT_PID_KI", "RIGHT_PID_KD", "RIGHT_PID_LIMIT_P", "RIGHT_PID_LIMIT_I", "RIGHT_PID_LIMIT_D",
+        "RIGHT_PID_LIMIT_OUTPUT", "RIGHT_PID_LIMIT_I_MIN", "RIGHT_PID_ANTI_WINDUP",
+        "ANGULAR_PID_KP", "ANGULAR_PID_KI", "ANGULAR_PID_KD", "ANGULAR_PID_LIMIT_P", "ANGULAR_PID_LIMIT_I",
+        "ANGULAR_PID_LIMIT_D", "ANGULAR_PID_LIMIT_OUTPUT", "ANGULAR_PID_LIMIT_I_MIN", "ANGULAR_PID_ANTI_WINDUP",
+        "WHEELBASE", "WHEEL_RADIUS", "CONTROL_PERIOD", "MOTOR_MAX_DUTY", "RAMP_MAX_ACCEL", "RAMP_MAX_DECEL"
     };
 
     std::vector<std::string> missing_keys;
@@ -521,8 +566,46 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     std::cout << "[Config] JSON 根节点字段数量: " << ConfigData.size() << std::endl;
 
-    JSON_PIDConfigData_p->speedl = ConfigData.at("SPEED_L");    // 获取电机低速
-    JSON_PIDConfigData_p->speedr = ConfigData.at("SPEED_R");    // 获取电机高速
+    // 左轮速PID参数
+    JSON_LeftSpeedPIDConfigData.Kp = ConfigData.at("LEFT_PID_KP");
+    JSON_LeftSpeedPIDConfigData.Ki = ConfigData.at("LEFT_PID_KI");
+    JSON_LeftSpeedPIDConfigData.Kd = ConfigData.at("LEFT_PID_KD");
+    JSON_LeftSpeedPIDConfigData.limitP = ConfigData.at("LEFT_PID_LIMIT_P");
+    JSON_LeftSpeedPIDConfigData.limitI = ConfigData.at("LEFT_PID_LIMIT_I");
+    JSON_LeftSpeedPIDConfigData.limitD = ConfigData.at("LEFT_PID_LIMIT_D");
+    JSON_LeftSpeedPIDConfigData.limitOutput = ConfigData.at("LEFT_PID_LIMIT_OUTPUT");
+    JSON_LeftSpeedPIDConfigData.limitIMin = ConfigData.at("LEFT_PID_LIMIT_I_MIN");
+    JSON_LeftSpeedPIDConfigData.enableAntiWindup = ConfigData.at("LEFT_PID_ANTI_WINDUP");
+
+    // 右轮速PID参数
+    JSON_RightSpeedPIDConfigData.Kp = ConfigData.at("RIGHT_PID_KP");
+    JSON_RightSpeedPIDConfigData.Ki = ConfigData.at("RIGHT_PID_KI");
+    JSON_RightSpeedPIDConfigData.Kd = ConfigData.at("RIGHT_PID_KD");
+    JSON_RightSpeedPIDConfigData.limitP = ConfigData.at("RIGHT_PID_LIMIT_P");
+    JSON_RightSpeedPIDConfigData.limitI = ConfigData.at("RIGHT_PID_LIMIT_I");
+    JSON_RightSpeedPIDConfigData.limitD = ConfigData.at("RIGHT_PID_LIMIT_D");
+    JSON_RightSpeedPIDConfigData.limitOutput = ConfigData.at("RIGHT_PID_LIMIT_OUTPUT");
+    JSON_RightSpeedPIDConfigData.limitIMin = ConfigData.at("RIGHT_PID_LIMIT_I_MIN");
+    JSON_RightSpeedPIDConfigData.enableAntiWindup = ConfigData.at("RIGHT_PID_ANTI_WINDUP");
+
+    // 角速度PID参数
+    JSON_AngularVelocityPIDConfigData.Kp = ConfigData.at("ANGULAR_PID_KP");
+    JSON_AngularVelocityPIDConfigData.Ki = ConfigData.at("ANGULAR_PID_KI");
+    JSON_AngularVelocityPIDConfigData.Kd = ConfigData.at("ANGULAR_PID_KD");
+    JSON_AngularVelocityPIDConfigData.limitP = ConfigData.at("ANGULAR_PID_LIMIT_P");
+    JSON_AngularVelocityPIDConfigData.limitI = ConfigData.at("ANGULAR_PID_LIMIT_I");
+    JSON_AngularVelocityPIDConfigData.limitD = ConfigData.at("ANGULAR_PID_LIMIT_D");
+    JSON_AngularVelocityPIDConfigData.limitOutput = ConfigData.at("ANGULAR_PID_LIMIT_OUTPUT");
+    JSON_AngularVelocityPIDConfigData.limitIMin = ConfigData.at("ANGULAR_PID_LIMIT_I_MIN");
+    JSON_AngularVelocityPIDConfigData.enableAntiWindup = ConfigData.at("ANGULAR_PID_ANTI_WINDUP");
+
+    // 车辆控制参数
+    JSON_VehicleConfigData.wheelbase = ConfigData.at("WHEELBASE");
+    JSON_VehicleConfigData.wheelRadius = ConfigData.at("WHEEL_RADIUS");
+    JSON_VehicleConfigData.controlPeriod = ConfigData.at("CONTROL_PERIOD");
+    JSON_VehicleConfigData.motorMaxDuty = ConfigData.at("MOTOR_MAX_DUTY");
+    JSON_VehicleConfigData.rampMaxAccel = ConfigData.at("RAMP_MAX_ACCEL");
+    JSON_VehicleConfigData.rampMaxDecel = ConfigData.at("RAMP_MAX_DECEL");
 
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数
@@ -572,8 +655,15 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     // 同步配置到运行时容器（覆盖旧值，保持单配置生效）。
     Function_EN_p->JSON_FunctionConfigData_v.clear();
     Data_Path_p->JSON_TrackConfigData_v.clear();
+    Data_Path_p->JSON_SpeedPIDConfigData_v.clear();
+    Data_Path_p->JSON_AngularVelocityPIDConfigData_v.clear();
+    Data_Path_p->JSON_VehicleConfigData_v.clear();
     Function_EN_p->JSON_FunctionConfigData_v.push_back(JSON_FunctionConfigData);
     Data_Path_p->JSON_TrackConfigData_v.push_back(JSON_TrackConfigData);
+    Data_Path_p->JSON_SpeedPIDConfigData_v.push_back(JSON_LeftSpeedPIDConfigData);
+    Data_Path_p->JSON_SpeedPIDConfigData_v.push_back(JSON_RightSpeedPIDConfigData);
+    Data_Path_p->JSON_AngularVelocityPIDConfigData_v.push_back(JSON_AngularVelocityPIDConfigData);
+    Data_Path_p->JSON_VehicleConfigData_v.push_back(JSON_VehicleConfigData);
 
     std::cout << "[Config] Function 配置数量: " << Function_EN_p->JSON_FunctionConfigData_v.size()
               << ", Track 配置数量: " << Data_Path_p->JSON_TrackConfigData_v.size() << std::endl;

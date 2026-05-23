@@ -25,6 +25,10 @@ bool g_calibration_enabled = false;
 bool g_simple_tracking_enabled = false;
 
 JSON_PIDConfigData JSON_PIDConfigData_s;
+JSON_SpeedPIDConfigData JSON_LeftSpeedPIDConfigData_s;
+JSON_SpeedPIDConfigData JSON_RightSpeedPIDConfigData_s;
+JSON_AngularVelocityPIDConfigData JSON_AngularVelocityPIDConfigData_s;
+JSON_VehicleConfigData JSON_VehicleConfigData_s;
 Function_EN Function_EN_s;
 Data_Path Data_Path_s;
 
@@ -123,10 +127,28 @@ int main()
         std::cerr << "[Motor] motorTask 未创建，无法启动主循环" << std::endl;
         return EXIT_FAILURE;
     }
+
+    // 从配置读取角速度PID参数
+    {
+        Control::PID::Parameters angularVelParams;
+        angularVelParams.Kp = JSON_AngularVelocityPIDConfigData_s.Kp;
+        angularVelParams.Ki = JSON_AngularVelocityPIDConfigData_s.Ki;
+        angularVelParams.Kd = JSON_AngularVelocityPIDConfigData_s.Kd;
+        angularVelParams.limitP = JSON_AngularVelocityPIDConfigData_s.limitP;
+        angularVelParams.limitI = JSON_AngularVelocityPIDConfigData_s.limitI;
+        angularVelParams.limitD = JSON_AngularVelocityPIDConfigData_s.limitD;
+        angularVelParams.limitOutput = JSON_AngularVelocityPIDConfigData_s.limitOutput;
+        angularVelParams.limitIMin = JSON_AngularVelocityPIDConfigData_s.limitIMin;
+        angularVelParams.enableAntiWindup = JSON_AngularVelocityPIDConfigData_s.enableAntiWindup;
+        motorTask->setAngularVelocityParams(angularVelParams);
+    }
+
     motorTask->enableAngularVelocityControl(true);
     motorTask->enableRampLimiting(true);
-    motorTask->setRampLimits(0.8, 0.2);
-    motorTask->setWheelbase(0.158);
+    motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
+    motorTask->setWheelbase(JSON_VehicleConfigData_s.wheelbase);
+    motorTask->setWheelRadius(JSON_VehicleConfigData_s.wheelRadius);
+    motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
     motorTask->start();
 
     // 5. 初始化摄像头并启动图像采集线程    
@@ -212,20 +234,7 @@ void argument_config(void)
     // 3. 电机控制器创建
     motors = std::make_unique<DualMotorController>();
 
-    // 4. PID参数设置
-    leftParams.Kp = 1.0;
-    leftParams.Ki = 0.4;
-    leftParams.Kd = 0.0;
-    leftParams.limitP = 0.9;
-    leftParams.limitI = 0.7;
-    leftParams.limitD = 0.0;
-    leftParams.limitIMin = -0.7;
-    leftParams.limitOutput = 0.7;
-    leftParams.enableAntiWindup = true;
-
-    rightParams = leftParams;
-
-    // 5. 配置文件同步
+    // 4. 配置文件同步
     Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s,&JSON_PIDConfigData_s);
     g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
     if (g_runtime_config_ok)
@@ -251,6 +260,32 @@ void argument_config(void)
             std::cout << "[Calibration] 图像标定使能关闭: " << calibrationJsonPath << std::endl;
         }
 
+        // 从配置读取轮速PID参数
+        JSON_LeftSpeedPIDConfigData_s = Data_Path_s.JSON_SpeedPIDConfigData_v[0];
+        JSON_RightSpeedPIDConfigData_s = Data_Path_s.JSON_SpeedPIDConfigData_v[1];
+        JSON_AngularVelocityPIDConfigData_s = Data_Path_s.JSON_AngularVelocityPIDConfigData_v[0];
+        JSON_VehicleConfigData_s = Data_Path_s.JSON_VehicleConfigData_v[0];
+
+        leftParams.Kp = JSON_LeftSpeedPIDConfigData_s.Kp;
+        leftParams.Ki = JSON_LeftSpeedPIDConfigData_s.Ki;
+        leftParams.Kd = JSON_LeftSpeedPIDConfigData_s.Kd;
+        leftParams.limitP = JSON_LeftSpeedPIDConfigData_s.limitP;
+        leftParams.limitI = JSON_LeftSpeedPIDConfigData_s.limitI;
+        leftParams.limitD = JSON_LeftSpeedPIDConfigData_s.limitD;
+        leftParams.limitOutput = JSON_LeftSpeedPIDConfigData_s.limitOutput;
+        leftParams.limitIMin = JSON_LeftSpeedPIDConfigData_s.limitIMin;
+        leftParams.enableAntiWindup = JSON_LeftSpeedPIDConfigData_s.enableAntiWindup;
+
+        rightParams.Kp = JSON_RightSpeedPIDConfigData_s.Kp;
+        rightParams.Ki = JSON_RightSpeedPIDConfigData_s.Ki;
+        rightParams.Kd = JSON_RightSpeedPIDConfigData_s.Kd;
+        rightParams.limitP = JSON_RightSpeedPIDConfigData_s.limitP;
+        rightParams.limitI = JSON_RightSpeedPIDConfigData_s.limitI;
+        rightParams.limitD = JSON_RightSpeedPIDConfigData_s.limitD;
+        rightParams.limitOutput = JSON_RightSpeedPIDConfigData_s.limitOutput;
+        rightParams.limitIMin = JSON_RightSpeedPIDConfigData_s.limitIMin;
+        rightParams.enableAntiWindup = JSON_RightSpeedPIDConfigData_s.enableAntiWindup;
+
         g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
         Function_EN_s.Game_EN = true;
         // 默认从图像循环开始，等待第一帧完成赛道状态判定后再切换到对应任务。
@@ -273,15 +308,18 @@ void argument_config(void)
     }
 
     // 6. 电机控制任务创建
-    motorTask = std::make_unique<MotorControlTask>(
-            leftParams,
-            rightParams,
-            motors.get(),
-            &encoder_left,
-            &encoder_right,
-            &imu,
-            0.01
-        );
+    {
+        double ctrlPeriod = g_runtime_config_ok ? JSON_VehicleConfigData_s.controlPeriod : 0.01;
+        motorTask = std::make_unique<MotorControlTask>(
+                leftParams,
+                rightParams,
+                motors.get(),
+                &encoder_left,
+                &encoder_right,
+                &imu,
+                ctrlPeriod
+            );
+    }
 }
 
 void sigint_handler(int signum)
@@ -454,7 +492,7 @@ int main_test_task(const MainTestConfig& test_config)
     {
         motorTask->start();
         motorTask->enableRampLimiting(true);
-        motorTask->setRampLimits(0.8, 0.2);
+        motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
         try
         {
             printf("\n=== 测试1：无斜坡限制的基本测试 ===\n");
@@ -487,7 +525,7 @@ int main_test_task(const MainTestConfig& test_config)
         {
             motorTask->enableAngularVelocityControl(true);
             motorTask->enableRampLimiting(true);
-            motorTask->setRampLimits(0.8, 0.2);
+            motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
             motorTask->start();
 
             motorTask->setBaseSpeed(0.5);

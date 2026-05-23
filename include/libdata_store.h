@@ -93,6 +93,52 @@ typedef struct JSON_PIDConfigData
 
 
 /*
+    JSON文件存储的轮速PID参数
+*/
+typedef struct JSON_SpeedPIDConfigData
+{
+    double Kp;
+    double Ki;
+    double Kd;
+    double limitP;
+    double limitI;
+    double limitD;
+    double limitOutput;
+    double limitIMin;
+    bool enableAntiWindup;
+} JSON_SpeedPIDConfigData;
+
+/*
+    JSON文件存储的角速度PID参数
+*/
+typedef struct JSON_AngularVelocityPIDConfigData
+{
+    double Kp;
+    double Ki;
+    double Kd;
+    double limitP;
+    double limitI;
+    double limitD;
+    double limitOutput;
+    double limitIMin;
+    bool enableAntiWindup;
+} JSON_AngularVelocityPIDConfigData;
+
+/*
+    JSON文件存储的车辆控制参数
+*/
+typedef struct JSON_VehicleConfigData
+{
+    double wheelbase;
+    double wheelRadius;
+    double controlPeriod;
+    double motorMaxDuty;
+    double rampMaxAccel;
+    double rampMaxDecel;
+} JSON_VehicleConfigData;
+
+
+/*
     JSON文件存储的工程功能设置参数
 */
 typedef struct JSON_FunctionConfigData
@@ -222,6 +268,9 @@ typedef struct Function_EN
 typedef struct Data_Path
 {
     std::vector<JSON_TrackConfigData> JSON_TrackConfigData_v; // JSON文件存储的赛道识别设置参数
+    std::vector<JSON_SpeedPIDConfigData> JSON_SpeedPIDConfigData_v; // JSON文件存储的轮速PID参数
+    std::vector<JSON_AngularVelocityPIDConfigData> JSON_AngularVelocityPIDConfigData_v; // JSON文件存储的角速度PID参数
+    std::vector<JSON_VehicleConfigData> JSON_VehicleConfigData_v; // JSON文件存储的车辆控制参数
     
     
     int NumSearch[2] = {0}; // 左右八邻域寻线坐标数量

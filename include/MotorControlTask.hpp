@@ -147,6 +147,18 @@ public:
      */
     void setWheelRadius(double wheelRadius);
     
+    /**
+     * @brief 设置电机最大占空比限制
+     * @param duty 最大占空比（百分比）
+     */
+    void setMotorMaxDuty(double duty);
+    
+    /**
+     * @brief 设置角速度PID参数
+     * @param params 角速度PID参数
+     */
+    void setAngularVelocityParams(const Control::PID::Parameters& params);
+
     // ==================== 斜坡控制相关方法 ====================
     
     /**
@@ -251,6 +263,7 @@ private:
     // 车辆参数
     double wheelbase;                               // 轮距（米）
     double wheelRadius;                             // 车轮半径（米）
+    double motorMaxDuty;                            // 电机最大占空比（百分比）
     
     // 控制周期
     const double controlPeriod;
