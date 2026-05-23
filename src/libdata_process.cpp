@@ -238,24 +238,25 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
 
+    Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[0];
     /*
         由于圆环步骤和赛道类型是独立的，因此会出现如下情况
         1、直道但是圆环步骤不为占位，如准备入环到入环的阶段
         2、弯道但是圆环步骤不为占位，同上
         为防止速度过快时的拐点识别率下降，因此引入直道弯道时也要考虑圆环步骤防止误判
     */
-    switch(Data_Path_p -> Track_Kind)
-    {
-        // 直道速度决策
-        case STRIGHT_TRACK:
-        {
-            Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[0];
-        }
-        case BEND_TRACK:
-        {
-            Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[1];
-        }
-    }
+    // switch(Data_Path_p -> Track_Kind)
+    // {
+    //     // 直道速度决策
+    //     case STRIGHT_TRACK:
+    //     {
+    //         Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[0];
+    //     }
+    //     case BEND_TRACK:
+    //     {
+    //         Data_Path_p->TargetBaseSpeedMps = JSON_TrackConfigData.CommonMotorSpeed[1];
+    //     }
+    // }
 }
 
 
@@ -266,13 +267,17 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 void Judge::AngularVelocityTarget_Judge(Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    float k = 0.45f / (JSON_TrackConfigData.Forward*1.4634f - 90.291f);     // 每像素对应实际距离
-    Data_Path_p->SteerErrorPx = Data_Path_p->center_line[JSON_TrackConfigData.Forward-JSON_TrackConfigData.Path_Search_Start] - image_w / 2;
+    float k = 0.45f / (Data_Path_p->forword_line_h*1.4634f - 90.291f);     // 每像素对应实际距离
+    Data_Path_p->forword_line_h = std::max(image_h-JSON_TrackConfigData.Default_Forward, int(Data_Path_p->search_print_h_max));
+    Data_Path_p->SteerErrorPx = Data_Path_p->center_line[Data_Path_p->forword_line_h] - image_w / 2;
+
+    // cout << "SteerErrorPx: " << Data_Path_p->SteerErrorPx << " readH: " << Data_Path_p->forword_line_h << endl;
 
     float error = Data_Path_p->SteerErrorPx * k;    // 转向误差对应的实际距离
     float L = 0.6f;
     float R = (L*L+error*error)/(2*error);
     float omega = Data_Path_p->TargetBaseSpeedMps / R;   // 目标角速度
+
     Data_Path_p->TargetAngularVelocityDeg = omega*180.0f/PI;   // 度/秒
 }
 

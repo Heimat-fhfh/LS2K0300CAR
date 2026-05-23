@@ -16,6 +16,8 @@ MotorControlTask::MotorControlTask(
     , rightTargetSpeed(0.0)
     , targetAngularVelocity(0.0)
     , baseSpeed(0.0)
+    , lastActualAngularVelocity(0.0)
+    , lastAngularVelocityPidOutput(0.0)
     , angularVelocityControlEnabled(false)
     , rampLimitingEnabled(false)          // 默认禁用斜坡限制
     , leftParams(leftParams)
@@ -141,11 +143,8 @@ void MotorControlTask::run() {
     
     ControlState state = ControlState::INIT;
     
-    // 创建左右轮PID控制器
-    // Control::PIDWithDeadband leftPID(leftParams, 0.2);
-    // Control::PIDWithDeadband rightPID(rightParams, 0.2);
-    Control::PID leftPID(leftParams);leftPID.setIntegral(0.2); // 设置初始积分值，帮助快速响应
-    Control::PID rightPID(rightParams);rightPID.setIntegral(0.2); // 设置初始积分值，帮助快速响应
+    Control::PID leftPID(leftParams);leftPID.setIntegral(0); // 设置初始积分值，帮助快速响应
+    Control::PID rightPID(rightParams);rightPID.setIntegral(0); // 设置初始积分值，帮助快速响应
 
     // 创建角速度PID控制器（如果需要）
     Control::PID angularVelocityPID(angularVelocityParams);
@@ -244,6 +243,9 @@ void MotorControlTask::run() {
                         lastValidAngularVelocity = actualAngularVelocity;
                     }
                 
+                    // 保存实际角速度，供外部读取
+                    lastActualAngularVelocity.store(actualAngularVelocity);
+                
                 } else {
                     printf("Warning: Failed to update IMU data\n");
                 }
@@ -255,6 +257,7 @@ void MotorControlTask::run() {
                 // 角速度PID控制
                 double angularVelocityError = targetAngVel - actualAngularVelocity;
                 double angularControlOutput = angularVelocityPID.calculate(targetAngVel, actualAngularVelocity, controlPeriod);
+                lastAngularVelocityPidOutput.store(angularControlOutput);
                 
                 // 将角速度控制输出转换为速度差
                 // 注意：angularControlOutput是角速度误差的修正量（°/s）
@@ -382,6 +385,14 @@ void MotorControlTask::setBaseSpeed(double baseSpeed) {
 
 double MotorControlTask::getBaseSpeed() const {
     return baseSpeed.load();
+}
+
+double MotorControlTask::getActualAngularVelocity() const {
+    return lastActualAngularVelocity.load();
+}
+
+double MotorControlTask::getAngularVelocityPidOutput() const {
+    return lastAngularVelocityPidOutput.load();
 }
 
 void MotorControlTask::setWheelbase(double wheelbase) {

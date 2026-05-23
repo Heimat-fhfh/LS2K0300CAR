@@ -19,7 +19,7 @@ void ProcessAlgo_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,F
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p->JSON_TrackConfigData_v[0];    // 赛道识别设置参数
     // 圆环赛道状态机只在本轮周期内完成“补线 + 寻线 + 回到图像循环”的闭环。
     // 其中 Circle_Track_Step 由决策模块提前写入，这里只负责按步骤执行对应补线算法。
-    cout << "CircleTrack_Step: " << Data_Path_p->Circle_Track_Step << endl;
+    // cout << "CircleTrack_Step: " << Data_Path_p->Circle_Track_Step << endl;
     static int status_change_count = 0; // 状态变化计数器，用于监控状态持续时间
     switch(Data_Path_p->Circle_Track_Step)
     {
@@ -162,7 +162,7 @@ void RunCircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
 void ProcessAlgo_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p->JSON_TrackConfigData_v[0];    // 赛道识别设置参数
-    cout << "AcrossTrack_Step: " << Data_Path_p->Across_Track_Step << endl;
+    // cout << "AcrossTrack_Step: " << Data_Path_p->Across_Track_Step << endl;
     static int status_change_count = 0; // 状态变化计数器，用于监控状态持续时间
 
     
@@ -309,26 +309,10 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
 void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
 {
 
-    (void)Img_Store_p;
-    #ifdef MAKE_MAIN_CPP
-        (void)Function_EN_p;
-        if (!motorTask || !motorTask->isRunning())
-        {
-            return;
-        }
-    #endif
-
     judge_p->MotorSpeed_Judge(Img_Store_p,Data_Path_p);
     judge_p->AngularVelocityTarget_Judge(Data_Path_p);
 
-    // 上位机控制模式：视觉输出 -> 目标角速度差速控制。
-    #ifdef MAKE_MAIN_CPP
-        if (Function_EN_p->Control_EN == true)
-        {
-            motorTask->setBaseSpeed(Data_Path_p->TargetBaseSpeedMps);
-            motorTask->setTargetAngularVelocity(Data_Path_p->TargetAngularVelocityDeg);
-        }
-    #endif
+    
 }
 
 void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)

@@ -3,6 +3,7 @@
 #include "main.hpp"
 #include "camera_calibration.h"
 #include "AAAtools.h"
+#include <iomanip>
 
 using namespace std;
 using namespace cv;
@@ -151,6 +152,18 @@ int main()
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
     motorTask->start();
 
+    // motorTask->setTargetAngularVelocity(0);
+    // motorTask->setBaseSpeed(0.5);
+    // std::this_thread::sleep_for(std::chrono::seconds(3));
+    // motorTask->setBaseSpeed(1);
+    // std::this_thread::sleep_for(std::chrono::seconds(3));
+    // motorTask->setBaseSpeed(2);
+    // std::this_thread::sleep_for(std::chrono::seconds(3));
+    // motorTask->setBaseSpeed(-2);
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
+    // buzzer.shortBeep();
+    // return 0;
+
     // 5. 初始化摄像头并启动图像采集线程    
     VideoCapture Camera;
     CameraInit(Camera, g_camera_kind, 320, 240, 120);
@@ -161,6 +174,7 @@ int main()
     TempCaptureSession tempCapture(false);
     PerfWindowRecorder perfRecorder(30, false);
 
+    Function_EN_s.Control_EN = true;
     // 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
     while (g_running.load() && Function_EN_s.Game_EN)
     {
@@ -192,7 +206,30 @@ int main()
 
         tempCapture.saveFrameIfNeeded(Img_Store_s.Img_Color);
 
-        ProcessTrackTaskPerFrame(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
+        FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
+
+        imgProcess.ImgLabel(&Img_Store_s, &Data_Path_s, &Function_EN_s);
+        imgProcess.ImgInflectionPointDraw(&Img_Store_s, &Data_Path_s); 
+        // ImgProcess::ImgBendPointDraw(Img_Store_p,Data_Path_p); 
+        imgProcess.ImgTransitionScanDraw(&Img_Store_s, &Data_Path_s);
+        imgProcess.ImgForwardLine(&Img_Store_s, &Data_Path_s);
+        imgProcess.ImgReferenceLine(&Img_Store_s, &Data_Path_s);
+        displayMatOnIPS200(Img_Store_s.Img_Track);
+        
+        if (!Function_EN_s.Control_EN)
+        {
+            continue;
+        }
+
+        cout << "EPx,TD,AD,PID,TBS: " << Data_Path_s.SteerErrorPx << ",\t"
+        << fixed << setprecision(3) 
+        << Data_Path_s.TargetAngularVelocityDeg << ",\t" 
+        << motorTask->getActualAngularVelocity() << ",\t"
+        << motorTask->getAngularVelocityPidOutput() << ",\t" 
+        << Data_Path_s.TargetBaseSpeedMps << endl;
+
+        motorTask->setBaseSpeed(Data_Path_s.TargetBaseSpeedMps);
+        motorTask->setTargetAngularVelocity(-Data_Path_s.TargetAngularVelocityDeg);
 
         
         // perfRecorder.record(std::chrono::steady_clock::now() - frameStart,
@@ -220,7 +257,7 @@ int main()
 void argument_config(void)
 {
     // 1. 测试配置初始化
-    test_config.buzzer_test = true;
+    test_config.buzzer_test = false;
     test_config.imu_test = false;
     test_config.motor_test = false;
     test_config.angular_velocity_test = false;
@@ -398,6 +435,7 @@ int main_init_task()
 
 int main_test_task(const MainTestConfig& test_config)
 {
+
     if (test_config.buzzer_test)
     {
         try

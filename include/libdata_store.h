@@ -177,7 +177,7 @@ typedef struct JSON_TrackConfigData
     int InflectionPointVectorDistance = 0;   // 边线元素拐点向量距离
     int BendPointIdentifyAngle[2] = {0};    // 边线弯点识别角度
     int BendPointVectorDistance = 0;   // 边线弯点向量距离
-    int CommonMotorSpeed[6] = {0};    // 电机速度：0.直道 1.小角度弯道 2.大角度弯道 3.十字赛道 4.圆环赛道(外) 5.圆环赛道(内)
+    double CommonMotorSpeed[6] = {0};    // 电机速度：0.直道 1.小角度弯道 2.大角度弯道 3.十字赛道 4.圆环赛道(外) 5.圆环赛道(内)
     int BridgeZoneMotorSpeed = 0;   // 桥梁区域电机速度
     int CrosswalkZoneMotorSpeed = 0;    // 斑马线区域电机准备停车速度
     int Circle_In_Prepare_Time = 0;    // 准备入环限定时间
@@ -289,6 +289,7 @@ typedef struct Data_Path
     uint16 dir_l[(uint16)USE_num] = { 0 };//用来存储左边生长方向
 
     uint16 search_print_h_max = 0;//最高点
+    int forword_line_h = 0; // 前瞻点高度
 
     int InflectionPointCoordinate[(uint16)USE_num][4] = {0};  // 左右边线元素拐点坐标
     int BendPointCoordinate[(uint16)USE_num][4] = {0};  // 左右边线弯点坐标

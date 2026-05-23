@@ -75,6 +75,7 @@
         "**/node_modules": true,
         "**/bower_components": true,
         "**/*.code-search": true,
+        ".reasonix": true,
     },
     "C_Cpp.default.intelliSenseMode": "gcc-x64",
     "C_Cpp.default.cppStandard": "c++17",

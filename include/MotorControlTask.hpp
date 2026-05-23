@@ -136,6 +136,18 @@ public:
     double getBaseSpeed() const;
     
     /**
+     * @brief 获取最近一次实际角速度（来自IMU）
+     * @return 实际角速度（°/s）
+     */
+    double getActualAngularVelocity() const;
+    
+    /**
+     * @brief 获取角速度PID控制输出量
+     * @return 角速度PID输出（°/s）
+     */
+    double getAngularVelocityPidOutput() const;
+    
+    /**
      * @brief 设置轮距（用于角速度计算）
      * @param wheelbase 轮距（米）
      */
@@ -242,6 +254,8 @@ private:
     // 角速度控制相关原子变量
     std::atomic<double> targetAngularVelocity;      // 目标角速度（°/s）
     std::atomic<double> baseSpeed;                  // 基础线速度（m/s）
+    std::atomic<double> lastActualAngularVelocity;   // 最近一次实际角速度（°/s）
+    std::atomic<double> lastAngularVelocityPidOutput;// 角速度PID控制器输出量（°/s）
     std::atomic<bool> angularVelocityControlEnabled; // 角速度控制是否启用
     
     // 斜坡控制相关原子变量
