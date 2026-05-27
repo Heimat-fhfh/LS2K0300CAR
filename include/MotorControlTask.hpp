@@ -128,6 +128,12 @@ public:
      * @param baseSpeed 基础线速度（m/s）
      */
     void setBaseSpeed(double baseSpeed);
+
+    /**
+     * @brief 设置速度PID的积分项
+     * @param integral 积分项值
+     */
+    void setSpeedPidIntegral(double integral);
     
     /**
      * @brief 获取当前基础线速度
@@ -257,6 +263,8 @@ private:
     std::atomic<double> lastActualAngularVelocity;   // 最近一次实际角速度（°/s）
     std::atomic<double> lastAngularVelocityPidOutput;// 角速度PID控制器输出量（°/s）
     std::atomic<bool> angularVelocityControlEnabled; // 角速度控制是否启用
+    std::atomic<bool> speedPidIntegralResetRequested{false};
+    std::atomic<double> speedPidIntegralValue{0.0};
     
     // 斜坡控制相关原子变量
     std::atomic<bool> rampLimitingEnabled;          // 斜坡限制是否启用

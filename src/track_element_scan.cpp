@@ -73,9 +73,28 @@ void Judge::TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p,
         return;
     }
 
+    int region_top = image_h - cfg.Path_Search_End;
+    int region_bottom = image_h - cfg.Path_Search_Start;
+    int region_h = region_bottom - region_top;
+    if (region_h <= 0) {
+        std::cerr << "Error: invalid scan region (top=" << region_top << ", bottom=" << region_bottom << ")" << std::endl;
+        Data_Path_p->TransitionDetectKind = TRANSITION_ELEMENT_NONE;
+        Data_Path_p->TransitionDetectSide = 0;
+        return;
+    }
+
+    cv::Mat roi_img = binary_img(cv::Rect(0, region_top, image_w, region_h));
+
     Data_Path_p->TransitionContours.clear();
     Data_Path_p->TransitionHierarchy.clear();
-    findContours(binary_img, Data_Path_p->TransitionContours, Data_Path_p->TransitionHierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+    findContours(roi_img, Data_Path_p->TransitionContours, Data_Path_p->TransitionHierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+    // 将轮廓坐标偏移回原图坐标系
+    for (auto& contour : Data_Path_p->TransitionContours) {
+        for (auto& pt : contour) {
+            pt.y += region_top;
+        }
+    }
 
     Data_Path_p->black_left_found = false;
     Data_Path_p->black_right_found = false;
@@ -90,7 +109,6 @@ void Judge::TransitionScanDetect(Img_Store* Img_Store_p, Data_Path* Data_Path_p,
 
         int cx = static_cast<int>(mu.m10 / mu.m00);
         int cy = static_cast<int>(mu.m01 / mu.m00);
-        if (cy < 0 || cy >= image_h) continue;
 
         int center_x = image_w / 2; // 使用图像中心作为参考线
         if (cx < center_x) {

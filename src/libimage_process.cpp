@@ -585,7 +585,8 @@ void ImgProcess::ImgBendPointDraw(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 void ImgProcess::ImgForwardLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
 	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-	line((Img_Store_p -> Img_Track),Point(0,Data_Path_p->forword_line_h),Point(image_w-1,Data_Path_p->forword_line_h),Scalar(255,0,0),3);
+	circle(Img_Store_p -> Img_Track,Point(Data_Path_p -> center_line[Data_Path_p->forword_line_h],Data_Path_p->forword_line_h),3,Scalar(255,0,0),2);
+	// line((Img_Store_p -> Img_Track),Point(0,Data_Path_p->forword_line_h),Point(image_w-1,Data_Path_p->forword_line_h),Scalar(255,0,0),3);
     // line((Img_Store_p -> Img_Track),Point(image_w/2,300),Point((Data_Path_p -> center_line[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),Scalar(255,0,0),3);
 	// putText((Img_Store_p -> Img_Track),to_string(abs(image_w/2-(Data_Path_p -> center_line[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]))),Point((Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),FONT_HERSHEY_COMPLEX,0.6,(255,255,255),1);
 }

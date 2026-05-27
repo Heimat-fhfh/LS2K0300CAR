@@ -215,7 +215,14 @@ void MotorControlTask::run() {
             // 获取当前目标速度
             double currentLeftTarget = leftTargetSpeed.load();
             double currentRightTarget = rightTargetSpeed.load();
+
+            if (speedPidIntegralResetRequested.exchange(false)) {
+                double integralValue = speedPidIntegralValue.load();
+                leftPID.setIntegral(integralValue);
+                rightPID.setIntegral(integralValue);
+            }
             
+
             // 角速度控制逻辑
             bool angularControlEnabled = angularVelocityControlEnabled.load();
             if (angularControlEnabled && imu != nullptr) {
@@ -278,6 +285,11 @@ void MotorControlTask::run() {
                 // 更新原子变量（用于显示）
                 leftTargetSpeed.store(leftTarget);
                 rightTargetSpeed.store(rightTarget);
+            }else{
+                currentLeftTarget = baseSpeed.load();
+                currentRightTarget = baseSpeed.load();
+                leftTargetSpeed.store(currentLeftTarget);
+                rightTargetSpeed.store(currentRightTarget);
             }
             
             // PID计算
@@ -381,6 +393,11 @@ void MotorControlTask::setBaseSpeed(double baseSpeed) {
     }
     
     this->baseSpeed.store(baseSpeed);
+}
+
+void MotorControlTask::setSpeedPidIntegral(double integral) {
+    speedPidIntegralValue.store(integral);
+    speedPidIntegralResetRequested.store(true);
 }
 
 double MotorControlTask::getBaseSpeed() const {

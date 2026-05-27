@@ -144,7 +144,7 @@ int main()
         motorTask->setAngularVelocityParams(angularVelParams);
     }
 
-    motorTask->enableAngularVelocityControl(true);
+    motorTask->enableAngularVelocityControl(false);
     motorTask->enableRampLimiting(true);
     motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
     motorTask->setWheelbase(JSON_VehicleConfigData_s.wheelbase);
@@ -152,17 +152,38 @@ int main()
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
     motorTask->start();
 
-    // motorTask->setTargetAngularVelocity(0);
-    // motorTask->setBaseSpeed(0.5);
-    // std::this_thread::sleep_for(std::chrono::seconds(3));
-    // motorTask->setBaseSpeed(1);
-    // std::this_thread::sleep_for(std::chrono::seconds(3));
-    // motorTask->setBaseSpeed(2);
-    // std::this_thread::sleep_for(std::chrono::seconds(3));
-    // motorTask->setBaseSpeed(-2);
-    // std::this_thread::sleep_for(std::chrono::seconds(10));
-    // buzzer.shortBeep();
-    // return 0;
+    
+    // motorTask->enableAngularVelocityControl(false);
+    motorTask->setSpeedPidIntegral(0.0);
+    motorTask->setBaseSpeed(1);
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    buzzer.longBeep();
+    
+    motorTask->setSpeedPidIntegral(0.0);
+    motorTask->setBaseSpeed(0);
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    buzzer.longBeep();
+
+    motorTask->setSpeedPidIntegral(0.0);
+    motorTask->setBaseSpeed(1);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    buzzer.longBeep();
+
+    motorTask->setSpeedPidIntegral(0.0);
+    motorTask->setBaseSpeed(2);
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+    buzzer.longBeep();
+
+    motorTask->setSpeedPidIntegral(0.0);
+    motorTask->setBaseSpeed(0);
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    buzzer.longBeep();
+
+    motorTask->setSpeedPidIntegral(0.0);
+    motorTask->setBaseSpeed(3);
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+    buzzer.longBeep();
+    return 0;
 
     // 5. 初始化摄像头并启动图像采集线程    
     VideoCapture Camera;
@@ -175,6 +196,7 @@ int main()
     PerfWindowRecorder perfRecorder(30, false);
 
     Function_EN_s.Control_EN = true;
+    JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_s.JSON_FunctionConfigData_v[0];
     // 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
     while (g_running.load() && Function_EN_s.Game_EN)
     {
@@ -208,13 +230,17 @@ int main()
 
         FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
 
-        imgProcess.ImgLabel(&Img_Store_s, &Data_Path_s, &Function_EN_s);
-        imgProcess.ImgInflectionPointDraw(&Img_Store_s, &Data_Path_s); 
-        // ImgProcess::ImgBendPointDraw(Img_Store_p,Data_Path_p); 
-        imgProcess.ImgTransitionScanDraw(&Img_Store_s, &Data_Path_s);
-        imgProcess.ImgForwardLine(&Img_Store_s, &Data_Path_s);
-        imgProcess.ImgReferenceLine(&Img_Store_s, &Data_Path_s);
-        displayMatOnIPS200(Img_Store_s.Img_Track);
+        if(JSON_FunctionConfigData.VideoShow_EN)
+        {
+            imgProcess.ImgLabel(&Img_Store_s, &Data_Path_s, &Function_EN_s);
+            imgProcess.ImgInflectionPointDraw(&Img_Store_s, &Data_Path_s); 
+            // ImgProcess::ImgBendPointDraw(Img_Store_p,Data_Path_p); 
+            imgProcess.ImgTransitionScanDraw(&Img_Store_s, &Data_Path_s);
+            imgProcess.ImgForwardLine(&Img_Store_s, &Data_Path_s);
+            imgProcess.ImgReferenceLine(&Img_Store_s, &Data_Path_s);
+            displayMatOnIPS200(Img_Store_s.Img_Track);
+            ips200_show_int(0,200,Data_Path_s.SteerErrorPx,3);
+        }
         
         if (!Function_EN_s.Control_EN)
         {

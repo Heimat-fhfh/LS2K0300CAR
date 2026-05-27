@@ -275,7 +275,9 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
 
     if (Data_Path_p->Loop_Kind == JUDGE_LOOP) {
         // 赛道判断循环：根据当前图像处理结果判断赛道类型，并切换到对应的赛道处理循环。
-        judge_p->TrackKind_Judge(Img_Store_p, Data_Path_p, Function_EN_p);
+        Data_Path_p->Track_Kind = STRIGHT_TRACK;
+        Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+        // judge_p->TrackKind_Judge(Img_Store_p, Data_Path_p, Function_EN_p);
     }
 
     if (Data_Path_p->Loop_Kind == COMMON_TRACK_LOOP) {
