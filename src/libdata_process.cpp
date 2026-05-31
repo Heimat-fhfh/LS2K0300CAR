@@ -546,7 +546,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "RIGHT_PID_LIMIT_OUTPUT", "RIGHT_PID_LIMIT_I_MIN", "RIGHT_PID_ANTI_WINDUP",
         "ANGULAR_PID_KP", "ANGULAR_PID_KI", "ANGULAR_PID_KD", "ANGULAR_PID_LIMIT_P", "ANGULAR_PID_LIMIT_I",
         "ANGULAR_PID_LIMIT_D", "ANGULAR_PID_LIMIT_OUTPUT", "ANGULAR_PID_LIMIT_I_MIN", "ANGULAR_PID_ANTI_WINDUP",
-        "WHEELBASE", "WHEEL_RADIUS", "CONTROL_PERIOD", "MOTOR_MAX_DUTY", "RAMP_MAX_ACCEL", "RAMP_MAX_DECEL"
+        "WHEELBASE", "WHEEL_RADIUS", "CONTROL_PERIOD", "MOTOR_MAX_DUTY", "RAMP_MAX_ACCEL", "RAMP_MAX_DECEL",
+        "LPF_SPEED_TAU", "LPF_ANGULAR_TAU"
     };
 
     std::vector<std::string> missing_keys;
@@ -611,6 +612,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_VehicleConfigData.motorMaxDuty = ConfigData.at("MOTOR_MAX_DUTY");
     JSON_VehicleConfigData.rampMaxAccel = ConfigData.at("RAMP_MAX_ACCEL");
     JSON_VehicleConfigData.rampMaxDecel = ConfigData.at("RAMP_MAX_DECEL");
+
+    // 低通滤波参数
+    JSON_VehicleConfigData.lpfSpeedTau = ConfigData.at("LPF_SPEED_TAU");
+    JSON_VehicleConfigData.lpfAngularTau = ConfigData.at("LPF_ANGULAR_TAU");
 
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数

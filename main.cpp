@@ -150,6 +150,9 @@ int main()
     motorTask->setWheelbase(JSON_VehicleConfigData_s.wheelbase);
     motorTask->setWheelRadius(JSON_VehicleConfigData_s.wheelRadius);
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
+    motorTask->enableLowPassFilter(true);
+    motorTask->setSpeedFilterTimeConstant(JSON_VehicleConfigData_s.lpfSpeedTau);
+    motorTask->setAngularFilterTimeConstant(JSON_VehicleConfigData_s.lpfAngularTau);
     motorTask->start();
 
     

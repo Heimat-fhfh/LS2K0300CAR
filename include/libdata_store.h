@@ -135,6 +135,8 @@ typedef struct JSON_VehicleConfigData
     double motorMaxDuty;
     double rampMaxAccel;
     double rampMaxDecel;
+    double lpfSpeedTau;
+    double lpfAngularTau;
 } JSON_VehicleConfigData;
 
 

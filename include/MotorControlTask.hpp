@@ -177,6 +177,40 @@ public:
      */
     void setAngularVelocityParams(const Control::PID::Parameters& params);
 
+    // ==================== 低通滤波控制相关方法 ====================
+    
+    /**
+     * @brief 启用或禁用低通滤波
+     * @param enable 是否启用
+     */
+    void enableLowPassFilter(bool enable = true);
+    
+    /**
+     * @brief 检查低通滤波是否启用
+     * @return 低通滤波是否启用
+     */
+    bool isLowPassFilterEnabled() const;
+    
+    /**
+     * @brief 设置轮速滤波器时间常数
+     * @param tau 时间常数（秒），τ = dt/(1-α)*dt，α = dt/(dt+τ)
+     */
+    void setSpeedFilterTimeConstant(double tau);
+    
+    /**
+     * @brief 设置角速度滤波器时间常数
+     * @param tau 时间常数（秒）
+     */
+    void setAngularFilterTimeConstant(double tau);
+    
+    /**
+     * @brief 重置滤波器状态
+     * @param leftValue 左轮初始值
+     * @param rightValue 右轮初始值
+     * @param angularValue 角速度初始值
+     */
+    void resetFilters(double leftValue = 0.0, double rightValue = 0.0, double angularValue = 0.0);
+
     // ==================== 斜坡控制相关方法 ====================
     
     /**
@@ -230,6 +264,25 @@ private:
     double radToDeg(double rad) const;
 
 private:
+    // 一阶低通滤波器类
+    class LowPassFilter {
+    public:
+        LowPassFilter(double tau = 0.02, double dt = 0.01);
+        
+        double apply(double raw);
+        void reset(double value = 0.0);
+        void setTimeConstant(double tau);
+        double getTimeConstant() const { return tau_; }
+        double getAlpha() const { return alpha_; }
+        
+    private:
+        double tau_;         // 时间常数（秒）
+        double dt_;          // 采样周期（秒）
+        double alpha_;       // 滤波系数 α = dt / (dt + τ)
+        double lastValue_;   // 上一次滤波输出
+        bool initialized_;   // 是否已初始化
+    };
+
     // 斜坡限制器类
     class RampLimiter {
     public:
@@ -266,6 +319,11 @@ private:
     std::atomic<bool> speedPidIntegralResetRequested{false};
     std::atomic<double> speedPidIntegralValue{0.0};
     
+    // 低通滤波相关原子变量
+    std::atomic<bool> lowPassFilterEnabled;         // 低通滤波是否启用
+    std::atomic<double> speedFilterTau;              // 轮速滤波器时间常数
+    std::atomic<double> angularFilterTau;            // 角速度滤波器时间常数
+    
     // 斜坡控制相关原子变量
     std::atomic<bool> rampLimitingEnabled;          // 斜坡限制是否启用
     
@@ -298,6 +356,11 @@ private:
     // 实时优先级设置
     int rtPriority;
     int rtPolicy;
+    
+    // 一阶低通滤波器
+    LowPassFilter leftSpeedFilter;
+    LowPassFilter rightSpeedFilter;
+    LowPassFilter angularVelocityFilter;
     
     // 斜坡限制器
     RampLimiter leftRampLimiter;

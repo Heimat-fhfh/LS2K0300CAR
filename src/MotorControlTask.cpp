@@ -19,6 +19,9 @@ MotorControlTask::MotorControlTask(
     , lastActualAngularVelocity(0.0)
     , lastAngularVelocityPidOutput(0.0)
     , angularVelocityControlEnabled(false)
+    , lowPassFilterEnabled(true)          // 默认启用低通滤波
+    , speedFilterTau(0.02)
+    , angularFilterTau(0.02)
     , rampLimitingEnabled(false)          // 默认禁用斜坡限制
     , leftParams(leftParams)
     , rightParams(rightParams)
@@ -34,6 +37,9 @@ MotorControlTask::MotorControlTask(
     , workerThread(nullptr)
     , rtPriority(50)
     , rtPolicy(SCHED_FIFO)
+    , leftSpeedFilter(0.02, controlPeriod)
+    , rightSpeedFilter(0.02, controlPeriod)
+    , angularVelocityFilter(0.02, controlPeriod)
     , leftRampLimiter(0.5, 0.5)
     , rightRampLimiter(0.5, 0.5)
     , lastLeftOutput_(0.0)
@@ -212,6 +218,12 @@ void MotorControlTask::run() {
                 lastValidRightSpeed = rightSpeed;
             }
             
+            // 一阶低通滤波
+            if (lowPassFilterEnabled.load()) {
+                leftSpeed = leftSpeedFilter.apply(leftSpeed);
+                rightSpeed = rightSpeedFilter.apply(rightSpeed);
+            }
+            
             // 获取当前目标速度
             double currentLeftTarget = leftTargetSpeed.load();
             double currentRightTarget = rightTargetSpeed.load();
@@ -250,6 +262,11 @@ void MotorControlTask::run() {
                         lastValidAngularVelocity = actualAngularVelocity;
                     }
                 
+                    // 一阶低通滤波
+                    if (lowPassFilterEnabled.load()) {
+                        actualAngularVelocity = angularVelocityFilter.apply(actualAngularVelocity);
+                    }
+                    
                     // 保存实际角速度，供外部读取
                     lastActualAngularVelocity.store(actualAngularVelocity);
                 
@@ -466,6 +483,39 @@ double MotorControlTask::radToDeg(double rad) const {
     return rad * 180.0 / M_PI;
 }
 
+// ==================== LowPassFilter类实现 ====================
+
+MotorControlTask::LowPassFilter::LowPassFilter(double tau, double dt)
+    : tau_(tau)
+    , dt_(dt)
+    , alpha_(dt / (dt + tau))
+    , lastValue_(0.0)
+    , initialized_(false) {
+}
+
+double MotorControlTask::LowPassFilter::apply(double raw) {
+    if (!initialized_) {
+        lastValue_ = raw;
+        initialized_ = true;
+        return raw;
+    }
+    lastValue_ = alpha_ * raw + (1.0 - alpha_) * lastValue_;
+    return lastValue_;
+}
+
+void MotorControlTask::LowPassFilter::reset(double value) {
+    lastValue_ = value;
+    initialized_ = true;
+}
+
+void MotorControlTask::LowPassFilter::setTimeConstant(double tau) {
+    if (tau < 0.0) return;
+    tau_ = tau;
+    alpha_ = dt_ / (dt_ + tau_);
+    if (alpha_ < 0.0) alpha_ = 0.0;
+    if (alpha_ > 1.0) alpha_ = 1.0;
+}
+
 // ==================== RampLimiter类实现 ====================
 
 MotorControlTask::RampLimiter::RampLimiter(double maxAcceleration, double maxDeceleration)
@@ -525,6 +575,58 @@ void MotorControlTask::setAngularVelocityParams(const Control::PID::Parameters& 
     angularVelocityParams = params;
     printf("Angular velocity PID params updated: Kp=%.3f, Ki=%.3f, Kd=%.3f\n",
            params.Kp, params.Ki, params.Kd);
+}
+
+// ==================== 低通滤波控制相关方法实现 ====================
+
+void MotorControlTask::enableLowPassFilter(bool enable) {
+    bool wasEnabled = lowPassFilterEnabled.load();
+    lowPassFilterEnabled.store(enable);
+    
+    if (enable && !wasEnabled) {
+        leftSpeedFilter.reset(leftEncoder->readSpeed());
+        rightSpeedFilter.reset(rightEncoder->readSpeed());
+        if (imu != nullptr) {
+            imu->update_all_data();
+            angularVelocityFilter.reset(imu->get_unit_data().gyro_z);
+        }
+        printf("Low-pass filter enabled\n");
+    } else if (!enable && wasEnabled) {
+        printf("Low-pass filter disabled\n");
+    }
+}
+
+bool MotorControlTask::isLowPassFilterEnabled() const {
+    return lowPassFilterEnabled.load();
+}
+
+void MotorControlTask::setSpeedFilterTimeConstant(double tau) {
+    if (tau < 0.0) {
+        printf("Warning: Invalid speed filter time constant: %.4f\n", tau);
+        return;
+    }
+    leftSpeedFilter.setTimeConstant(tau);
+    rightSpeedFilter.setTimeConstant(tau);
+    speedFilterTau.store(tau);
+    printf("Speed low-pass filter time constant set to: %.4f s (alpha=%.4f)\n", 
+           tau, leftSpeedFilter.getAlpha());
+}
+
+void MotorControlTask::setAngularFilterTimeConstant(double tau) {
+    if (tau < 0.0) {
+        printf("Warning: Invalid angular filter time constant: %.4f\n", tau);
+        return;
+    }
+    angularVelocityFilter.setTimeConstant(tau);
+    angularFilterTau.store(tau);
+    printf("Angular velocity low-pass filter time constant set to: %.4f s (alpha=%.4f)\n",
+           tau, angularVelocityFilter.getAlpha());
+}
+
+void MotorControlTask::resetFilters(double leftValue, double rightValue, double angularValue) {
+    leftSpeedFilter.reset(leftValue);
+    rightSpeedFilter.reset(rightValue);
+    angularVelocityFilter.reset(angularValue);
 }
 
 // ==================== 斜坡控制相关方法实现 ====================

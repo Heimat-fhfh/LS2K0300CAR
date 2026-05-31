@@ -75,5 +75,8 @@
     "CONTROL_PERIOD": 0.01,
     "MOTOR_MAX_DUTY": 50.0,
     "RAMP_MAX_ACCEL": 0.8,
-    "RAMP_MAX_DECEL": 0.2
+    "RAMP_MAX_DECEL": 0.2,
+
+    "LPF_SPEED_TAU": 0.02,
+    "LPF_ANGULAR_TAU": 0.02
 }
