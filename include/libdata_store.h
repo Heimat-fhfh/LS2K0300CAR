@@ -137,6 +137,15 @@ typedef struct JSON_VehicleConfigData
     double rampMaxDecel;
     double lpfSpeedTau;
     double lpfAngularTau;
+    double motorPwmDeadZone;    // PWM占空比死区 (0.0~1.0)，低于此值的PWM输出被截断并重映射
+    double motorMinSpeed;       // 最小速度死区 (m/s)，低于此值的目标速度视为0
+    bool collisionProtectEnable;     // 碰撞保护总使能
+    double collisionImuJerkThreshold;// IMU冲击检测阈值 (g)，默认 3.0
+    double collisionStallDutyThreshold; // 堵转检测占空比阈值 (0~1)
+    double collisionStallSpeedThreshold;// 堵转检测速度阈值 (m/s)
+    int collisionStallCycles;        // 堵转确认周期数 (×控制周期)
+    int collisionResetKey;           // 复位按键 (0=KEY0, 1=KEY1, 2=KEY2, 3=KEY3)
+    int collisionBumperKey;          // 碰撞开关按键 (-1=禁用, 0=KEY0, 1=KEY1, 2=KEY2, 3=KEY3)
 } JSON_VehicleConfigData;
 
 

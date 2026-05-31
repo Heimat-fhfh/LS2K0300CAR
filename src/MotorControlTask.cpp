@@ -44,7 +44,17 @@ MotorControlTask::MotorControlTask(
     , rightRampLimiter(0.5, 0.5)
     , lastLeftOutput_(0.0)
     , lastRightOutput_(0.0)
-    , motorMaxDuty(50.0f) {
+    , motorMaxDuty(50.0f)
+    , motorMinSpeed(0.0)
+    , collisionProtectEnabled(false)
+    , collisionImuJerkThreshold(3.0)
+    , collisionStallDutyThreshold(0.2)
+    , collisionStallSpeedThreshold(0.01)
+    , collisionStallCycles(20)
+    , collisionResetKey(0)
+    , collisionBumperKey(-1)
+    , collisionDetected(false)
+    , stallCounter_(0) {
     
     if (!motors || !leftEncoder || !rightEncoder) {
         throw std::invalid_argument("MotorControlTask: Null pointer provided");
@@ -143,6 +153,7 @@ void MotorControlTask::run() {
     enum class ControlState {
         INIT,
         RUNNING,
+        COLLISION,
         ERROR,
         STOPPED
     };
@@ -166,6 +177,7 @@ void MotorControlTask::run() {
     double lastValidLeftSpeed = 0.0;
     double lastValidRightSpeed = 0.0;
     double lastValidAngularVelocity = 0.0;
+    int intervalCounter = 0;
     
     printf("Motor control task initialized\n");
     state = ControlState::RUNNING;
@@ -177,6 +189,31 @@ void MotorControlTask::run() {
     while (state != ControlState::STOPPED && running.load()) {
         try {
             next_time += period;
+            
+            // ============================================================
+            // 碰撞状态：电机停转，等待手动按键复位
+            // ============================================================
+            if (state == ControlState::COLLISION) {
+                if (intervalCounter % 100 == 0) {
+                    printf("[COLLISION] Press KEY%d to reset\n", collisionResetKey.load());
+                }
+                if (checkCollisionReset()) {
+                    resetCollisionState();
+                    state = ControlState::RUNNING;
+                    leftPID.reset(); leftPID.setIntegral(0);
+                    rightPID.reset(); rightPID.setIntegral(0);
+                    if (angularVelocityControlEnabled.load())
+                        angularVelocityPID.reset();
+                    printf("Collision reset - resuming control\n");
+                }
+                intervalCounter++;
+                std::this_thread::sleep_until(next_time);
+                continue;
+            }
+            
+            // ============================================================
+            // 传感器采集
+            // ============================================================
             
             // 读取左右轮速度
             double leftSpeed = leftEncoder->readSpeed();
@@ -234,45 +271,66 @@ void MotorControlTask::run() {
                 rightPID.setIntegral(integralValue);
             }
             
-
-            // 角速度控制逻辑
-            bool angularControlEnabled = angularVelocityControlEnabled.load();
-            if (angularControlEnabled && imu != nullptr) {
-                // 读取IMU数据获取实际角速度
-                double actualAngularVelocity = 0.0;
-                if (imu->update_all_data()) {
-                    const imu_unit_data_t& unit_data = imu->get_unit_data();
-                    actualAngularVelocity = unit_data.gyro_z;  // Z轴角速度（°/s）
-                    
-                    // 角速度有效性检查
-                    if (!isValidAngularVelocity(actualAngularVelocity)) {
-                        imuErrorCount++;
-                        printf("Warning: Invalid angular velocity: %.3f °/s (error %d/%d)\n", 
-                               actualAngularVelocity, imuErrorCount, maxErrorCount);
-                        actualAngularVelocity = lastValidAngularVelocity;
-                        
-                        if (imuErrorCount >= maxErrorCount) {
-                            printf("ERROR: Too many invalid angular velocity readings\n");
-                            state = ControlState::ERROR;
-                            taskError = true;
-                            break;
-                        }
-                    } else {
-                        imuErrorCount = 0;
-                        lastValidAngularVelocity = actualAngularVelocity;
-                    }
-                
-                    // 一阶低通滤波
-                    if (lowPassFilterEnabled.load()) {
-                        actualAngularVelocity = angularVelocityFilter.apply(actualAngularVelocity);
-                    }
-                    
-                    // 保存实际角速度，供外部读取
-                    lastActualAngularVelocity.store(actualAngularVelocity);
-                
-                } else {
-                    printf("Warning: Failed to update IMU data\n");
+            // 读取IMU数据（每控制周期一次，碰撞检测与角速度PID共享）
+            bool imuValid = false;
+            imu_unit_data_t imuData{};
+            if (imu != nullptr) {
+                imuValid = imu->update_all_data();
+                if (imuValid) {
+                    imuData = imu->get_unit_data();
                 }
+            }
+            
+            // ============================================================
+            // 碰撞检测（PID计算前：IMU冲击 + GPIO开关）
+            // ============================================================
+            if (collisionProtectEnabled.load()) {
+                if (imuValid && detectImuCollision(imuData)) {
+                    printf("COLLISION: IMU jerk detected (acc_x=%.2fg acc_y=%.2fg acc_z=%.2fg)\n",
+                           imuData.acc_x, imuData.acc_y, imuData.acc_z);
+                    handleCollision();
+                    state = ControlState::COLLISION;
+                    continue;
+                }
+                if (detectGpioCollision()) {
+                    handleCollision();
+                    state = ControlState::COLLISION;
+                    continue;
+                }
+            }
+            
+            // ============================================================
+            // 角速度控制 + 运动学分解
+            // ============================================================
+            bool angularControlEnabled = angularVelocityControlEnabled.load();
+            if (angularControlEnabled && imuValid) {
+                double actualAngularVelocity = imuData.gyro_z;
+                
+                // 角速度有效性检查
+                if (!isValidAngularVelocity(actualAngularVelocity)) {
+                    imuErrorCount++;
+                    printf("Warning: Invalid angular velocity: %.3f °/s (error %d/%d)\n", 
+                           actualAngularVelocity, imuErrorCount, maxErrorCount);
+                    actualAngularVelocity = lastValidAngularVelocity;
+                    
+                    if (imuErrorCount >= maxErrorCount) {
+                        printf("ERROR: Too many invalid angular velocity readings\n");
+                        state = ControlState::ERROR;
+                        taskError = true;
+                        break;
+                    }
+                } else {
+                    imuErrorCount = 0;
+                    lastValidAngularVelocity = actualAngularVelocity;
+                }
+            
+                // 一阶低通滤波
+                if (lowPassFilterEnabled.load()) {
+                    actualAngularVelocity = angularVelocityFilter.apply(actualAngularVelocity);
+                }
+                
+                // 保存实际角速度，供外部读取
+                lastActualAngularVelocity.store(actualAngularVelocity);
                 
                 // 获取目标角速度和基础速度
                 double targetAngVel = targetAngularVelocity.load();
@@ -284,7 +342,6 @@ void MotorControlTask::run() {
                 lastAngularVelocityPidOutput.store(angularControlOutput);
                 
                 // 将角速度控制输出转换为速度差
-                // 注意：angularControlOutput是角速度误差的修正量（°/s）
                 double correctedAngularVelocity = targetAngVel + angularControlOutput;
                 
                 // 单位转换：°/s -> rad/s
@@ -296,22 +353,41 @@ void MotorControlTask::run() {
                 // 更新目标速度
                 currentLeftTarget = leftTarget;
                 currentRightTarget = rightTarget;
-                // printf("当前角速度: %.2f, 误差: %.2f, 角速度控制输出: %.2f", 
-                //     actualAngularVelocity, angularVelocityError, angularControlOutput);
                 
                 // 更新原子变量（用于显示）
                 leftTargetSpeed.store(leftTarget);
                 rightTargetSpeed.store(rightTarget);
-            }else{
+            } else if (angularControlEnabled && !imuValid) {
+                printf("Warning: Failed to update IMU data\n");
+            } else {
                 currentLeftTarget = baseSpeed.load();
                 currentRightTarget = baseSpeed.load();
                 leftTargetSpeed.store(currentLeftTarget);
                 rightTargetSpeed.store(currentRightTarget);
             }
             
+            // 最小速度死区重分配（慢轮钳位到 minSpeed，丢速补到快轮，保持差速不变）
+            double mMinSpeed = motorMinSpeed.load();
+            if (mMinSpeed > 0.0) {
+                auto [adjustedLeft, adjustedRight] = applySpeedRedistribution(currentLeftTarget, currentRightTarget);
+                currentLeftTarget = adjustedLeft;
+                currentRightTarget = adjustedRight;
+            }
+            
             // PID计算
             double leftOutput = leftPID.calculate(currentLeftTarget, leftSpeed);
             double rightOutput = rightPID.calculate(currentRightTarget, rightSpeed);
+            
+            // ============================================================
+            // 堵转检测（PID计算后：有大输出但轮子不转）
+            // ============================================================
+            if (collisionProtectEnabled.load()) {
+                if (detectStallCollision(leftOutput, rightOutput, leftSpeed, rightSpeed)) {
+                    handleCollision();
+                    state = ControlState::COLLISION;
+                    continue;
+                }
+            }
 
             // 应用斜坡限制（如果启用）
             bool rampEnabled = rampLimitingEnabled.load();
@@ -321,17 +397,6 @@ void MotorControlTask::run() {
                 lastLeftOutput_ = leftOutput;
                 lastRightOutput_ = rightOutput;
             }
-
-            // printf(",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-            //     currentLeftTarget,currentRightTarget,leftSpeed,rightSpeed,leftOutput,rightOutput);
-            
-            // // 添加斜坡状态输出
-            // if (rampEnabled) {
-            //     printf(",RAMP");
-            // } else {
-            //     printf(",NORAMP");
-            // }
-            // printf("\n");
             
             std::array<float, 12> data = {
                 (float)currentLeftTarget,           // 0
@@ -365,6 +430,8 @@ void MotorControlTask::run() {
     
     if (state == ControlState::ERROR) {
         printf("Motor control task terminated due to errors.\n");
+    } else if (state == ControlState::COLLISION) {
+        printf("Motor control task stopped - collision detected.\n");
     } else {
         printf("Motor control task stopped normally.\n");
     }
@@ -571,6 +638,54 @@ std::pair<double, double> MotorControlTask::RampLimiter::getLimits() const {
     return {maxAcceleration_, maxDeceleration_};
 }
 
+void MotorControlTask::setMotorMinSpeed(double minSpeed) {
+    if (minSpeed < 0.0) {
+        printf("Warning: Invalid motor min speed: %.4f m/s\n", minSpeed);
+        return;
+    }
+    motorMinSpeed.store(minSpeed);
+    printf("Motor min speed set to: %.4f m/s\n", minSpeed);
+}
+
+double MotorControlTask::getMotorMinSpeed() const {
+    return motorMinSpeed.load();
+}
+
+std::pair<double, double> MotorControlTask::applySpeedRedistribution(double leftTarget, double rightTarget) const {
+    double minSpeed = motorMinSpeed.load();
+    if (minSpeed <= 0.0) {
+        return {leftTarget, rightTarget};
+    }
+    
+    double absL = std::abs(leftTarget);
+    double absR = std::abs(rightTarget);
+    
+    // 两轮均低于最小速度 → 停车
+    if (absL < minSpeed && absR < minSpeed) {
+        return {0.0, 0.0};
+    }
+    
+    // 两轮均在最小速度以上 → 无需调整
+    if (absL >= minSpeed && absR >= minSpeed) {
+        return {leftTarget, rightTarget};
+    }
+    
+    // 原始转速差
+    double originalDiff = rightTarget - leftTarget;
+    
+    // 慢轮钳位到最小速度，丢速叠加到快轮以保持转速差
+    if (absL < minSpeed) {
+        double clampedLeft = std::copysign(minSpeed, leftTarget);
+        double compensatedRight = clampedLeft + originalDiff;
+        return {clampedLeft, compensatedRight};
+    }
+    
+    // absR < minSpeed
+    double clampedRight = std::copysign(minSpeed, rightTarget);
+    double compensatedLeft = clampedRight - originalDiff;
+    return {compensatedLeft, clampedRight};
+}
+
 void MotorControlTask::setAngularVelocityParams(const Control::PID::Parameters& params) {
     angularVelocityParams = params;
     printf("Angular velocity PID params updated: Kp=%.3f, Ki=%.3f, Kd=%.3f\n",
@@ -675,4 +790,135 @@ void MotorControlTask::resetRampLimiters(double leftValue, double rightValue) {
     lastRightOutput_ = rightValue;
     
     printf("Ramp limiters reset - left: %.3f, right: %.3f\n", leftValue, rightValue);
+}
+
+// ==================== 碰撞保护方法实现 ====================
+
+void MotorControlTask::enableCollisionProtection(bool enable) {
+    collisionProtectEnabled.store(enable);
+    printf("Collision protection %s\n", enable ? "enabled" : "disabled");
+}
+
+bool MotorControlTask::isCollisionProtectionEnabled() const {
+    return collisionProtectEnabled.load();
+}
+
+void MotorControlTask::setCollisionImuJerkThreshold(double threshold) {
+    if (threshold <= 0.0) {
+        printf("Warning: Invalid IMU jerk threshold: %.2f g\n", threshold);
+        return;
+    }
+    collisionImuJerkThreshold.store(threshold);
+    printf("Collision IMU jerk threshold set to: %.2f g\n", threshold);
+}
+
+void MotorControlTask::setCollisionStallThresholds(double dutyThreshold, double speedThreshold, int cycles) {
+    if (dutyThreshold < 0.0 || dutyThreshold > 1.0 || speedThreshold < 0.0 || cycles < 1) {
+        printf("Warning: Invalid stall thresholds\n");
+        return;
+    }
+    collisionStallDutyThreshold.store(dutyThreshold);
+    collisionStallSpeedThreshold.store(speedThreshold);
+    collisionStallCycles.store(cycles);
+    stallCounter_ = 0;
+    printf("Collision stall: duty>%.2f, speed<%.3f m/s, cycles=%d\n",
+           dutyThreshold, speedThreshold, cycles);
+}
+
+void MotorControlTask::setCollisionKeyConfig(int resetKeyIndex, int bumperKeyIndex) {
+    collisionResetKey.store(resetKeyIndex);
+    collisionBumperKey.store(bumperKeyIndex);
+    printf("Collision keys: reset=KEY%d, bumper=KEY%d\n", resetKeyIndex, bumperKeyIndex);
+}
+
+void MotorControlTask::configureCollisionGpio(const std::array<std::string, 4>& keyPaths) {
+    collisionKeyPaths_ = keyPaths;
+    printf("Collision GPIO paths configured\n");
+}
+
+void MotorControlTask::resetCollisionState() {
+    collisionDetected.store(false);
+    stallCounter_ = 0;
+    printf("Collision state reset\n");
+}
+
+bool MotorControlTask::isCollisionDetected() const {
+    return collisionDetected.load();
+}
+
+bool MotorControlTask::detectImuCollision(const imu_unit_data_t& imuData) const {
+    double threshold = collisionImuJerkThreshold.load();
+    if (threshold <= 0.0) return false;
+    
+    double horizontalAcc = std::sqrt(imuData.acc_x * imuData.acc_x +
+                                      imuData.acc_y * imuData.acc_y);
+    return horizontalAcc > threshold;
+}
+
+bool MotorControlTask::detectStallCollision(double leftOutput, double rightOutput,
+                                             double leftSpeed, double rightSpeed) {
+    double dutyThr = collisionStallDutyThreshold.load();
+    double speedThr = collisionStallSpeedThreshold.load();
+    int cycles = collisionStallCycles.load();
+    
+    if (dutyThr <= 0.0 || cycles <= 0) return false;
+    
+    double absLeftOut = std::abs(leftOutput);
+    double absRightOut = std::abs(rightOutput);
+    double absLeftSpeed = std::abs(leftSpeed);
+    double absRightSpeed = std::abs(rightSpeed);
+    
+    bool stalld = (absLeftOut > dutyThr && absLeftSpeed < speedThr) ||
+                  (absRightOut > dutyThr && absRightSpeed < speedThr);
+    
+    if (stalld) {
+        stallCounter_++;
+        if (stallCounter_ >= cycles) {
+            printf("Stall detected: L_out=%.3f L_spd=%.3f R_out=%.3f R_spd=%.3f (%d cycles)\n",
+                   leftOutput, leftSpeed, rightOutput, rightSpeed, stallCounter_);
+            stallCounter_ = 0;
+            return true;
+        }
+    } else {
+        stallCounter_ = 0;
+    }
+    return false;
+}
+
+bool MotorControlTask::detectGpioCollision() const {
+    int bumperKey = collisionBumperKey.load();
+    if (bumperKey < 0 || bumperKey >= 4) return false;
+    
+    const char* path = getKeyPath(bumperKey);
+    if (path == nullptr) return false;
+    
+    uint8_t level = gpio_get_level(path);
+    if (level == 0) {
+        printf("GPIO collision detected on KEY%d (level=%d)\n", bumperKey, level);
+        return true;
+    }
+    return false;
+}
+
+void MotorControlTask::handleCollision() {
+    collisionDetected.store(true);
+    motors->setSpeeds(0.0f, 0.0f);
+    printf("*** COLLISION PROTECTION ACTIVATED - Motors stopped ***\n");
+}
+
+bool MotorControlTask::checkCollisionReset() const {
+    int resetKey = collisionResetKey.load();
+    if (resetKey < 0 || resetKey >= 4) return true;
+    
+    const char* path = getKeyPath(resetKey);
+    if (path == nullptr) return true;
+    
+    uint8_t level = gpio_get_level(path);
+    return (level == 0);
+}
+
+const char* MotorControlTask::getKeyPath(int keyIndex) const {
+    if (keyIndex < 0 || keyIndex >= 4) return nullptr;
+    if (collisionKeyPaths_[keyIndex].empty()) return nullptr;
+    return collisionKeyPaths_[keyIndex].c_str();
 }

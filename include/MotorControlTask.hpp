@@ -13,6 +13,7 @@
 #include "PID.hpp"
 #include "zf_driver_udp.hpp"
 #include "zf_device_imu_core.h"
+#include "zf_driver_gpio.h"
 
 class MotorControlTask {
 public:
@@ -176,6 +177,72 @@ public:
      * @param params 角速度PID参数
      */
     void setAngularVelocityParams(const Control::PID::Parameters& params);
+    
+    /**
+     * @brief 设置最小速度死区（m/s）
+     *        运动学分解后，若目标速度绝对值低于此值且不为零，则强制置零，
+     *        避免PID跟踪电机无法实现的过低速度导致积分饱和。
+     * @param minSpeed 最小速度（m/s）
+     */
+    void setMotorMinSpeed(double minSpeed);
+    
+    /**
+     * @brief 获取当前最小速度死区（m/s）
+     * @return 最小速度（m/s）
+     */
+    double getMotorMinSpeed() const;
+
+    // ==================== 碰撞保护相关方法 ====================
+
+    /**
+     * @brief 启用或禁用碰撞保护
+     * @param enable 是否启用
+     */
+    void enableCollisionProtection(bool enable = true);
+
+    /**
+     * @brief 检查碰撞保护是否启用
+     * @return 碰撞保护是否启用
+     */
+    bool isCollisionProtectionEnabled() const;
+
+    /**
+     * @brief 设置IMU冲击检测阈值
+     * @param threshold 加速度阈值 (g)
+     */
+    void setCollisionImuJerkThreshold(double threshold);
+
+    /**
+     * @brief 设置堵转检测参数
+     * @param dutyThreshold 占空比阈值 (0~1)
+     * @param speedThreshold 速度阈值 (m/s)
+     * @param cycles 确认周期数
+     */
+    void setCollisionStallThresholds(double dutyThreshold, double speedThreshold, int cycles);
+
+    /**
+     * @brief 设置碰撞检测使用的GPIO按键
+     * @param resetKeyIndex 复位按键 (0=KEY0, 1=KEY1, 2=KEY2, 3=KEY3)
+     * @param bumperKeyIndex 碰撞开关 (-1=禁用, 0=KEY0, ...)
+     */
+    void setCollisionKeyConfig(int resetKeyIndex, int bumperKeyIndex);
+
+    /**
+     * @brief 配置GPIO按键设备路径
+     * @param keyPaths 4个按键路径数组
+     */
+    void configureCollisionGpio(const std::array<std::string, 4>& keyPaths);
+
+    /**
+     * @brief 手动复位碰撞状态
+     */
+    void resetCollisionState();
+
+    /**
+     * @brief 检查是否检测到碰撞
+     * @return 是否处于碰撞状态
+     */
+    bool isCollisionDetected() const;
 
     // ==================== 低通滤波控制相关方法 ====================
     
@@ -256,6 +323,30 @@ private:
     
     // 运动学分解：将基础速度和角速度转换为左右轮速度
     std::pair<double, double> kinematicsDecomposition(double baseSpeed, double angularVelocityRad) const;
+    
+    // 最小速度死区重分配：慢轮钳位到 minSpeed，丢速补到快轮，保持原始差速不变
+    std::pair<double, double> applySpeedRedistribution(double leftTarget, double rightTarget) const;
+    
+    // ==================== 碰撞检测方法 ====================
+    
+    // IMU冲击检测：检查水平加速度是否超过阈值
+    bool detectImuCollision(const imu_unit_data_t& imuData) const;
+    
+    // 堵转检测：有PWM输出但车轮不转视为碰撞卡死
+    bool detectStallCollision(double leftOutput, double rightOutput,
+                              double leftSpeed, double rightSpeed);
+    
+    // GPIO碰撞开关检测：轮询按键电平
+    bool detectGpioCollision() const;
+    
+    // 碰撞处理：停电机、报警
+    void handleCollision();
+    
+    // 复位按键检测：长按确认
+    bool checkCollisionReset() const;
+    
+    // 获取按键GPIO路径
+    const char* getKeyPath(int keyIndex) const;
     
     // 单位转换：度/秒 转 弧度/秒
     double degToRad(double deg) const;
@@ -344,6 +435,21 @@ private:
     double wheelbase;                               // 轮距（米）
     double wheelRadius;                             // 车轮半径（米）
     double motorMaxDuty;                            // 电机最大占空比（百分比）
+    
+    // 死区参数
+    std::atomic<double> motorMinSpeed;              // 最小速度死区（m/s）
+    
+    // 碰撞保护参数
+    std::atomic<bool> collisionProtectEnabled;       // 碰撞保护总使能
+    std::atomic<double> collisionImuJerkThreshold;   // IMU冲击阈值 (g)
+    std::atomic<double> collisionStallDutyThreshold; // 堵转检测占空比阈值
+    std::atomic<double> collisionStallSpeedThreshold;// 堵转检测速度阈值 (m/s)
+    std::atomic<int> collisionStallCycles;            // 堵转确认周期数
+    std::atomic<int> collisionResetKey;               // 复位按键索引
+    std::atomic<int> collisionBumperKey;              // 碰撞开关按键索引
+    std::atomic<bool> collisionDetected;              // 碰撞标志
+    std::array<std::string, 4> collisionKeyPaths_;    // 4个按键的GPIO设备路径
+    int stallCounter_{0};                             // 堵转计数器
     
     // 控制周期
     const double controlPeriod;

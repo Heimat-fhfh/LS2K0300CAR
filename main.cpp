@@ -150,6 +150,21 @@ int main()
     motorTask->setWheelbase(JSON_VehicleConfigData_s.wheelbase);
     motorTask->setWheelRadius(JSON_VehicleConfigData_s.wheelRadius);
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
+    motorTask->setMotorMinSpeed(JSON_VehicleConfigData_s.motorMinSpeed);
+    motors->setPwmDeadZone(static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZone));
+    
+    // 碰撞保护配置
+    motorTask->enableCollisionProtection(JSON_VehicleConfigData_s.collisionProtectEnable);
+    motorTask->setCollisionImuJerkThreshold(JSON_VehicleConfigData_s.collisionImuJerkThreshold);
+    motorTask->setCollisionStallThresholds(
+        JSON_VehicleConfigData_s.collisionStallDutyThreshold,
+        JSON_VehicleConfigData_s.collisionStallSpeedThreshold,
+        JSON_VehicleConfigData_s.collisionStallCycles);
+    motorTask->setCollisionKeyConfig(
+        JSON_VehicleConfigData_s.collisionResetKey,
+        JSON_VehicleConfigData_s.collisionBumperKey);
+    motorTask->configureCollisionGpio({KEY_0, KEY_1, KEY_2, KEY_3});
+    
     motorTask->enableLowPassFilter(true);
     motorTask->setSpeedFilterTimeConstant(JSON_VehicleConfigData_s.lpfSpeedTau);
     motorTask->setAngularFilterTimeConstant(JSON_VehicleConfigData_s.lpfAngularTau);

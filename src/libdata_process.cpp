@@ -547,7 +547,11 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "ANGULAR_PID_KP", "ANGULAR_PID_KI", "ANGULAR_PID_KD", "ANGULAR_PID_LIMIT_P", "ANGULAR_PID_LIMIT_I",
         "ANGULAR_PID_LIMIT_D", "ANGULAR_PID_LIMIT_OUTPUT", "ANGULAR_PID_LIMIT_I_MIN", "ANGULAR_PID_ANTI_WINDUP",
         "WHEELBASE", "WHEEL_RADIUS", "CONTROL_PERIOD", "MOTOR_MAX_DUTY", "RAMP_MAX_ACCEL", "RAMP_MAX_DECEL",
-        "LPF_SPEED_TAU", "LPF_ANGULAR_TAU"
+        "LPF_SPEED_TAU", "LPF_ANGULAR_TAU",
+        "MOTOR_PWM_DEAD_ZONE", "MOTOR_MIN_SPEED",
+        "COLLISION_PROTECT_ENABLE", "COLLISION_IMU_JERK_THRESHOLD",
+        "COLLISION_STALL_DUTY_THRESHOLD", "COLLISION_STALL_SPEED_THRESHOLD",
+        "COLLISION_STALL_CYCLES", "COLLISION_RESET_KEY", "COLLISION_BUMPER_KEY"
     };
 
     std::vector<std::string> missing_keys;
@@ -616,6 +620,19 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     // 低通滤波参数
     JSON_VehicleConfigData.lpfSpeedTau = ConfigData.at("LPF_SPEED_TAU");
     JSON_VehicleConfigData.lpfAngularTau = ConfigData.at("LPF_ANGULAR_TAU");
+
+    // 电机死区参数
+    JSON_VehicleConfigData.motorPwmDeadZone = ConfigData.at("MOTOR_PWM_DEAD_ZONE");
+    JSON_VehicleConfigData.motorMinSpeed = ConfigData.at("MOTOR_MIN_SPEED");
+
+    // 碰撞保护参数
+    JSON_VehicleConfigData.collisionProtectEnable = ConfigData.at("COLLISION_PROTECT_ENABLE");
+    JSON_VehicleConfigData.collisionImuJerkThreshold = ConfigData.at("COLLISION_IMU_JERK_THRESHOLD");
+    JSON_VehicleConfigData.collisionStallDutyThreshold = ConfigData.at("COLLISION_STALL_DUTY_THRESHOLD");
+    JSON_VehicleConfigData.collisionStallSpeedThreshold = ConfigData.at("COLLISION_STALL_SPEED_THRESHOLD");
+    JSON_VehicleConfigData.collisionStallCycles = ConfigData.at("COLLISION_STALL_CYCLES");
+    JSON_VehicleConfigData.collisionResetKey = ConfigData.at("COLLISION_RESET_KEY");
+    JSON_VehicleConfigData.collisionBumperKey = ConfigData.at("COLLISION_BUMPER_KEY");
 
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数

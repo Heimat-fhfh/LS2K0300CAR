@@ -23,6 +23,9 @@ public:
     // 设置两个电机的最大占空比限制
     void setMaxDutyLimits(float maxDutyPercent);
     
+    // 设置两个电机的PWM占空比死区（0.0~1.0）
+    void setPwmDeadZone(float deadZone);
+    
     // 设置PWM最大值
     void setPwmMaxValues(uint16_t maxValue);
 
