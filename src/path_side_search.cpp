@@ -698,12 +698,96 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
     get_left(static_cast<uint16>(Data_Path_p->NumSearch[0]), Data_Path_p);
     get_right(static_cast<uint16>(Data_Path_p->NumSearch[1]), Data_Path_p);
 
-    for (int i = Data_Path_p->search_print_h_max; i < image_h-JSON_TrackConfigData.Path_Search_Start; i++)
     {
-        Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;
-    }     //求中线
-    // cout << "search_print_h_max: " << Data_Path_p->search_print_h_max << endl;
+        const int start_row = image_h - JSON_TrackConfigData.Path_Search_Start;
+        const int top_row = static_cast<int>(Data_Path_p->search_print_h_max);
+        const int range = start_row - top_row;
 
+        int left_valid_count = 0, right_valid_count = 0;
+        for (int i = top_row; i < start_row; ++i) {
+            if (Data_Path_p->l_border[i] != border_min) ++left_valid_count;
+            if (Data_Path_p->r_border[i] != border_max) ++right_valid_count;
+        }
+
+        const bool use_left_ref = (left_valid_count >= right_valid_count);
+
+        std::vector<cv::Point2f> ref_points;
+        if (use_left_ref) {
+            for (int i = top_row; i < start_row; ++i) {
+                if (Data_Path_p->l_border[i] != border_min) {
+                    ref_points.emplace_back(static_cast<float>(Data_Path_p->l_border[i]), static_cast<float>(i));
+                }
+            }
+        } else {
+            for (int i = top_row; i < start_row; ++i) {
+                if (Data_Path_p->r_border[i] != border_max) {
+                    ref_points.emplace_back(static_cast<float>(Data_Path_p->r_border[i]), static_cast<float>(i));
+                }
+            }
+        }
+
+        std::vector<cv::Point2f> smoothed;
+        const bool have_ref = (ref_points.size() >= 3);
+        if (have_ref) {
+            triangle_blur_points(ref_points, smoothed, 5);
+        }
+
+        auto interpolate_smooth = [&](float target_y, float fallback_x) -> float {
+            if (smoothed.empty()) return fallback_x;
+            if (smoothed.size() == 1) return smoothed[0].x;
+            for (size_t k = 0; k + 1 < smoothed.size(); ++k) {
+                const float y0 = smoothed[k].y, y1 = smoothed[k + 1].y;
+                if (y0 <= target_y && target_y <= y1) {
+                    const float t = (target_y - y0) / (y1 - y0 + 1e-6f);
+                    return smoothed[k].x + t * (smoothed[k + 1].x - smoothed[k].x);
+                }
+            }
+            return (target_y < smoothed.front().y) ? smoothed.front().x : smoothed.back().x;
+        };
+
+        for (int i = top_row; i < start_row; ++i) {
+            const bool left_valid = (Data_Path_p->l_border[i] != border_min);
+            const bool right_valid = (Data_Path_p->r_border[i] != border_max);
+
+            float perspective_scale = JSON_TrackConfigData.TrackWidthPerspectiveMin;
+            if (range > 0) {
+                perspective_scale = JSON_TrackConfigData.TrackWidthPerspectiveMin +
+                    (JSON_TrackConfigData.TrackWidthPerspectiveMax - JSON_TrackConfigData.TrackWidthPerspectiveMin) *
+                    static_cast<float>(i - top_row) / static_cast<float>(range);
+            }
+            perspective_scale = std::max(JSON_TrackConfigData.TrackWidthPerspectiveMin,
+                std::min(JSON_TrackConfigData.TrackWidthPerspectiveMax, perspective_scale));
+            const int scaled_w = static_cast<int>(JSON_TrackConfigData.TrackWidth * perspective_scale);
+
+            if (left_valid && right_valid) {
+                Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;
+            } else if (left_valid && !right_valid) {
+                float ref_x;
+                if (use_left_ref && have_ref) {
+                    ref_x = interpolate_smooth(static_cast<float>(i), static_cast<float>(Data_Path_p->l_border[i]));
+                } else {
+                    ref_x = static_cast<float>(Data_Path_p->l_border[i]);
+                }
+                int est_r = static_cast<int>(ref_x) + scaled_w;
+                est_r = std::max(est_r, static_cast<int>(ref_x) + JSON_TrackConfigData.TrackWidthGuardMinPx);
+                est_r = std::min(est_r, border_max);
+                Data_Path_p->center_line[i] = static_cast<uint16>((static_cast<int>(ref_x) + est_r) >> 1);
+            } else if (right_valid && !left_valid) {
+                float ref_x;
+                if (!use_left_ref && have_ref) {
+                    ref_x = interpolate_smooth(static_cast<float>(i), static_cast<float>(Data_Path_p->r_border[i]));
+                } else {
+                    ref_x = static_cast<float>(Data_Path_p->r_border[i]);
+                }
+                int est_l = static_cast<int>(ref_x) - scaled_w;
+                est_l = std::min(est_l, static_cast<int>(ref_x) - JSON_TrackConfigData.TrackWidthGuardMinPx);
+                est_l = std::max(est_l, border_min);
+                Data_Path_p->center_line[i] = static_cast<uint16>((est_l + static_cast<int>(ref_x)) >> 1);
+            } else {
+                Data_Path_p->center_line[i] = image_w / 2;
+            }
+        }
+    }
 
     dataMove(Data_Path_p);
 

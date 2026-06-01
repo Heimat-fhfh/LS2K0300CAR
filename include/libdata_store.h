@@ -198,6 +198,10 @@ typedef struct JSON_TrackConfigData
     int TransitionMinArea = 1000; // 独立黑色区域最小面积
     int TransitionDebounceFrames = 5; // 防抖连续帧数
 
+    float TrackWidthPerspectiveMin = 0.3f; // 赛道宽度透视缩放系数(远)
+    float TrackWidthPerspectiveMax = 1.0f; // 赛道宽度透视缩放系数(近)
+    int TrackWidthGuardMinPx = 20; // 估算边与已知边最小像素间距
+
 }JSON_TrackConfigData;
 
 struct InversePerspectiveMap {
