@@ -21,6 +21,7 @@ void MotorController::setSpeed(float speed) {
     // 限制速度在-1.0到1.0之间
     if (speed > 1.0f) speed = 1.0f;
     if (speed < -1.0f) speed = -1.0f;
+    if (speed < 0.0f) speed = 0.0f; // 禁止反转
     
     currentSpeed_ = speed;
     updateMotor(speed);

@@ -548,7 +548,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "ANGULAR_PID_LIMIT_D", "ANGULAR_PID_LIMIT_OUTPUT", "ANGULAR_PID_LIMIT_I_MIN", "ANGULAR_PID_ANTI_WINDUP",
         "WHEELBASE", "WHEEL_RADIUS", "CONTROL_PERIOD", "MOTOR_MAX_DUTY", "RAMP_MAX_ACCEL", "RAMP_MAX_DECEL",
         "LPF_SPEED_TAU", "LPF_ANGULAR_TAU",
-        "MOTOR_PWM_DEAD_ZONE", "MOTOR_MIN_SPEED",
+        "MOTOR_PWM_DEAD_ZONE_LEFT", "MOTOR_PWM_DEAD_ZONE_RIGHT", "MOTOR_MIN_SPEED",
         "COLLISION_PROTECT_ENABLE", "COLLISION_IMU_JERK_THRESHOLD",
         "COLLISION_STALL_DUTY_THRESHOLD", "COLLISION_STALL_SPEED_THRESHOLD",
         "COLLISION_STALL_CYCLES", "COLLISION_RESET_KEY", "COLLISION_BUMPER_KEY"
@@ -622,7 +622,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_VehicleConfigData.lpfAngularTau = ConfigData.at("LPF_ANGULAR_TAU");
 
     // 电机死区参数
-    JSON_VehicleConfigData.motorPwmDeadZone = ConfigData.at("MOTOR_PWM_DEAD_ZONE");
+    JSON_VehicleConfigData.motorPwmDeadZoneLeft = ConfigData.at("MOTOR_PWM_DEAD_ZONE_LEFT");
+    JSON_VehicleConfigData.motorPwmDeadZoneRight = ConfigData.at("MOTOR_PWM_DEAD_ZONE_RIGHT");
     JSON_VehicleConfigData.motorMinSpeed = ConfigData.at("MOTOR_MIN_SPEED");
 
     // 碰撞保护参数
@@ -700,6 +701,23 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
               << ", " << JSON_TrackConfigData.Path_Search_End << "]" << std::endl;
 
     cout << "<---------------------JSON参数获取成功--------------------->" << endl;
+}
+
+std::string SYNC::GetConfigFilePath() const
+{
+    int JSON_FileNum = jsonnum;
+    if (JSON_FileNum < 0 || JSON_FileNum > 2)
+    {
+        JSON_FileNum = 0;
+    }
+
+    switch (JSON_FileNum)
+    {
+        case 0: return "config/config_0.json";
+        case 1: return "config/config_1.json";
+        case 2: return "config/config_2.json";
+        default: return "config/config_0.json";
+    }
 }
 
 

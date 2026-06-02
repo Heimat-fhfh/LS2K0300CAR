@@ -101,6 +101,9 @@ class SYNC
             Data_Path_p 路径相关数据指针
         */
         void ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSON_PIDConfigData *JSON_PIDConfigData_p);
+
+        // 获取当前选择的配置文件路径（config/config_*.json）
+        std::string GetConfigFilePath() const;
 };
 
 

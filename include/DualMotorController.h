@@ -25,6 +25,9 @@ public:
     
     // 设置两个电机的PWM占空比死区（0.0~1.0）
     void setPwmDeadZone(float deadZone);
+
+    // 分别设置左右电机PWM占空比死区（0.0~1.0）
+    void setPwmDeadZones(float leftDeadZone, float rightDeadZone);
     
     // 设置PWM最大值
     void setPwmMaxValues(uint16_t maxValue);

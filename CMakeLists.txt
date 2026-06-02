@@ -3,6 +3,12 @@ cmake_minimum_required(VERSION 3.16)    # 限制最低CMake版本
 # 默认按边缘设备工具链构建；服务器端本机构建时可在配置阶段关闭。
 option(USE_EDGE_TOOLCHAIN "Build with LoongArch edge toolchain" ON)
 
+# Guard against mixing LoongArch compiler with host OpenCV libs from /usr/local.
+if (CMAKE_CXX_COMPILER MATCHES "loongarch64" AND NOT USE_EDGE_TOOLCHAIN)
+    message(WARNING "Detected LoongArch compiler; forcing USE_EDGE_TOOLCHAIN=ON to avoid host OpenCV linkage.")
+    set(USE_EDGE_TOOLCHAIN ON CACHE BOOL "Build with LoongArch edge toolchain" FORCE)
+endif()
+
 # 设置C语言编译器、C++编译器的路径和名称
 if (USE_EDGE_TOOLCHAIN)
     set(CMAKE_C_COMPILER /opt/loongarch-gnu-toolchain/bin/loongarch64-linux-gnu-gcc)

@@ -186,6 +186,8 @@ void MotorControlTask::run() {
     auto next_time = std::chrono::steady_clock::now();
     const auto period = std::chrono::microseconds(static_cast<int>(controlPeriod * 1000000));
     
+    double correctedAngularVelocityRad;
+
     while (state != ControlState::STOPPED && running.load()) {
         try {
             next_time += period;
@@ -345,7 +347,7 @@ void MotorControlTask::run() {
                 double correctedAngularVelocity = targetAngVel + angularControlOutput;
                 
                 // 单位转换：°/s -> rad/s
-                double correctedAngularVelocityRad = degToRad(correctedAngularVelocity);
+                correctedAngularVelocityRad = degToRad(correctedAngularVelocity);
                 
                 // 运动学分解：计算左右轮目标速度
                 auto [leftTarget, rightTarget] = kinematicsDecomposition(currentBaseSpeed, correctedAngularVelocityRad);
@@ -381,13 +383,13 @@ void MotorControlTask::run() {
             // ============================================================
             // 堵转检测（PID计算后：有大输出但轮子不转）
             // ============================================================
-            if (collisionProtectEnabled.load()) {
-                if (detectStallCollision(leftOutput, rightOutput, leftSpeed, rightSpeed)) {
-                    handleCollision();
-                    state = ControlState::COLLISION;
-                    continue;
-                }
-            }
+            // if (collisionProtectEnabled.load()) {
+            //     if (detectStallCollision(leftOutput, rightOutput, leftSpeed, rightSpeed)) {
+            //         handleCollision();
+            //         state = ControlState::COLLISION;
+            //         continue;
+            //     }
+            // }
 
             // 应用斜坡限制（如果启用）
             bool rampEnabled = rampLimitingEnabled.load();
@@ -407,6 +409,10 @@ void MotorControlTask::run() {
                 (float)rightOutput,                 // 5
                 (float)leftPID.getIntegral(),       // 6
                 (float)rightPID.getIntegral(),      // 7
+                (float)targetAngularVelocity.load(), // 8
+                (float)lastActualAngularVelocity, // 9
+                (float)lastAngularVelocityPidOutput, // 10
+                (float)correctedAngularVelocityRad // 11
             };
             send_udp_data("status", data.data(), data.size());
 
@@ -533,8 +539,8 @@ bool MotorControlTask::isValidAngularVelocity(double angularVelocity) const {
 
 std::pair<double, double> MotorControlTask::kinematicsDecomposition(double baseSpeed, double angularVelocityRad) const {
     // 计算速度差：Δv = ω * L / 2
-    double deltaV = angularVelocityRad * wheelbase / 2.0;;
-    
+    double deltaV = angularVelocityRad * wheelbase / 2.0;
+    deltaV *= 3;
     // 计算左右轮速度
     double leftSpeed = baseSpeed - deltaV;
     double rightSpeed = baseSpeed + deltaV;
@@ -653,37 +659,22 @@ double MotorControlTask::getMotorMinSpeed() const {
 
 std::pair<double, double> MotorControlTask::applySpeedRedistribution(double leftTarget, double rightTarget) const {
     double minSpeed = motorMinSpeed.load();
-    if (minSpeed <= 0.0) {
-        return {leftTarget, rightTarget};
+    double clampedLeft = leftTarget;
+    double clampedRight = rightTarget;
+    
+    double originalDiff = std::abs(rightTarget - leftTarget); 
+
+    if (leftTarget < minSpeed) {
+        clampedLeft = minSpeed;
+        clampedRight = minSpeed + originalDiff;
     }
-    
-    double absL = std::abs(leftTarget);
-    double absR = std::abs(rightTarget);
-    
-    // 两轮均低于最小速度 → 停车
-    if (absL < minSpeed && absR < minSpeed) {
-        return {0.0, 0.0};
+    if (rightTarget < minSpeed){
+        clampedRight = minSpeed;
+        clampedLeft = minSpeed + originalDiff;
     }
-    
-    // 两轮均在最小速度以上 → 无需调整
-    if (absL >= minSpeed && absR >= minSpeed) {
-        return {leftTarget, rightTarget};
-    }
-    
-    // 原始转速差
-    double originalDiff = rightTarget - leftTarget;
-    
-    // 慢轮钳位到最小速度，丢速叠加到快轮以保持转速差
-    if (absL < minSpeed) {
-        double clampedLeft = std::copysign(minSpeed, leftTarget);
-        double compensatedRight = clampedLeft + originalDiff;
-        return {clampedLeft, compensatedRight};
-    }
-    
-    // absR < minSpeed
-    double clampedRight = std::copysign(minSpeed, rightTarget);
-    double compensatedLeft = clampedRight - originalDiff;
-    return {compensatedLeft, clampedRight};
+
+    return {clampedLeft, clampedRight};
+
 }
 
 void MotorControlTask::setAngularVelocityParams(const Control::PID::Parameters& params) {

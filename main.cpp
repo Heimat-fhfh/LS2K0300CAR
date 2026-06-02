@@ -45,8 +45,109 @@ void cleanup();
 int main_init_task();
 int main_test_task(const MainTestConfig& test_config);
 
-int main()
+namespace
 {
+double ReadAverageSpeed(Encoder& encoder, int samples, int delayMs)
+{
+    double sum = 0.0;
+    int count = 0;
+    for (int i = 0; i < samples; ++i)
+    {
+        try
+        {
+            sum += std::abs(encoder.readSpeed());
+            ++count;
+        }
+        catch (const EncoderException&)
+        {
+            // Ignore single read failures during dead-zone probing.
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+    }
+    return (count > 0) ? (sum / static_cast<double>(count)) : 0.0;
+}
+
+double FindMotorDeadZone(MotorController& motor,
+                         Encoder& encoder,
+                         double speedThreshold,
+                         double step,
+                         int settleMs)
+{
+    motor.stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    for (double cmd = step; cmd <= 1.0 + 1e-6; cmd += step)
+    {
+        motor.setSpeed(static_cast<float>(cmd));
+        std::this_thread::sleep_for(std::chrono::milliseconds(settleMs));
+
+        const double avgSpeed = ReadAverageSpeed(encoder, 3, 50);
+        if (avgSpeed >= speedThreshold)
+        {
+            motor.stop();
+            return cmd;
+        }
+    }
+
+    motor.stop();
+    return 1.0;
+}
+
+bool UpdateConfigDeadZones(const std::string& path, double leftDeadZone, double rightDeadZone, std::string* error)
+{
+    std::ifstream ifs(path);
+    if (!ifs.is_open())
+    {
+        if (error)
+        {
+            *error = "Cannot open config file: " + path;
+        }
+        return false;
+    }
+
+    nlohmann::json cfg;
+    try
+    {
+        ifs >> cfg;
+    }
+    catch (const std::exception& e)
+    {
+        if (error)
+        {
+            *error = std::string("JSON parse failed: ") + e.what();
+        }
+        return false;
+    }
+
+    if (!cfg.is_object())
+    {
+        if (error)
+        {
+            *error = "Config JSON root is not an object";
+        }
+        return false;
+    }
+
+    cfg["MOTOR_PWM_DEAD_ZONE_LEFT"] = leftDeadZone;
+    cfg["MOTOR_PWM_DEAD_ZONE_RIGHT"] = rightDeadZone;
+
+    std::ofstream ofs(path);
+    if (!ofs.is_open())
+    {
+        if (error)
+        {
+            *error = "Cannot write config file: " + path;
+        }
+        return false;
+    }
+    ofs << cfg.dump(4);
+    return true;
+}
+}
+
+int main(int argc, char** argv)
+{
+    const bool motorDeadMode = (argc > 1 && std::string(argv[1]) == "MotorDead");
     const bool runCameraOnlyTest = false;
     if (runCameraOnlyTest)
     {
@@ -104,6 +205,58 @@ int main()
         return EXIT_FAILURE;
     }
 
+    if (motorDeadMode)
+    {
+        if (!motors)
+        {
+            std::cerr << "[MotorDead] motors 未初始化" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        motors->setPwmDeadZones(0.0f, 0.0f);
+        motors->setMaxDutyLimits(static_cast<float>(JSON_VehicleConfigData_s.motorMaxDuty));
+
+        const double speedThreshold = std::max(0.01, JSON_VehicleConfigData_s.motorMinSpeed * 0.5);
+        const double step = 0.01;
+        const int settleMs = 200;
+
+        std::cout << "[MotorDead] speed_threshold=" << speedThreshold
+                  << " step=" << step << std::endl;
+
+        const double leftDead = FindMotorDeadZone(
+            motors->getLeftMotor(),
+            encoder_left,
+            speedThreshold,
+            step,
+            settleMs);
+
+        const double rightDead = FindMotorDeadZone(
+            motors->getRightMotor(),
+            encoder_right,
+            speedThreshold,
+            step,
+            settleMs);
+
+        motors->stopAll();
+
+        JSON_VehicleConfigData_s.motorPwmDeadZoneLeft = leftDead;
+        JSON_VehicleConfigData_s.motorPwmDeadZoneRight = rightDead;
+        motors->setPwmDeadZones(static_cast<float>(leftDead), static_cast<float>(rightDead));
+
+        const std::string configPath = Sync.GetConfigFilePath();
+        std::string error;
+        if (!UpdateConfigDeadZones(configPath, leftDead, rightDead, &error))
+        {
+            std::cerr << "[MotorDead] 写入配置失败: " << error << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "[MotorDead] left=" << leftDead
+                  << " right=" << rightDead
+                  << " -> " << configPath << std::endl;
+        return EXIT_SUCCESS;
+    }
+
     // 2. 硬件设备初始化
     if (main_init_task() == EXIT_SUCCESS)
     {
@@ -144,14 +297,15 @@ int main()
         motorTask->setAngularVelocityParams(angularVelParams);
     }
 
-    motorTask->enableAngularVelocityControl(false);
+    motorTask->enableAngularVelocityControl(true);
     motorTask->enableRampLimiting(true);
     motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
     motorTask->setWheelbase(JSON_VehicleConfigData_s.wheelbase);
     motorTask->setWheelRadius(JSON_VehicleConfigData_s.wheelRadius);
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
     motorTask->setMotorMinSpeed(JSON_VehicleConfigData_s.motorMinSpeed);
-    motors->setPwmDeadZone(static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZone));
+    motors->setPwmDeadZones(static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZoneLeft),
+                            static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZoneRight));
     
     // 碰撞保护配置
     motorTask->enableCollisionProtection(JSON_VehicleConfigData_s.collisionProtectEnable);
@@ -170,38 +324,42 @@ int main()
     motorTask->setAngularFilterTimeConstant(JSON_VehicleConfigData_s.lpfAngularTau);
     motorTask->start();
 
-    
-    // motorTask->enableAngularVelocityControl(false);
-    motorTask->setSpeedPidIntegral(0.0);
     motorTask->setBaseSpeed(1);
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    buzzer.longBeep();
-    
-    motorTask->setSpeedPidIntegral(0.0);
-    motorTask->setBaseSpeed(0);
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    buzzer.longBeep();
-
-    motorTask->setSpeedPidIntegral(0.0);
-    motorTask->setBaseSpeed(1);
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    buzzer.longBeep();
-
-    motorTask->setSpeedPidIntegral(0.0);
-    motorTask->setBaseSpeed(2);
-    std::this_thread::sleep_for(std::chrono::seconds(6));
-    buzzer.longBeep();
-
-    motorTask->setSpeedPidIntegral(0.0);
-    motorTask->setBaseSpeed(0);
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    buzzer.longBeep();
-
-    motorTask->setSpeedPidIntegral(0.0);
-    motorTask->setBaseSpeed(3);
-    std::this_thread::sleep_for(std::chrono::seconds(6));
-    buzzer.longBeep();
+    printf("\nTest 1: Clockwise rotation (+90°/s)\n");
+    motorTask->setTargetAngularVelocity(90.0);
+    std::this_thread::sleep_for(std::chrono::seconds(15));
     return 0;
+
+    // motorTask->setSpeedPidIntegral(0.0);
+    // motorTask->setBaseSpeed(1);
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
+    // buzzer.longBeep();
+    
+    // motorTask->setSpeedPidIntegral(0.0);
+    // motorTask->setBaseSpeed(0);
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
+    // buzzer.longBeep();
+
+    // motorTask->setSpeedPidIntegral(0.0);
+    // motorTask->setBaseSpeed(1);
+    // std::this_thread::sleep_for(std::chrono::seconds(2));
+    // buzzer.longBeep();
+
+    // motorTask->setSpeedPidIntegral(0.0);
+    // motorTask->setBaseSpeed(2);
+    // std::this_thread::sleep_for(std::chrono::seconds(6));
+    // buzzer.longBeep();
+
+    // motorTask->setSpeedPidIntegral(0.0);
+    // motorTask->setBaseSpeed(0);
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
+    // buzzer.longBeep();
+
+    // motorTask->setSpeedPidIntegral(0.0);
+    // motorTask->setBaseSpeed(3);
+    // std::this_thread::sleep_for(std::chrono::seconds(6));
+    // buzzer.longBeep();
+    // return 0;
 
     // 5. 初始化摄像头并启动图像采集线程    
     VideoCapture Camera;
