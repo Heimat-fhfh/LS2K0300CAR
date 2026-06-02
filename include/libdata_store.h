@@ -81,32 +81,31 @@ typedef enum CircleTrackStep
     INIT_CIRCLE = 7,   // 占位
 }CircleTrackStep;
 
+
+
+
 /*
-    JSON文件存储的PID 
+    JSON文件存储的差速外环PD参数
 */
-typedef struct JSON_PIDConfigData
+typedef struct JSON_DifferentialPDConfigData
 {
-    int speedl;
-    int speedr;
-
-}JSON_PIDConfigData;
-
+    double Kp;
+    double Kd;
+    double limitP;
+    double limitD;
+    double limitOutput;
+} JSON_DifferentialPDConfigData;
 
 /*
-    JSON文件存储的轮速PID参数
+    JSON文件存储的速度环增量式PID参数
 */
-typedef struct JSON_SpeedPIDConfigData
+typedef struct JSON_SpeedIncrementalPIConfigData
 {
     double Kp;
     double Ki;
     double Kd;
-    double limitP;
-    double limitI;
-    double limitD;
     double limitOutput;
-    double limitIMin;
-    bool enableAntiWindup;
-} JSON_SpeedPIDConfigData;
+} JSON_SpeedIncrementalPIConfigData;
 
 /*
     JSON文件存储的角速度PID参数
@@ -129,24 +128,19 @@ typedef struct JSON_AngularVelocityPIDConfigData
 */
 typedef struct JSON_VehicleConfigData
 {
-    double wheelbase;
-    double wheelRadius;
     double controlPeriod;
     double motorMaxDuty;
-    double rampMaxAccel;
-    double rampMaxDecel;
     double lpfSpeedTau;
     double lpfAngularTau;
     double motorPwmDeadZoneLeft;    // 左电机PWM占空比死区 (0.0~1.0)
     double motorPwmDeadZoneRight;   // 右电机PWM占空比死区 (0.0~1.0)
-    double motorMinSpeed;       // 最小速度死区 (m/s)，低于此值的目标速度视为0
     bool collisionProtectEnable;     // 碰撞保护总使能
     double collisionImuJerkThreshold;// IMU冲击检测阈值 (g)，默认 3.0
     double collisionStallDutyThreshold; // 堵转检测占空比阈值 (0~1)
     double collisionStallSpeedThreshold;// 堵转检测速度阈值 (m/s)
     int collisionStallCycles;        // 堵转确认周期数 (×控制周期)
     int collisionResetKey;           // 复位按键 (0=KEY0, 1=KEY1, 2=KEY2, 3=KEY3)
-    int collisionBumperKey;          // 碰撞开关按键 (-1=禁用, 0=KEY0, 1=KEY1, 2=KEY2, 3=KEY3)
+    int collisionBumperKey;          // 碰撞开关按键 (-1=禁用, 0=KEY0, ...)
 } JSON_VehicleConfigData;
 
 
@@ -167,6 +161,16 @@ typedef struct JSON_FunctionConfigData
     int exposure_auto;   // 摄像头曝光
     int imgshownum;   // 图像显示序号
 }JSON_FunctionConfigData;
+
+/*
+    JSON文件存储的PID 
+*/
+typedef struct JSON_PIDConfigData
+{
+    int speedl;
+    int speedr;
+
+}JSON_PIDConfigData;
 
 /*
     JSON文件存储的赛道识别设置参数
@@ -280,8 +284,9 @@ typedef struct Function_EN
 typedef struct Data_Path
 {
     std::vector<JSON_TrackConfigData> JSON_TrackConfigData_v; // JSON文件存储的赛道识别设置参数
-    std::vector<JSON_SpeedPIDConfigData> JSON_SpeedPIDConfigData_v; // JSON文件存储的轮速PID参数
-    std::vector<JSON_AngularVelocityPIDConfigData> JSON_AngularVelocityPIDConfigData_v; // JSON文件存储的角速度PID参数
+    std::vector<JSON_DifferentialPDConfigData> JSON_DifferentialPDConfigData_v; // JSON文件存储的外环差速PD参数
+    std::vector<JSON_AngularVelocityPIDConfigData> JSON_AngularVelocityPIDConfigData_v; // JSON文件存储的内环角速度PI参数
+    std::vector<JSON_SpeedIncrementalPIConfigData> JSON_SpeedIncrementalPIConfigData_v; // JSON文件存储的速度环增量式PI参数
     std::vector<JSON_VehicleConfigData> JSON_VehicleConfigData_v; // JSON文件存储的车辆控制参数
     
     
@@ -329,12 +334,10 @@ typedef struct Data_Path
     CircleTrackStep Circle_Track_Step = INIT_CIRCLE;  // 圆环入环步骤：1.准备入环 2.入环 3.
     AcrossTrackStep Across_Track_Step = INIT_ACROSS;  // 十字赛道步骤：1.准备进入十字 2.十字内 3.出十字
 
-    // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask 角速度模式）
+    // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask）
     int SteerErrorPx = 0;                 // 带符号的横向误差（像素）
-    double TargetAngularVelocityDeg = 0;  // 目标角速度（deg/s）
-    double TargetBaseSpeedMps = 0;        // 目标基础线速度（m/s）
-    double TargetLeftSpeedMps = 0;        // 运动学分解得到的左轮目标速度（m/s）
-    double TargetRightSpeedMps = 0;       // 运动学分解得到的右轮目标速度（m/s）
+    double TargetBaseSpeedMps = 0;        // 目标线速度（m/s）
+    double TargetDifferentialSpeed = 0;   // 外环PD输出的期望差速
 
     // 控制参数
     int ServoDir = 0;  // 舵机方向

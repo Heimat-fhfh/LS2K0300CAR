@@ -15,7 +15,8 @@ IMUDevice imu;
 std::unique_ptr<DualMotorController> motors;
 Encoder encoder_left("/dev/zf_encoder_1");
 Encoder encoder_right("/dev/zf_encoder_2", true);
-Control::PID::Parameters leftParams, rightParams;
+Control::PID::Parameters diffOuterParams, diffInnerParams;
+Control::IncrementalPID::Parameters speedIncrParams;
 std::unique_ptr<MotorControlTask> motorTask;
 Buzzer buzzer;
 MainTestConfig test_config;
@@ -26,9 +27,9 @@ bool g_calibration_enabled = false;
 bool g_simple_tracking_enabled = false;
 
 JSON_PIDConfigData JSON_PIDConfigData_s;
-JSON_SpeedPIDConfigData JSON_LeftSpeedPIDConfigData_s;
-JSON_SpeedPIDConfigData JSON_RightSpeedPIDConfigData_s;
+JSON_DifferentialPDConfigData JSON_DifferentialPDConfigData_s;
 JSON_AngularVelocityPIDConfigData JSON_AngularVelocityPIDConfigData_s;
+JSON_SpeedIncrementalPIConfigData JSON_SpeedIncrementalPIConfigData_s;
 JSON_VehicleConfigData JSON_VehicleConfigData_s;
 Function_EN Function_EN_s;
 Data_Path Data_Path_s;
@@ -216,7 +217,7 @@ int main(int argc, char** argv)
         motors->setPwmDeadZones(0.0f, 0.0f);
         motors->setMaxDutyLimits(static_cast<float>(JSON_VehicleConfigData_s.motorMaxDuty));
 
-        const double speedThreshold = std::max(0.01, JSON_VehicleConfigData_s.motorMinSpeed * 0.5);
+        const double speedThreshold = 0.01;
         const double step = 0.01;
         const int settleMs = 200;
 
@@ -282,28 +283,7 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    // 从配置读取角速度PID参数
-    {
-        Control::PID::Parameters angularVelParams;
-        angularVelParams.Kp = JSON_AngularVelocityPIDConfigData_s.Kp;
-        angularVelParams.Ki = JSON_AngularVelocityPIDConfigData_s.Ki;
-        angularVelParams.Kd = JSON_AngularVelocityPIDConfigData_s.Kd;
-        angularVelParams.limitP = JSON_AngularVelocityPIDConfigData_s.limitP;
-        angularVelParams.limitI = JSON_AngularVelocityPIDConfigData_s.limitI;
-        angularVelParams.limitD = JSON_AngularVelocityPIDConfigData_s.limitD;
-        angularVelParams.limitOutput = JSON_AngularVelocityPIDConfigData_s.limitOutput;
-        angularVelParams.limitIMin = JSON_AngularVelocityPIDConfigData_s.limitIMin;
-        angularVelParams.enableAntiWindup = JSON_AngularVelocityPIDConfigData_s.enableAntiWindup;
-        motorTask->setAngularVelocityParams(angularVelParams);
-    }
-
-    motorTask->enableAngularVelocityControl(true);
-    motorTask->enableRampLimiting(true);
-    motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
-    motorTask->setWheelbase(JSON_VehicleConfigData_s.wheelbase);
-    motorTask->setWheelRadius(JSON_VehicleConfigData_s.wheelRadius);
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
-    motorTask->setMotorMinSpeed(JSON_VehicleConfigData_s.motorMinSpeed);
     motors->setPwmDeadZones(static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZoneLeft),
                             static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZoneRight));
     
@@ -323,43 +303,6 @@ int main(int argc, char** argv)
     motorTask->setSpeedFilterTimeConstant(JSON_VehicleConfigData_s.lpfSpeedTau);
     motorTask->setAngularFilterTimeConstant(JSON_VehicleConfigData_s.lpfAngularTau);
     motorTask->start();
-
-    motorTask->setBaseSpeed(1);
-    printf("\nTest 1: Clockwise rotation (+90°/s)\n");
-    motorTask->setTargetAngularVelocity(90.0);
-    std::this_thread::sleep_for(std::chrono::seconds(15));
-    return 0;
-
-    // motorTask->setSpeedPidIntegral(0.0);
-    // motorTask->setBaseSpeed(1);
-    // std::this_thread::sleep_for(std::chrono::seconds(10));
-    // buzzer.longBeep();
-    
-    // motorTask->setSpeedPidIntegral(0.0);
-    // motorTask->setBaseSpeed(0);
-    // std::this_thread::sleep_for(std::chrono::seconds(10));
-    // buzzer.longBeep();
-
-    // motorTask->setSpeedPidIntegral(0.0);
-    // motorTask->setBaseSpeed(1);
-    // std::this_thread::sleep_for(std::chrono::seconds(2));
-    // buzzer.longBeep();
-
-    // motorTask->setSpeedPidIntegral(0.0);
-    // motorTask->setBaseSpeed(2);
-    // std::this_thread::sleep_for(std::chrono::seconds(6));
-    // buzzer.longBeep();
-
-    // motorTask->setSpeedPidIntegral(0.0);
-    // motorTask->setBaseSpeed(0);
-    // std::this_thread::sleep_for(std::chrono::seconds(10));
-    // buzzer.longBeep();
-
-    // motorTask->setSpeedPidIntegral(0.0);
-    // motorTask->setBaseSpeed(3);
-    // std::this_thread::sleep_for(std::chrono::seconds(6));
-    // buzzer.longBeep();
-    // return 0;
 
     // 5. 初始化摄像头并启动图像采集线程    
     VideoCapture Camera;
@@ -423,15 +366,17 @@ int main(int argc, char** argv)
             continue;
         }
 
-        cout << "EPx,TD,AD,PID,TBS: " << Data_Path_s.SteerErrorPx << ",\t"
-        << fixed << setprecision(3) 
-        << Data_Path_s.TargetAngularVelocityDeg << ",\t" 
-        << motorTask->getActualAngularVelocity() << ",\t"
-        << motorTask->getAngularVelocityPidOutput() << ",\t" 
-        << Data_Path_s.TargetBaseSpeedMps << endl;
+        // 归一化偏差并下发电机控制任务
+        {
+            float errorNorm = static_cast<float>(Data_Path_s.SteerErrorPx) / 160.0f;
+            errorNorm = std::max(-1.0f, std::min(1.0f, errorNorm));
+            motorTask->setSteerError(static_cast<double>(errorNorm));
+            motorTask->setTargetSpeed(Data_Path_s.TargetBaseSpeedMps);
+        }
 
-        motorTask->setBaseSpeed(Data_Path_s.TargetBaseSpeedMps);
-        motorTask->setTargetAngularVelocity(-Data_Path_s.TargetAngularVelocityDeg);
+        cout << "EPx,TBS: " << Data_Path_s.SteerErrorPx << ",\t"
+        << fixed << setprecision(3) 
+        << Data_Path_s.TargetBaseSpeedMps << endl;
 
         
         // perfRecorder.record(std::chrono::steady_clock::now() - frameStart,
@@ -448,8 +393,7 @@ int main(int argc, char** argv)
 
     if (motorTask)
     {
-        motorTask->setTargetAngularVelocity(0.0);
-        motorTask->setBaseSpeed(0.0);
+        motorTask->setTargetSpeed(0.0);
         motorTask->stop();
     }
 
@@ -499,31 +443,33 @@ void argument_config(void)
             std::cout << "[Calibration] 图像标定使能关闭: " << calibrationJsonPath << std::endl;
         }
 
-        // 从配置读取轮速PID参数
-        JSON_LeftSpeedPIDConfigData_s = Data_Path_s.JSON_SpeedPIDConfigData_v[0];
-        JSON_RightSpeedPIDConfigData_s = Data_Path_s.JSON_SpeedPIDConfigData_v[1];
+        // 从配置读取PID参数
+        JSON_DifferentialPDConfigData_s = Data_Path_s.JSON_DifferentialPDConfigData_v[0];
         JSON_AngularVelocityPIDConfigData_s = Data_Path_s.JSON_AngularVelocityPIDConfigData_v[0];
+        JSON_SpeedIncrementalPIConfigData_s = Data_Path_s.JSON_SpeedIncrementalPIConfigData_v[0];
         JSON_VehicleConfigData_s = Data_Path_s.JSON_VehicleConfigData_v[0];
 
-        leftParams.Kp = JSON_LeftSpeedPIDConfigData_s.Kp;
-        leftParams.Ki = JSON_LeftSpeedPIDConfigData_s.Ki;
-        leftParams.Kd = JSON_LeftSpeedPIDConfigData_s.Kd;
-        leftParams.limitP = JSON_LeftSpeedPIDConfigData_s.limitP;
-        leftParams.limitI = JSON_LeftSpeedPIDConfigData_s.limitI;
-        leftParams.limitD = JSON_LeftSpeedPIDConfigData_s.limitD;
-        leftParams.limitOutput = JSON_LeftSpeedPIDConfigData_s.limitOutput;
-        leftParams.limitIMin = JSON_LeftSpeedPIDConfigData_s.limitIMin;
-        leftParams.enableAntiWindup = JSON_LeftSpeedPIDConfigData_s.enableAntiWindup;
+        diffOuterParams.Kp = JSON_DifferentialPDConfigData_s.Kp;
+        diffOuterParams.Kd = JSON_DifferentialPDConfigData_s.Kd;
+        diffOuterParams.limitP = JSON_DifferentialPDConfigData_s.limitP;
+        diffOuterParams.limitD = JSON_DifferentialPDConfigData_s.limitD;
+        diffOuterParams.limitOutput = JSON_DifferentialPDConfigData_s.limitOutput;
+        diffOuterParams.Ki = 0.0;
 
-        rightParams.Kp = JSON_RightSpeedPIDConfigData_s.Kp;
-        rightParams.Ki = JSON_RightSpeedPIDConfigData_s.Ki;
-        rightParams.Kd = JSON_RightSpeedPIDConfigData_s.Kd;
-        rightParams.limitP = JSON_RightSpeedPIDConfigData_s.limitP;
-        rightParams.limitI = JSON_RightSpeedPIDConfigData_s.limitI;
-        rightParams.limitD = JSON_RightSpeedPIDConfigData_s.limitD;
-        rightParams.limitOutput = JSON_RightSpeedPIDConfigData_s.limitOutput;
-        rightParams.limitIMin = JSON_RightSpeedPIDConfigData_s.limitIMin;
-        rightParams.enableAntiWindup = JSON_RightSpeedPIDConfigData_s.enableAntiWindup;
+        diffInnerParams.Kp = JSON_AngularVelocityPIDConfigData_s.Kp;
+        diffInnerParams.Ki = JSON_AngularVelocityPIDConfigData_s.Ki;
+        diffInnerParams.Kd = JSON_AngularVelocityPIDConfigData_s.Kd;
+        diffInnerParams.limitP = JSON_AngularVelocityPIDConfigData_s.limitP;
+        diffInnerParams.limitI = JSON_AngularVelocityPIDConfigData_s.limitI;
+        diffInnerParams.limitD = JSON_AngularVelocityPIDConfigData_s.limitD;
+        diffInnerParams.limitOutput = JSON_AngularVelocityPIDConfigData_s.limitOutput;
+        diffInnerParams.limitIMin = JSON_AngularVelocityPIDConfigData_s.limitIMin;
+        diffInnerParams.enableAntiWindup = JSON_AngularVelocityPIDConfigData_s.enableAntiWindup;
+
+        speedIncrParams.Kp = JSON_SpeedIncrementalPIConfigData_s.Kp;
+        speedIncrParams.Ki = JSON_SpeedIncrementalPIConfigData_s.Ki;
+        speedIncrParams.Kd = JSON_SpeedIncrementalPIConfigData_s.Kd;
+        speedIncrParams.limitOutput = JSON_SpeedIncrementalPIConfigData_s.limitOutput;
 
         g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
         Function_EN_s.Game_EN = true;
@@ -550,8 +496,9 @@ void argument_config(void)
     {
         double ctrlPeriod = g_runtime_config_ok ? JSON_VehicleConfigData_s.controlPeriod : 0.01;
         motorTask = std::make_unique<MotorControlTask>(
-                leftParams,
-                rightParams,
+                diffOuterParams,
+                diffInnerParams,
+                speedIncrParams,
                 motors.get(),
                 &encoder_left,
                 &encoder_right,
@@ -731,23 +678,20 @@ int main_test_task(const MainTestConfig& test_config)
     if (test_config.motor_test)
     {
         motorTask->start();
-        motorTask->enableRampLimiting(true);
-        motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
         try
         {
-            printf("\n=== 测试1：无斜坡限制的基本测试 ===\n");
-            motorTask->setTargetSpeed(1, 4);
+            printf("\n=== 电机基本功能测试 ===\n");
+            motorTask->setTargetSpeed(1.0);
+            motorTask->setSteerError(0.0);
             std::this_thread::sleep_for(std::chrono::seconds(5));
 
-            motorTask->setTargetSpeed(4, 1);
+            printf("\n=== 差速测试 ===\n");
+            motorTask->setSteerError(0.5);
             std::this_thread::sleep_for(std::chrono::seconds(5));
 
-            motorTask->setTargetSpeed(0, 0);
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-
-            motorTask->enableRampLimiting(false);
+            motorTask->setTargetSpeed(0.0);
             motorTask->stop();
-            printf("\n斜坡限制测试完成\n");
+            printf("\n电机测试完成\n");
 
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
@@ -760,49 +704,43 @@ int main_test_task(const MainTestConfig& test_config)
 
     if (test_config.angular_velocity_test)
     {
-        printf("\n=== Angular Velocity Control Test ===\n");
+        printf("\n=== 串级差速控制测试 ===\n");
         try
         {
-            motorTask->enableAngularVelocityControl(true);
-            motorTask->enableRampLimiting(true);
-            motorTask->setRampLimits(JSON_VehicleConfigData_s.rampMaxAccel, JSON_VehicleConfigData_s.rampMaxDecel);
             motorTask->start();
 
-            motorTask->setBaseSpeed(0.5);
-            printf("\nTest 1: Clockwise rotation (+90°/s)\n");
-            motorTask->setTargetAngularVelocity(90.0);
-            std::this_thread::sleep_for(std::chrono::seconds(15));
+            motorTask->setTargetSpeed(0.5);
+            printf("\nTest 1: 直线前进 (偏差=0)\n");
+            motorTask->setSteerError(0.0);
+            std::this_thread::sleep_for(std::chrono::seconds(5));
 
-            printf("\nTest 2: Counter-clockwise rotation (-90°/s)\n");
-            motorTask->setTargetAngularVelocity(-90.0);
-            std::this_thread::sleep_for(std::chrono::seconds(30));
+            printf("\nTest 2: 右偏 (SteerError=0.3)\n");
+            motorTask->setSteerError(0.3);
+            std::this_thread::sleep_for(std::chrono::seconds(5));
 
-            printf("\nTest 3: Fast rotation (+180°/s)\n");
-            motorTask->setTargetAngularVelocity(180.0);
+            printf("\nTest 3: 左偏 (SteerError=-0.3)\n");
+            motorTask->setSteerError(-0.3);
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+
+            printf("\nTest 4: 大角度右偏 (SteerError=0.8)\n");
+            motorTask->setSteerError(0.8);
             std::this_thread::sleep_for(std::chrono::seconds(3));
 
-            printf("\nTest 4: Slow rotation (+45°/s)\n");
-            motorTask->setTargetAngularVelocity(45.0);
-            std::this_thread::sleep_for(std::chrono::seconds(4));
-
-            printf("\nTest 5: Straight line (0°/s)\n");
-            motorTask->setTargetAngularVelocity(0.0);
+            printf("\nTest 5: 回正 (SteerError=0)\n");
+            motorTask->setSteerError(0.0);
             std::this_thread::sleep_for(std::chrono::seconds(3));
 
-            printf("\nTest 6: Change base speed to 0.3 m/s with +60°/s\n");
-            motorTask->setBaseSpeed(0.3);
-            motorTask->setTargetAngularVelocity(60.0);
+            printf("\nTest 6: 速度切换 1.0m/s\n");
+            motorTask->setTargetSpeed(1.0);
+            motorTask->setSteerError(0.0);
             std::this_thread::sleep_for(std::chrono::seconds(4));
 
             motorTask->stop();
-            motorTask->enableAngularVelocityControl(false);
-            motorTask->enableRampLimiting(false);
-            printf("\nAngular velocity control test completed.\n");
+            printf("\n串级差速控制测试完成.\n");
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Angular velocity control test error: " << e.what() << std::endl;
-            motorTask->enableAngularVelocityControl(false);
+            std::cerr << "串级差速控制测试错误: " << e.what() << std::endl;
             return EXIT_FAILURE;
         }
     }

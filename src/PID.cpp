@@ -226,5 +226,69 @@ void PIDWithFeedforward::setFeedforwardGain(double gain) {
     m_ffGain = gain;
 }
 
+//=============================================================================
+// IncrementalPID::Parameters 构造函数
+//=============================================================================
+IncrementalPID::Parameters::Parameters(double kp, double ki, double kd, double outLimit)
+    : Kp(kp), Ki(ki), Kd(kd), limitOutput(outLimit) {}
+
+//=============================================================================
+// IncrementalPID 构造函数
+//=============================================================================
+IncrementalPID::IncrementalPID(const Parameters& params)
+    : m_params(params) {
+    reset();
+}
+
+//=============================================================================
+// IncrementalPID::reset
+//=============================================================================
+void IncrementalPID::reset() {
+    m_accumOutput = 0.0;
+    m_prevError = 0.0;
+    m_prevPrevError = 0.0;
+    m_firstCall = true;
+}
+
+//=============================================================================
+// IncrementalPID::calculate
+// 增量式PID: Δu = Kp*(e_k - e_{k-1}) + Ki*e_k*dt + Kd*(e_k - 2*e_{k-1} + e_{k-2})/dt
+// u_k = clamp(u_{k-1} + Δu, ±limitOutput)
+//=============================================================================
+double IncrementalPID::calculate(double setpoint, double feedback, double dt) {
+    if (dt <= 0.0) dt = 1e-6;
+
+    double error = setpoint - feedback;
+
+    if (m_firstCall) {
+        m_prevError = error;
+        m_prevPrevError = error;
+        m_firstCall = false;
+        return m_accumOutput;
+    }
+
+    double deltaU = m_params.Kp * (error - m_prevError);
+
+    if (m_params.Ki != 0.0) {
+        deltaU += m_params.Ki * error * dt;
+    }
+
+    if (m_params.Kd != 0.0) {
+        deltaU += m_params.Kd * (error - 2.0 * m_prevError + m_prevPrevError) / dt;
+    }
+
+    m_prevPrevError = m_prevError;
+    m_prevError = error;
+
+    m_accumOutput += deltaU;
+
+    if (m_accumOutput > m_params.limitOutput)
+        m_accumOutput = m_params.limitOutput;
+    else if (m_accumOutput < -m_params.limitOutput)
+        m_accumOutput = -m_params.limitOutput;
+
+    return m_accumOutput;
+}
+
 } // namespace Control
 

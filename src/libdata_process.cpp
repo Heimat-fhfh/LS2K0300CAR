@@ -261,24 +261,16 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 
 
 /*
-    AngularVelocityTarget_Judge说明
-    将方向控制结果转换为目标角速度双轮差速控制目标
+    DifferentialPD_Calculate说明
+    计算归一化偏差和期望速度
 */
-void Judge::AngularVelocityTarget_Judge(Data_Path *Data_Path_p)
+void Judge::DifferentialPD_Calculate(Data_Path *Data_Path_p)
 {
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    float k = 0.45f / (Data_Path_p->forword_line_h*1.4634f - 90.291f);     // 每像素对应实际距离
     Data_Path_p->forword_line_h = std::max(image_h-JSON_TrackConfigData.Default_Forward, int(Data_Path_p->search_print_h_max));
     Data_Path_p->SteerErrorPx = Data_Path_p->center_line[Data_Path_p->forword_line_h] - image_w / 2;
 
-    // cout << "SteerErrorPx: " << Data_Path_p->SteerErrorPx << " readH: " << Data_Path_p->forword_line_h << endl;
-
-    float error = Data_Path_p->SteerErrorPx * k;    // 转向误差对应的实际距离
-    float L = 0.6f;
-    float R = (L*L+error*error)/(2*error);
-    float omega = Data_Path_p->TargetBaseSpeedMps / R;   // 目标角速度
-
-    Data_Path_p->TargetAngularVelocityDeg = omega*180.0f/PI;   // 度/秒
+    // TargetBaseSpeedMps 已在 MotorSpeed_Judge 中设定
 }
 
 
@@ -447,9 +439,9 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     JSON_FunctionConfigData JSON_FunctionConfigData;
     JSON_TrackConfigData JSON_TrackConfigData;
-    JSON_SpeedPIDConfigData JSON_LeftSpeedPIDConfigData;
-    JSON_SpeedPIDConfigData JSON_RightSpeedPIDConfigData;
+    JSON_DifferentialPDConfigData JSON_DifferentialPDConfigData;
     JSON_AngularVelocityPIDConfigData JSON_AngularVelocityPIDConfigData;
+    JSON_SpeedIncrementalPIConfigData JSON_SpeedIncrementalPIConfigData;
     JSON_VehicleConfigData JSON_VehicleConfigData;
 
     int JSON_FileNum;
@@ -540,15 +532,14 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED", "BIG_ANGLE_BEND_TRACK_MOTOR_SPEED", "ACROSS_TRACK_MOTOR_SPEED",
         "CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE", "CIRCLE_TRACK_MOTOR_SPEED_INSIDE", "BRIDGE_ZONE_MOTOR_SPEED",
         "CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE", "CIRCLE_IN_PREPARE_TIME",
-        "LEFT_PID_KP", "LEFT_PID_KI", "LEFT_PID_KD", "LEFT_PID_LIMIT_P", "LEFT_PID_LIMIT_I", "LEFT_PID_LIMIT_D",
-        "LEFT_PID_LIMIT_OUTPUT", "LEFT_PID_LIMIT_I_MIN", "LEFT_PID_ANTI_WINDUP",
-        "RIGHT_PID_KP", "RIGHT_PID_KI", "RIGHT_PID_KD", "RIGHT_PID_LIMIT_P", "RIGHT_PID_LIMIT_I", "RIGHT_PID_LIMIT_D",
-        "RIGHT_PID_LIMIT_OUTPUT", "RIGHT_PID_LIMIT_I_MIN", "RIGHT_PID_ANTI_WINDUP",
-        "ANGULAR_PID_KP", "ANGULAR_PID_KI", "ANGULAR_PID_KD", "ANGULAR_PID_LIMIT_P", "ANGULAR_PID_LIMIT_I",
-        "ANGULAR_PID_LIMIT_D", "ANGULAR_PID_LIMIT_OUTPUT", "ANGULAR_PID_LIMIT_I_MIN", "ANGULAR_PID_ANTI_WINDUP",
-        "WHEELBASE", "WHEEL_RADIUS", "CONTROL_PERIOD", "MOTOR_MAX_DUTY", "RAMP_MAX_ACCEL", "RAMP_MAX_DECEL",
+        "DIFF_OUTER_PD_KP", "DIFF_OUTER_PD_KD", "DIFF_OUTER_PD_LIMIT_P", "DIFF_OUTER_PD_LIMIT_D",
+        "DIFF_OUTER_PD_LIMIT_OUTPUT",
+        "DIFF_INNER_PI_KP", "DIFF_INNER_PI_KI", "DIFF_INNER_PI_KD", "DIFF_INNER_PI_LIMIT_P", "DIFF_INNER_PI_LIMIT_I",
+        "DIFF_INNER_PI_LIMIT_D", "DIFF_INNER_PI_LIMIT_OUTPUT", "DIFF_INNER_PI_LIMIT_I_MIN", "DIFF_INNER_PI_ANTI_WINDUP",
+        "SPEED_INCR_PI_KP", "SPEED_INCR_PI_KI", "SPEED_INCR_PI_KD", "SPEED_INCR_PI_LIMIT_OUTPUT",
+        "CONTROL_PERIOD", "MOTOR_MAX_DUTY",
         "LPF_SPEED_TAU", "LPF_ANGULAR_TAU",
-        "MOTOR_PWM_DEAD_ZONE_LEFT", "MOTOR_PWM_DEAD_ZONE_RIGHT", "MOTOR_MIN_SPEED",
+        "MOTOR_PWM_DEAD_ZONE_LEFT", "MOTOR_PWM_DEAD_ZONE_RIGHT",
         "COLLISION_PROTECT_ENABLE", "COLLISION_IMU_JERK_THRESHOLD",
         "COLLISION_STALL_DUTY_THRESHOLD", "COLLISION_STALL_SPEED_THRESHOLD",
         "COLLISION_STALL_CYCLES", "COLLISION_RESET_KEY", "COLLISION_BUMPER_KEY"
@@ -576,46 +567,33 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     std::cout << "[Config] JSON 根节点字段数量: " << ConfigData.size() << std::endl;
 
-    // 左轮速PID参数
-    JSON_LeftSpeedPIDConfigData.Kp = ConfigData.at("LEFT_PID_KP");
-    JSON_LeftSpeedPIDConfigData.Ki = ConfigData.at("LEFT_PID_KI");
-    JSON_LeftSpeedPIDConfigData.Kd = ConfigData.at("LEFT_PID_KD");
-    JSON_LeftSpeedPIDConfigData.limitP = ConfigData.at("LEFT_PID_LIMIT_P");
-    JSON_LeftSpeedPIDConfigData.limitI = ConfigData.at("LEFT_PID_LIMIT_I");
-    JSON_LeftSpeedPIDConfigData.limitD = ConfigData.at("LEFT_PID_LIMIT_D");
-    JSON_LeftSpeedPIDConfigData.limitOutput = ConfigData.at("LEFT_PID_LIMIT_OUTPUT");
-    JSON_LeftSpeedPIDConfigData.limitIMin = ConfigData.at("LEFT_PID_LIMIT_I_MIN");
-    JSON_LeftSpeedPIDConfigData.enableAntiWindup = ConfigData.at("LEFT_PID_ANTI_WINDUP");
+    // 外环差速PD参数
+    JSON_DifferentialPDConfigData.Kp = ConfigData.at("DIFF_OUTER_PD_KP");
+    JSON_DifferentialPDConfigData.Kd = ConfigData.at("DIFF_OUTER_PD_KD");
+    JSON_DifferentialPDConfigData.limitP = ConfigData.at("DIFF_OUTER_PD_LIMIT_P");
+    JSON_DifferentialPDConfigData.limitD = ConfigData.at("DIFF_OUTER_PD_LIMIT_D");
+    JSON_DifferentialPDConfigData.limitOutput = ConfigData.at("DIFF_OUTER_PD_LIMIT_OUTPUT");
 
-    // 右轮速PID参数
-    JSON_RightSpeedPIDConfigData.Kp = ConfigData.at("RIGHT_PID_KP");
-    JSON_RightSpeedPIDConfigData.Ki = ConfigData.at("RIGHT_PID_KI");
-    JSON_RightSpeedPIDConfigData.Kd = ConfigData.at("RIGHT_PID_KD");
-    JSON_RightSpeedPIDConfigData.limitP = ConfigData.at("RIGHT_PID_LIMIT_P");
-    JSON_RightSpeedPIDConfigData.limitI = ConfigData.at("RIGHT_PID_LIMIT_I");
-    JSON_RightSpeedPIDConfigData.limitD = ConfigData.at("RIGHT_PID_LIMIT_D");
-    JSON_RightSpeedPIDConfigData.limitOutput = ConfigData.at("RIGHT_PID_LIMIT_OUTPUT");
-    JSON_RightSpeedPIDConfigData.limitIMin = ConfigData.at("RIGHT_PID_LIMIT_I_MIN");
-    JSON_RightSpeedPIDConfigData.enableAntiWindup = ConfigData.at("RIGHT_PID_ANTI_WINDUP");
+    // 内环角速度PI参数
+    JSON_AngularVelocityPIDConfigData.Kp = ConfigData.at("DIFF_INNER_PI_KP");
+    JSON_AngularVelocityPIDConfigData.Ki = ConfigData.at("DIFF_INNER_PI_KI");
+    JSON_AngularVelocityPIDConfigData.Kd = ConfigData.at("DIFF_INNER_PI_KD");
+    JSON_AngularVelocityPIDConfigData.limitP = ConfigData.at("DIFF_INNER_PI_LIMIT_P");
+    JSON_AngularVelocityPIDConfigData.limitI = ConfigData.at("DIFF_INNER_PI_LIMIT_I");
+    JSON_AngularVelocityPIDConfigData.limitD = ConfigData.at("DIFF_INNER_PI_LIMIT_D");
+    JSON_AngularVelocityPIDConfigData.limitOutput = ConfigData.at("DIFF_INNER_PI_LIMIT_OUTPUT");
+    JSON_AngularVelocityPIDConfigData.limitIMin = ConfigData.at("DIFF_INNER_PI_LIMIT_I_MIN");
+    JSON_AngularVelocityPIDConfigData.enableAntiWindup = ConfigData.at("DIFF_INNER_PI_ANTI_WINDUP");
 
-    // 角速度PID参数
-    JSON_AngularVelocityPIDConfigData.Kp = ConfigData.at("ANGULAR_PID_KP");
-    JSON_AngularVelocityPIDConfigData.Ki = ConfigData.at("ANGULAR_PID_KI");
-    JSON_AngularVelocityPIDConfigData.Kd = ConfigData.at("ANGULAR_PID_KD");
-    JSON_AngularVelocityPIDConfigData.limitP = ConfigData.at("ANGULAR_PID_LIMIT_P");
-    JSON_AngularVelocityPIDConfigData.limitI = ConfigData.at("ANGULAR_PID_LIMIT_I");
-    JSON_AngularVelocityPIDConfigData.limitD = ConfigData.at("ANGULAR_PID_LIMIT_D");
-    JSON_AngularVelocityPIDConfigData.limitOutput = ConfigData.at("ANGULAR_PID_LIMIT_OUTPUT");
-    JSON_AngularVelocityPIDConfigData.limitIMin = ConfigData.at("ANGULAR_PID_LIMIT_I_MIN");
-    JSON_AngularVelocityPIDConfigData.enableAntiWindup = ConfigData.at("ANGULAR_PID_ANTI_WINDUP");
+    // 速度环增量式PID参数
+    JSON_SpeedIncrementalPIConfigData.Kp = ConfigData.at("SPEED_INCR_PI_KP");
+    JSON_SpeedIncrementalPIConfigData.Ki = ConfigData.at("SPEED_INCR_PI_KI");
+    JSON_SpeedIncrementalPIConfigData.Kd = ConfigData.at("SPEED_INCR_PI_KD");
+    JSON_SpeedIncrementalPIConfigData.limitOutput = ConfigData.at("SPEED_INCR_PI_LIMIT_OUTPUT");
 
     // 车辆控制参数
-    JSON_VehicleConfigData.wheelbase = ConfigData.at("WHEELBASE");
-    JSON_VehicleConfigData.wheelRadius = ConfigData.at("WHEEL_RADIUS");
     JSON_VehicleConfigData.controlPeriod = ConfigData.at("CONTROL_PERIOD");
     JSON_VehicleConfigData.motorMaxDuty = ConfigData.at("MOTOR_MAX_DUTY");
-    JSON_VehicleConfigData.rampMaxAccel = ConfigData.at("RAMP_MAX_ACCEL");
-    JSON_VehicleConfigData.rampMaxDecel = ConfigData.at("RAMP_MAX_DECEL");
 
     // 低通滤波参数
     JSON_VehicleConfigData.lpfSpeedTau = ConfigData.at("LPF_SPEED_TAU");
@@ -624,7 +602,6 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     // 电机死区参数
     JSON_VehicleConfigData.motorPwmDeadZoneLeft = ConfigData.at("MOTOR_PWM_DEAD_ZONE_LEFT");
     JSON_VehicleConfigData.motorPwmDeadZoneRight = ConfigData.at("MOTOR_PWM_DEAD_ZONE_RIGHT");
-    JSON_VehicleConfigData.motorMinSpeed = ConfigData.at("MOTOR_MIN_SPEED");
 
     // 碰撞保护参数
     JSON_VehicleConfigData.collisionProtectEnable = ConfigData.at("COLLISION_PROTECT_ENABLE");
@@ -683,14 +660,15 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     // 同步配置到运行时容器（覆盖旧值，保持单配置生效）。
     Function_EN_p->JSON_FunctionConfigData_v.clear();
     Data_Path_p->JSON_TrackConfigData_v.clear();
-    Data_Path_p->JSON_SpeedPIDConfigData_v.clear();
+    Data_Path_p->JSON_DifferentialPDConfigData_v.clear();
     Data_Path_p->JSON_AngularVelocityPIDConfigData_v.clear();
+    Data_Path_p->JSON_SpeedIncrementalPIConfigData_v.clear();
     Data_Path_p->JSON_VehicleConfigData_v.clear();
     Function_EN_p->JSON_FunctionConfigData_v.push_back(JSON_FunctionConfigData);
     Data_Path_p->JSON_TrackConfigData_v.push_back(JSON_TrackConfigData);
-    Data_Path_p->JSON_SpeedPIDConfigData_v.push_back(JSON_LeftSpeedPIDConfigData);
-    Data_Path_p->JSON_SpeedPIDConfigData_v.push_back(JSON_RightSpeedPIDConfigData);
+    Data_Path_p->JSON_DifferentialPDConfigData_v.push_back(JSON_DifferentialPDConfigData);
     Data_Path_p->JSON_AngularVelocityPIDConfigData_v.push_back(JSON_AngularVelocityPIDConfigData);
+    Data_Path_p->JSON_SpeedIncrementalPIConfigData_v.push_back(JSON_SpeedIncrementalPIConfigData);
     Data_Path_p->JSON_VehicleConfigData_v.push_back(JSON_VehicleConfigData);
 
     std::cout << "[Config] Function 配置数量: " << Function_EN_p->JSON_FunctionConfigData_v.size()

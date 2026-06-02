@@ -36,11 +36,11 @@ class Judge
 
 
         /*
-            将方向控制结果转换为目标角速度双轮差速控制目标
-            @参数说明
-            Data_Path_p 路径相关数据指针
-        */
-        void AngularVelocityTarget_Judge(Data_Path *Data_Path_p);
+             计算归一化偏差和期望速度
+             @参数说明
+             Data_Path_p 路径相关数据指针
+         */
+        void DifferentialPD_Calculate(Data_Path *Data_Path_p);
 
         
         /*

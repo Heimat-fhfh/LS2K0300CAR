@@ -163,4 +163,37 @@ private:
     double m_ffGain{1.0};
 };
 
+/**
+ * @brief 增量式PID控制器
+ *
+ * 内部完成累加和限幅，返回完整的 u(k)：
+ *   Δu(k) = Kp*(e_k - e_{k-1}) + Ki*e_k*dt + Kd*(e_k - 2*e_{k-1} + e_{k-2})/dt
+ *   u(k) = clamp(u(k-1) + Δu(k), ±limitOutput)
+ */
+class IncrementalPID {
+public:
+    struct Parameters {
+        double Kp{0.0};
+        double Ki{0.0};
+        double Kd{0.0};
+        double limitOutput{1.0};
+
+        Parameters() = default;
+        Parameters(double kp, double ki, double kd, double outLimit);
+    };
+
+    explicit IncrementalPID(const Parameters& params);
+    void reset();
+    double calculate(double setpoint, double feedback, double dt);
+    double getOutput() const { return m_accumOutput; }
+    void setOutput(double val) { m_accumOutput = val; }
+
+private:
+    Parameters m_params;
+    double m_accumOutput{0.0};
+    double m_prevError{0.0};
+    double m_prevPrevError{0.0};
+    bool m_firstCall{true};
+};
+
 } // namespace Control
