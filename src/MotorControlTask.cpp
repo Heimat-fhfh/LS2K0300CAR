@@ -112,7 +112,7 @@ bool MotorControlTask::isValidSpeed(double speed) const {
 
 bool MotorControlTask::isValidAngularVelocity(double angularVelocity) const {
     return !std::isnan(angularVelocity) && !std::isinf(angularVelocity) &&
-           angularVelocity >= -1000.0 && angularVelocity <= 1000.0;
+           angularVelocity >= -20.0 && angularVelocity <= 20.0;
 }
 
 // ==================== 串级差速环 API 实现 ====================
@@ -275,7 +275,7 @@ void MotorControlTask::run() {
                 imuValid = imu->update_all_data();
                 if (imuValid) {
                     imuData = imu->get_unit_data();
-                    gyroZ = imuData.gyro_z;
+                    gyroZ = imuData.gyro_z * M_PI / 180.0;
                 }
             }
 
@@ -306,9 +306,9 @@ void MotorControlTask::run() {
             // ============================================================
             // 6. 低通滤波 (归一化偏差 + 陀螺仪)
             // ============================================================
-            if (lowPassFilterEnabled.load()) {
-                currentError = steerErrorFilter.apply(currentError);
-            }
+            // if (lowPassFilterEnabled.load()) {
+            //     currentError = steerErrorFilter.apply(currentError);
+            // }
 
             // ============================================================
             // 7. 低通滤波 (陀螺仪)
@@ -316,7 +316,7 @@ void MotorControlTask::run() {
             if (imuValid) {
                 if (!isValidAngularVelocity(gyroZ)) {
                     imuErrorCount++;
-                    printf("Warning: Invalid angular velocity: %.3f °/s (error %d/%d)\n",
+                    printf("Warning: Invalid angular velocity: %.3f rad/s (error %d/%d)\n",
                            gyroZ, imuErrorCount, maxErrorCount);
                     gyroZ = lastValidAngularVelocity;
                     if (imuErrorCount >= maxErrorCount) {
@@ -456,7 +456,7 @@ void MotorControlTask::enableLowPassFilter(bool enable) {
         rightSpeedFilter.reset(rightEncoder->readSpeed());
         if (imu != nullptr) {
             imu->update_all_data();
-            angularVelocityFilter.reset(imu->get_unit_data().gyro_z);
+            angularVelocityFilter.reset(imu->get_unit_data().gyro_z * M_PI / 180.0);
         }
         printf("Low-pass filter enabled\n");
     } else if (!enable && wasEnabled) {

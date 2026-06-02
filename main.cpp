@@ -680,12 +680,17 @@ int main_test_task(const MainTestConfig& test_config)
         motorTask->start();
         try
         {
-            printf("\n=== 电机基本功能测试 ===\n");
-            motorTask->setTargetSpeed(1.0);
-            motorTask->setSteerError(0.0);
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            // printf("\n=== 电机基本功能测试 ===\n");
+            // motorTask->setTargetSpeed(1.0);
+            // motorTask->setSteerError(0.0);
+            // std::this_thread::sleep_for(std::chrono::seconds(10));
+
+            // motorTask->setTargetSpeed(0.0);
+            // motorTask->setSteerError(0.0);
+            // std::this_thread::sleep_for(std::chrono::seconds(5));
 
             printf("\n=== 差速测试 ===\n");
+            motorTask->setTargetSpeed(1.0);
             motorTask->setSteerError(0.5);
             std::this_thread::sleep_for(std::chrono::seconds(5));
 
