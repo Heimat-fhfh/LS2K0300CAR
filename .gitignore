@@ -1,6 +1,8 @@
 .rubbish/
+test/
 build/
 build_host/
+build_rt1064/
 document/
 ls2k0300_linux_4.19/
 third_party/

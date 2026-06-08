@@ -4,18 +4,18 @@ camera_matrix: !!opencv-matrix
    rows: 3
    cols: 3
    dt: d
-   data: [ 108.68973241794691, 0., 136.9757939320821, 0.,
-       108.44672978549515, 127.69044870027406, 0., 0., 1. ]
+   data: [ 1.5033066376277469e+02, 0., 1.6076484224527926e+02, 0.,
+       1.5027518752357301e+02, 1.1446497474597478e+02, 0., 0., 1. ]
 dist_coeffs: !!opencv-matrix
    rows: 1
    cols: 5
    dt: d
-   data: [ -0.04268976091466254, -0.014512635305607986,
-       0.00043052786585908597, -0.00017396568803412611,
-       0.0025320921335363136 ]
+   data: [ 2.0345862927479663e-01, -1.8085174277272414e-01,
+       2.6119936474242197e-03, -1.4222495498042540e-03,
+       3.1411992000456267e-02 ]
 image_width: 320
 image_height: 240
-reprojection_error: 0.44648721503471533
-chessboard_cols_inner: 9
-chessboard_rows_inner: 6
-square_size_mm: 25.
+reprojection_error: 3.8235819025166817e-01
+chessboard_cols_inner: 10
+chessboard_rows_inner: 7
+square_size_mm: 20.

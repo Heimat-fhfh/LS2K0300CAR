@@ -390,7 +390,7 @@ void Judge::HoughCircleSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
     vector<Vec3f> Circle;
     HoughCircles((Img_Store_p -> Img_OTSU_Unpivot),Circle,HOUGH_GRADIENT,1,100,60,30,40,150);
-    for(int i = 0;i < Circle.size();i++)
+    for(size_t i = 0;i < Circle.size();i++)
     {
         circle((Img_Store_p -> Img_Color_Unpivot),Point(Circle[i][0],Circle[i][1]),Circle[i][2],Scalar(255,0,255),2);
     }

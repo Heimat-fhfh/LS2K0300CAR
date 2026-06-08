@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)    # 限制最低CMake版本
+cmake_minimum_required(VERSION 3.16)
 
 # 默认按边缘设备工具链构建；服务器端本机构建时可在配置阶段关闭。
 option(USE_EDGE_TOOLCHAIN "Build with LoongArch edge toolchain" ON)
@@ -15,101 +15,80 @@ if (USE_EDGE_TOOLCHAIN)
     set(CMAKE_CXX_COMPILER /opt/loongarch-gnu-toolchain/bin/loongarch64-linux-gnu-g++)
 endif()
 
-# 设置C++标准为C++17（支持filesystem）
+# 设置C/C++标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# 项目名称
+# 项目名称（固定为 main）
 project(main)
 
-file(GLOB SRC ${PROJECT_SOURCE_DIR}/src/*.cpp)      # 获取包含的源文件
-include_directories(${PROJECT_SOURCE_DIR}/include)  # 指定所需头文件路径
+# 编译与链接优化标志（仅对边缘工具链启用龙芯架构优化）
+if (USE_EDGE_TOOLCHAIN)
+    set(ARCH_FLAGS "-march=loongarch64 -mtune=loongarch64")
+    set(OPT_FLAGS "-O3 -fPIC -ffunction-sections -fdata-sections -Wall")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPT_FLAGS} ${ARCH_FLAGS} -pthread -Wno-delete-non-virtual-dtor -Wno-placement-new -Wno-switch -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_FLAGS} ${ARCH_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
+else()
+    # 本机构建时也可添加通用优化（按需）
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall")
+endif()
+
+# 源文件收集
+file(GLOB SRC ${PROJECT_SOURCE_DIR}/src/*.cpp)
+
+# 头文件路径
+include_directories(${PROJECT_SOURCE_DIR}/include)
 if (USE_EDGE_TOOLCHAIN)
     include_directories(/opt/loongarch-gnu-toolchain/loongarch64-linux-gnu/sysroot/usr/include/)
 endif()
-include_directories(${PROJECT_SOURCE_DIR}/third_party/cpp-httplib-master)  # cpp-httplib头文件路径
+include_directories(${PROJECT_SOURCE_DIR}/third_party/cpp-httplib-master)
 
-link_libraries(pthread)
-
-# 指定OpenCV所用头文件路径
+# OpenCV 依赖配置（统一使用 find_package，边缘模式下手动指定库目录）
 if (USE_EDGE_TOOLCHAIN)
-    include_directories(/home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/include/opencv4)
-    set(OPENCV_LIB_DIR /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-    # 找到opencv所需的库文件并保存到变量中
-    set(OPENCV_CORE ${OPENCV_LIB_DIR}/libopencv_core.so)
-    set(OPENCV_IMGPROC ${OPENCV_LIB_DIR}/libopencv_imgproc.so)
-    set(OPENCV_HIGHGUI ${OPENCV_LIB_DIR}/libopencv_highgui.so)
-    set(OPENCV_VIDEOIO ${OPENCV_LIB_DIR}/libopencv_videoio.so)
-    set(OPENCV_IMGCODECS ${OPENCV_LIB_DIR}/libopencv_imgcodecs.so)
-    set(OPENCV_DNN ${OPENCV_LIB_DIR}/libopencv_dnn.so)
-    set(OPENCV_CALIB3D ${OPENCV_LIB_DIR}/libopencv_calib3d.so)
-    set(OPENCV_FEATURES2D ${OPENCV_LIB_DIR}/libopencv_features2d.so)
-    set(OPENCV_FLANN ${OPENCV_LIB_DIR}/libopencv_flann.so)
-    set(OPENCV_LINK_LIBS
-        ${OPENCV_CORE}
-        ${OPENCV_IMGPROC}
-        ${OPENCV_HIGHGUI}
-        ${OPENCV_VIDEOIO}
-        ${OPENCV_IMGCODECS}
-        ${OPENCV_DNN}
-        ${OPENCV_CALIB3D}
-        ${OPENCV_FEATURES2D}
-        ${OPENCV_FLANN}
-    )
-else()
-    find_package(OpenCV REQUIRED)
-    include_directories(${OpenCV_INCLUDE_DIRS})
-    set(OPENCV_LIB_DIR "")
-    set(OPENCV_LINK_LIBS ${OpenCV_LIBS})
+    set(CMAKE_PREFIX_PATH "/home/fhfh/Work/LS2K0300CAR/opencv_4_10_build")
+    set(OPENCV_LIB_DIR "/home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib")
 endif()
+find_package(OpenCV REQUIRED)
+message(STATUS "OpenCV version: ${OpenCV_VERSION}")
+message(STATUS "OpenCV include: ${OpenCV_INCLUDE_DIRS}")
+include_directories(${OpenCV_INCLUDE_DIRS})
 
-
-
-
-# find_library(OPENCV_CORE      opencv_core      PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-# find_library(OPENCV_IMGPROC   opencv_imgproc   PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-# find_library(OPENCV_HIGHGUI   opencv_highgui   PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-# find_library(OPENCV_VIDEOIO   opencv_videoio   PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-# find_library(OPENCV_IMGCODECS opencv_imgcodecs PATHS /home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-
-# link_directories(/home/fhfh/Work/LS2K0300CAR/opencv_4_10_build/lib)
-# set(CMAKE_PREFIX_PATH "/home/zmr/Desktop/opencv_4_10_build") 
-
-# 若需使用静态库，可带上下面两行程序，具体可参考龙邱B站视频教程
-# link_directories(${PROJECT_SOURCE_DIR}/a)
-# link_libraries(ss)
-
-# 添加第三方web库cpp-httplib（HTTP服务器/客户端库）
-# 禁用可选依赖以避免交叉编译问题
+# 第三方 web 库 cpp-httplib（HTTP服务器/客户端库）
 set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF)
 set(HTTPLIB_USE_ZLIB_IF_AVAILABLE OFF)
 set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF)
 set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF)
 set(HTTPLIB_USE_NON_BLOCKING_GETADDRINFO OFF)
-# 启用编译httplib库（默认是头文件库，设为ON可看到编译过程）
 set(HTTPLIB_COMPILE ON)
 add_subdirectory(third_party/cpp-httplib-master)
 
-# 由源文件生成一个可执行程序
-add_executable(main main.cpp ${SRC} ${TEST})
+# 主程序可执行文件
+add_executable(main main.cpp ${SRC})
 
-# 交叉链接时为 ld 提供动态库依赖搜索路径，避免 calib3d 的间接依赖找不到。
+# 为边缘设备设置 rpath-link，避免间接依赖找不到（使用手动定义的 OPENCV_LIB_DIR）
 if (USE_EDGE_TOOLCHAIN)
     target_link_options(main PUBLIC -Wl,-rpath-link,${OPENCV_LIB_DIR})
+    # 同时设置 INSTALL_RPATH 方便运行时查找
+    set_target_properties(main PROPERTIES
+        INSTALL_RPATH "${OPENCV_LIB_DIR}"
+        BUILD_WITH_INSTALL_RPATH ON
+    )
 endif()
 
-# 连接OpenCV动态库
-target_link_libraries(main PUBLIC ${OPENCV_LINK_LIBS})
-# 连接第三方web库cpp-httplib
-target_link_libraries(main PUBLIC httplib::httplib)
-# 连接多线程pthread库
-target_link_libraries(main PUBLIC pthread)
-# 连接C++17 filesystem库（对于某些编译器可能需要）
-target_link_libraries(main PUBLIC stdc++fs)
+# 链接依赖库
+target_link_libraries(main PUBLIC
+    ${OpenCV_LIBS}
+    httplib::httplib
+    pthread
+    stdc++fs   # C++17 filesystem
+)
 
-# 上位机图像处理离线测试（WebUI展示）
-# 该目标仅用于上位机调试，边缘设备构建时不参与构建。
+# 上位机图像处理离线测试（WebUI展示），仅非边缘构建时生成
 if (NOT USE_EDGE_TOOLCHAIN)
     set(IMAGE_WEB_TEST_SRC
         ${PROJECT_SOURCE_DIR}/src/libimage_process.cpp
@@ -131,12 +110,18 @@ if (NOT USE_EDGE_TOOLCHAIN)
 
     if (USE_EDGE_TOOLCHAIN)
         target_link_options(image_web_test PUBLIC -Wl,-rpath-link,${OPENCV_LIB_DIR})
+        set_target_properties(image_web_test PROPERTIES
+            INSTALL_RPATH "${OPENCV_LIB_DIR}"
+            BUILD_WITH_INSTALL_RPATH ON
+        )
     endif()
 
-    target_link_libraries(image_web_test PUBLIC ${OPENCV_LINK_LIBS})
-    target_link_libraries(image_web_test PUBLIC httplib::httplib)
-    target_link_libraries(image_web_test PUBLIC pthread)
-    target_link_libraries(image_web_test PUBLIC stdc++fs)
+    target_link_libraries(image_web_test PUBLIC
+        ${OpenCV_LIBS}
+        httplib::httplib
+        pthread
+        stdc++fs
+    )
 else()
     message(STATUS "Skip image_web_test: edge-device build enabled")
 endif()

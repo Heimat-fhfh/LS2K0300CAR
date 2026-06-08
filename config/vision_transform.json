@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "enable": false,
+    "enable": true,
     "input_size": {
         "width": 320,
         "height": 240
@@ -13,18 +13,16 @@
         "enable": true,
         "calibration_file": "../config/calibration.yaml"
     },
+    "coordinate_map": {
+        "enable": true,
+        "file": "config/vision_transform_coordinate_map.npz"
+    },
     "inverse_perspective": {
-        "enable": false,
+        "enable": true,
         "matrix": [
-            -2.388857,
-            4.090252,
-            -701.530597,
-            0.057342,
-            2.329624,
-            -693.438730,
-            0.001596,
-            0.028233,
-            -7.590749
+            -0.679754,0.884480,-127.027788,
+            0.011264,0.123602,-58.625694,
+            -0.000093,0.005851,-1.534388
         ]
     }
 }
