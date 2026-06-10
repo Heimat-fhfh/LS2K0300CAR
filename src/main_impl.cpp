@@ -310,7 +310,11 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
  */
 void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
 {
-    judge_p->DifferentialPD_Calculate(Data_Path_p);
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+    Data_Path_p->forword_line_h = std::max(image_h-JSON_TrackConfigData.Default_Forward, int(Data_Path_p->search_print_h_max));
+    
+    Data_Path_p->SteerErrorPx = (Data_Path_p->center_line[Data_Path_p->forword_line_h] - image_w / 2) 
+                + JSON_TrackConfigData.ForwardHeightCompensationPxPerRow * (Data_Path_p->search_print_h_max-image_h-JSON_TrackConfigData.Default_Forward);
 }
 
 void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
@@ -322,4 +326,3 @@ void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
     ProcessTrackTaskPerFrame(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
     ApplyDifferentialControl(Img_Store_p,Data_Path_p,Function_EN_p,judge_p);
 }
-

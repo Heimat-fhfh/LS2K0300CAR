@@ -118,6 +118,7 @@ namespace
 
         track_cfg.Forward = cfg.at("FORWARD");
         track_cfg.Default_Forward = cfg.at("FORWARD");
+        track_cfg.ForwardHeightCompensationPxPerRow = cfg.at("FORWARD_HEIGHT_COMPENSATION_PX_PER_ROW");
         track_cfg.Path_Search_Start = cfg.at("PATH_SEARCH_START");
         track_cfg.Path_Search_End = cfg.at("PATH_SEARCH_END");
         track_cfg.Side_Search_Start = cfg.at("SIDE_SEARCH_START");

@@ -95,7 +95,6 @@ class CameraCalibrationCorrector;
 	extern Control::PID::Parameters diffInnerParams;
 	extern Control::IncrementalPID::Parameters speedIncrParams;
 	extern std::unique_ptr<MotorControlTask> motorTask;
-	extern Buzzer buzzer;
 	extern MainTestConfig test_config;
 	extern bool g_runtime_config_ok;
 	extern CameraKind g_camera_kind;

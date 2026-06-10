@@ -261,20 +261,6 @@ void Judge::MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 
 
 /*
-    DifferentialPD_Calculate说明
-    计算归一化偏差和期望速度
-*/
-void Judge::DifferentialPD_Calculate(Data_Path *Data_Path_p)
-{
-    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-    Data_Path_p->forword_line_h = std::max(image_h-JSON_TrackConfigData.Default_Forward, int(Data_Path_p->search_print_h_max));
-    Data_Path_p->SteerErrorPx = Data_Path_p->center_line[Data_Path_p->forword_line_h] - image_w / 2;
-
-    // TargetBaseSpeedMps 已在 MotorSpeed_Judge 中设定
-}
-
-
-/*
     InflectionPointSearch说明
     边线拐点寻找
 */
@@ -525,7 +511,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     const std::vector<std::string> required_keys = {
         "UART_EN", "IMG_COMPRESS_EN", "CAMERA_EN", "IMAGE_SAVE_EN", "VIDEO_SHOW_EN",
-        "DATA_PRINT_EN", "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN","Track_width", "FORWARD", "PATH_SEARCH_START",
+        "DATA_PRINT_EN", "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN","Track_width", "FORWARD", "FORWARD_HEIGHT_COMPENSATION_PX_PER_ROW", "PATH_SEARCH_START",
         "PATH_SEARCH_END", "SIDE_SEARCH_START", "SIDE_SEARCH_END", "POINT_DISTANCE", "LITTLE_ANGLE_BEND_POINT_NUM",
         "BIG_ANGLE_BEND_POINT_NUM", "MIN_INFLECTION_POINT_ANGLE", "MAX_INFLECTION_POINT_ANGLE", "MIN_BEND_POINT_ANGLE",
         "MAX_BEND_POINT_ANGLE", "TRACK_WIDTH", "TRACK_KIND_COUNT_THRESHOLD","CIRCLE_OUT_WIDTH", "STRIGHT_TRACK_MOTOR_SPEED",
@@ -625,6 +611,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
 
     JSON_TrackConfigData.Forward = ConfigData.at("FORWARD"); // 获取前瞻点
     JSON_TrackConfigData.Default_Forward = ConfigData.at("FORWARD"); // 获取默认前瞻点
+    JSON_TrackConfigData.ForwardHeightCompensationPxPerRow = ConfigData.at("FORWARD_HEIGHT_COMPENSATION_PX_PER_ROW"); // 获取巡线前瞻点高度补偿
     JSON_TrackConfigData.Path_Search_Start = ConfigData.at("PATH_SEARCH_START"); // 获取路径循线起始点
     JSON_TrackConfigData.Path_Search_End = ConfigData.at("PATH_SEARCH_END"); // 获取路径循线结束点
     JSON_TrackConfigData.Side_Search_Start = ConfigData.at("SIDE_SEARCH_START");    // 获取边线循线起始点
@@ -675,6 +662,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
               << ", Track 配置数量: " << Data_Path_p->JSON_TrackConfigData_v.size() << std::endl;
     std::cout << "[Config] Camera_EN=" << static_cast<int>(JSON_FunctionConfigData.Camera_EN)
               << ", Forward=" << JSON_TrackConfigData.Forward
+              << ", ForwardHeightCompensationPxPerRow=" << JSON_TrackConfigData.ForwardHeightCompensationPxPerRow
               << ", PathSearch=[" << JSON_TrackConfigData.Path_Search_Start
               << ", " << JSON_TrackConfigData.Path_Search_End << "]" << std::endl;
 
@@ -716,5 +704,4 @@ void DataPrint(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 
     }
 }
-
 

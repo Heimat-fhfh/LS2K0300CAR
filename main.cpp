@@ -18,7 +18,6 @@ Encoder encoder_right("/dev/zf_encoder_2", true);
 Control::PID::Parameters diffOuterParams, diffInnerParams;
 Control::IncrementalPID::Parameters speedIncrParams;
 std::unique_ptr<MotorControlTask> motorTask;
-Buzzer buzzer;
 MainTestConfig test_config;
 std::atomic<bool> g_running(true);
 bool g_runtime_config_ok = false;
@@ -48,6 +47,138 @@ int main_test_task(const MainTestConfig& test_config);
 
 namespace
 {
+constexpr int kVideoSpeedTestWidth = 320;
+constexpr int kVideoSpeedTestHeight = 240;
+constexpr int kVideoSpeedTestFps = 120;
+constexpr int kVideoSpeedTestReportFrames = 30;
+constexpr double kVideoSpeedTestAutoExposureMode = 3.0;
+
+Buzzer& GetBuzzer()
+{
+    static Buzzer buzzer;
+    return buzzer;
+}
+
+bool IsVideoSpeedTestMode(int argc, char** argv)
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::string(argv[i]) == "VideoSpeedTest")
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string FourccToString(double fourccValue)
+{
+    const int fourcc = static_cast<int>(fourccValue);
+    std::string text(4, ' ');
+    text[0] = static_cast<char>(fourcc & 0xFF);
+    text[1] = static_cast<char>((fourcc >> 8) & 0xFF);
+    text[2] = static_cast<char>((fourcc >> 16) & 0xFF);
+    text[3] = static_cast<char>((fourcc >> 24) & 0xFF);
+    return text;
+}
+
+void VideoSpeedTestSignalHandler(int signum)
+{
+    (void)signum;
+    g_running.store(false);
+}
+
+int RunVideoSpeedTest()
+{
+    std::cout << "[VideoSpeedTest] 启动 YUY2 视频读取速度检测" << std::endl;
+    signal(SIGINT, VideoSpeedTestSignalHandler);
+    g_running.store(true);
+
+    const char* cameraPath = "/dev/video0";
+    VideoCapture camera;
+    camera.open(cameraPath);
+
+    if (!camera.isOpened())
+    {
+        std::cerr << "[VideoSpeedTest] error: no find uvc camera ." << std::endl;
+        return EXIT_FAILURE;
+    }
+    std::cout << "[VideoSpeedTest] find uvc camera Successfully." << std::endl;
+
+    camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('Y', 'U', 'Y', '2'));
+    camera.set(CAP_PROP_FRAME_WIDTH, kVideoSpeedTestWidth);
+    camera.set(CAP_PROP_FRAME_HEIGHT, kVideoSpeedTestHeight);
+    camera.set(CAP_PROP_FPS, kVideoSpeedTestFps);
+    camera.set(CAP_PROP_AUTO_EXPOSURE, kVideoSpeedTestAutoExposureMode);
+
+    std::cout << "[VideoSpeedTest] get uvc width = " << camera.get(CAP_PROP_FRAME_WIDTH) << std::endl;
+    std::cout << "[VideoSpeedTest] get uvc height = " << camera.get(CAP_PROP_FRAME_HEIGHT) << std::endl;
+    std::cout << "[VideoSpeedTest] get uvc fps = " << camera.get(CAP_PROP_FPS) << std::endl;
+    std::cout << "[VideoSpeedTest] get uvc fourcc = " << FourccToString(camera.get(CAP_PROP_FOURCC)) << std::endl;
+    std::cout << "[VideoSpeedTest] get uvc auto exposure mode = "
+              << camera.get(CAP_PROP_AUTO_EXPOSURE) << std::endl;
+
+    uint64_t frameCount = 0;
+    uint64_t failedReadCount = 0;
+    uint64_t emptyFrameCount = 0;
+    int64_t windowReadCostUs = 0;
+    auto windowStart = std::chrono::steady_clock::now();
+
+    while (g_running.load())
+    {
+        Mat frame;
+        const auto readStart = std::chrono::steady_clock::now();
+        const bool ok = camera.read(frame);
+        const auto readCostUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::steady_clock::now() - readStart)
+                                    .count();
+
+        windowReadCostUs += readCostUs;
+        if (!ok)
+        {
+            ++failedReadCount;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            continue;
+        }
+        if (frame.empty())
+        {
+            ++emptyFrameCount;
+            continue;
+        }
+
+        ++frameCount;
+        if (frameCount % kVideoSpeedTestReportFrames == 0)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(now - windowStart).count();
+            const double fps = (elapsedUs > 0)
+                                   ? (kVideoSpeedTestReportFrames * 1000000.0 / static_cast<double>(elapsedUs))
+                                   : 0.0;
+            const double avgReadUs = windowReadCostUs / static_cast<double>(kVideoSpeedTestReportFrames);
+
+            std::cout << "[VideoSpeedTest] frame=" << frameCount
+                      << " fps=" << fixed << setprecision(2) << fps
+                      << " avg_read_us=" << fixed << setprecision(1) << avgReadUs
+                      << " last_read_us=" << readCostUs
+                      << " size=" << frame.cols << "x" << frame.rows
+                      << " type=" << frame.type()
+                      << " channels=" << frame.channels()
+                      << " failed=" << failedReadCount
+                      << " empty=" << emptyFrameCount
+                      << std::endl;
+
+            windowStart = now;
+            windowReadCostUs = 0;
+        }
+    }
+
+    camera.release();
+    std::cout << "[VideoSpeedTest] 停止，总帧数=" << frameCount
+              << " failed=" << failedReadCount
+              << " empty=" << emptyFrameCount << std::endl;
+    return EXIT_SUCCESS;
+}
+
 double ReadAverageSpeed(Encoder& encoder, int samples, int delayMs)
 {
     double sum = 0.0;
@@ -148,55 +279,12 @@ bool UpdateConfigDeadZones(const std::string& path, double leftDeadZone, double 
 
 int main(int argc, char** argv)
 {
-    const bool motorDeadMode = (argc > 1 && std::string(argv[1]) == "MotorDead");
-    const bool runCameraOnlyTest = false;
-    if (runCameraOnlyTest)
+    if (IsVideoSpeedTestMode(argc, argv))
     {
-        std::cout << "[CameraTest] 仅摄像头初始化与采集测试启动" << std::endl;
-
-        VideoCapture camera;
-        CameraInit(camera, CameraKind::VIDEO_0, 320, 240, 120);
-
-        Img_Store imgStore;
-        std::thread captureThread;
-        CameraCaptureThreadStart(camera, &imgStore, captureThread);
-
-        uint64_t frameCount = 0;
-        uint64_t emptyFrameCount = 0;
-        auto windowStart = std::chrono::steady_clock::now();
-
-        while (1)
-        {
-            const auto frameStart = std::chrono::steady_clock::now();
-            CameraImgGet(&imgStore);
-            const auto captureCostUs = std::chrono::duration_cast<std::chrono::microseconds>(
-                                           std::chrono::steady_clock::now() - frameStart)
-                                           .count();
-
-            if (imgStore.Img_Color.empty())
-            {
-                ++emptyFrameCount;
-            }
-
-            ++frameCount;
-            if (frameCount % 30 == 0)
-            {
-                const auto now = std::chrono::steady_clock::now();
-                const auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(now - windowStart).count();
-                const double fps = (elapsedUs > 0) ? (30.0 * 1000000.0 / static_cast<double>(elapsedUs)) : 0.0;
-
-                std::cout << "[CameraTest] frame=" << frameCount
-                          << " capture_us=" << captureCostUs
-                          << " empty=" << emptyFrameCount
-                          << " fps=" << fps << std::endl;
-                windowStart = now;
-            }
-        }
-
-        CameraCaptureThreadStop(&imgStore, captureThread);
-        camera.release();
-        return EXIT_SUCCESS;
+        return RunVideoSpeedTest();
     }
+
+    const bool motorDeadMode = (argc > 1 && std::string(argv[1]) == "MotorDead");
 
     // 1. 配置参数初始化
     argument_config();
@@ -410,6 +498,7 @@ void argument_config(void)
     test_config.encoder_test = false;
 
     // 2. 蜂鸣器参数设置
+    Buzzer& buzzer = GetBuzzer();
     buzzer.setShortDuration(60)
             .setLongDuration(300)
             .setIntervalDuration(120);
@@ -589,6 +678,7 @@ int main_test_task(const MainTestConfig& test_config)
     {
         try
         {
+            Buzzer& buzzer = GetBuzzer();
             std::cout << "短鸣 1 次" << std::endl;
             buzzer.shortBeep();
             std::this_thread::sleep_for(std::chrono::milliseconds(600));
@@ -790,4 +880,3 @@ int main_test_task(const MainTestConfig& test_config)
     motorTask->stop();
     return EXIT_SUCCESS;
 }
-

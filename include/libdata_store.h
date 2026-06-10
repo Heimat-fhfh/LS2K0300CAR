@@ -182,6 +182,7 @@ typedef struct JSON_TrackConfigData
     int Forward;    // 前瞻点
     int Forward_Distance;   // 前瞻点对应实际距离
     int Default_Forward;    // 默认前瞻点，用于前瞻点初始化
+    double ForwardHeightCompensationPxPerRow = 0.0; // 巡线前瞻点高度补偿，单位 px/行
     int Path_Search_Start;  // 寻路径起始点
     int Path_Search_End;    // 寻路径结束点
     int Side_Search_Start; // 寻边线起始点
