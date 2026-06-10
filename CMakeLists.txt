@@ -39,7 +39,7 @@ else()
 endif()
 
 # 源文件收集
-file(GLOB SRC ${PROJECT_SOURCE_DIR}/src/*.cpp)
+file(GLOB SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 # 头文件路径
 include_directories(${PROJECT_SOURCE_DIR}/include)

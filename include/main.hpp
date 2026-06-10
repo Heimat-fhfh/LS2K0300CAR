@@ -98,6 +98,7 @@ class CameraCalibrationCorrector;
 	extern MainTestConfig test_config;
 	extern bool g_runtime_config_ok;
 	extern CameraKind g_camera_kind;
+	extern int g_camera_fps;
 	extern bool g_calibration_enabled;
 	extern bool g_simple_tracking_enabled;
 	extern JSON_PIDConfigData JSON_PIDConfigData_s;

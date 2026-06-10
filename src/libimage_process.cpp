@@ -4,6 +4,7 @@
 #include "vision_transform.h"
 #include <condition_variable>
 #include <display_show.h>
+#include <iomanip>
 using namespace std;
 using namespace cv;
 
@@ -25,6 +26,17 @@ bool EnsureVisionTransformReady()
 		}
 	});
 	return g_vision_transform_ready;
+}
+
+std::string FourccToText(double fourccValue)
+{
+	const int fourcc = static_cast<int>(fourccValue);
+	std::string text(4, ' ');
+	text[0] = static_cast<char>(fourcc & 0xFF);
+	text[1] = static_cast<char>((fourcc >> 8) & 0xFF);
+	text[2] = static_cast<char>((fourcc >> 16) & 0xFF);
+	text[3] = static_cast<char>((fourcc >> 24) & 0xFF);
+	return text;
 }
 } // namespace
 
@@ -88,11 +100,11 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 	}
 	else
 	{
-		Camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G')); 
-		Camera.set(CAP_PROP_BUFFERSIZE, 1);         // 减少驱动侧积压帧，降低延迟与无效解码开销
+		Camera.set(CAP_PROP_FOURCC, VideoWriter::fourcc('Y', 'U', 'Y', '2'));
 		Camera.set(CAP_PROP_FRAME_WIDTH, Width);      // 帧宽
 		Camera.set(CAP_PROP_FRAME_HEIGHT, Height);     // 帧高
 		Camera.set(CAP_PROP_FPS, FPS);              // 帧率
+		Camera.set(CAP_PROP_AUTO_EXPOSURE, 3);
 		// Camera.set(CAP_PROP_EXPOSURE, 3);	// 曝光度
 		// Camera.set(CAP_PROP_BRIGHTNESS, 0.8);    // 亮度，范围通常0~1
 		// Camera.set(CAP_PROP_GAIN, 1);          // 增益，提高亮度但会增加噪点
@@ -101,8 +113,11 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 		double actualHeight = Camera.get(CAP_PROP_FRAME_HEIGHT); 
 		double actualFps = Camera.get(CAP_PROP_FPS); 
 		printf("摄像头配置信息：\n"); 
+		printf("请求帧率：%d FPS\n", FPS);
 		printf("分辨率：%.0fx%.0f\n", actualWidth, actualHeight); 
 		printf("帧率：%.0f FPS\n", actualFps);
+		printf("格式：%s\n", FourccToText(Camera.get(CAP_PROP_FOURCC)).c_str());
+		printf("自动曝光：%.0f\n", Camera.get(CAP_PROP_AUTO_EXPOSURE));
 
 		if (!Camera.isOpened())
 		{
@@ -125,13 +140,12 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 {
 	Mat Img;
 	double cameraFps = Camera.get(CAP_PROP_FPS);
-	cout << "摄像头获取图像线程 Camera FPS: " << cameraFps << endl;
-	if (cameraFps <= 0.0)
-	{
-		cameraFps = 60.0;
-	}
-	const auto frameInterval = chrono::microseconds(static_cast<long long>(1000000.0 / cameraFps));
-	auto nextFrameTime = chrono::steady_clock::now();
+	cout << "摄像头获取图像线程 Camera FPS: " << cameraFps
+	     << " FOURCC: " << FourccToText(Camera.get(CAP_PROP_FOURCC)) << endl;
+	uint64_t threadFrameCount = 0;
+	uint64_t threadFailedCount = 0;
+	uint64_t threadEmptyCount = 0;
+	auto statsStart = chrono::steady_clock::now();
 	{
 		lock_guard<mutex> lock(CameraCapture_Mutex);
 		Img_Store_p->CameraThreadRunning = true;
@@ -149,12 +163,14 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 
         if (!Camera.read(Img)) {
             cerr << "Error: Camera read failed!" << endl;
+			++threadFailedCount;
 			this_thread::sleep_for(chrono::milliseconds(2));
             continue;
         }
 
         if (Img.empty()) {
             cerr << "Error: Captured image is empty!" << endl;
+			++threadEmptyCount;
 			this_thread::sleep_for(chrono::milliseconds(2));
             continue;
         }
@@ -172,11 +188,20 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 		}
 		CameraCapture_CV.notify_one();
 
-		nextFrameTime += frameInterval;
-		this_thread::sleep_until(nextFrameTime);
-		if (chrono::steady_clock::now() > nextFrameTime + frameInterval)
+		++threadFrameCount;
+		const auto now = chrono::steady_clock::now();
+		const auto elapsedMs = chrono::duration_cast<chrono::milliseconds>(now - statsStart).count();
+		if (elapsedMs >= 1000)
 		{
-			nextFrameTime = chrono::steady_clock::now();
+			const double readFps = threadFrameCount * 1000.0 / static_cast<double>(elapsedMs);
+			cout << "[CameraThread] read_fps=" << fixed << setprecision(2) << readFps
+			     << " camera_fps=" << cameraFps
+			     << " failed=" << threadFailedCount
+			     << " empty=" << threadEmptyCount << endl;
+			threadFrameCount = 0;
+			threadFailedCount = 0;
+			threadEmptyCount = 0;
+			statsStart = now;
 		}
     }
 }
