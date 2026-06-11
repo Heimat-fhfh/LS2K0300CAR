@@ -53,11 +53,11 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    // 4. 启动电机控制任务
-    if (!StartMotorControlTask())
-    {
-        return EXIT_FAILURE;
-    }
+    // 4. 启动电机控制任务  26-27% --> 39-44% CPU占用率 提升了15% 左右
+    // if (!StartMotorControlTask())
+    // {
+    //     return EXIT_FAILURE;
+    // }
 
     // 5. 初始化摄像头并启动图像采集线程
     VideoCapture Camera;
@@ -95,9 +95,14 @@ int main(int argc, char** argv)
 
         tempCapture.saveFrameIfNeeded(Img_Store_s.Img_Color);
 
-        // FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
-        
-        // 归一化偏差并下发电机控制任务
+        // 69-75% , 提升了 50% 左右
+        // 独立黑块检测占用5%左右
+        // 数据分析占用 64% ，降低了 10% 左右
+        // 八邻域占用 63% 几乎没有占用
+        // 主要占用为图像预处理
+        FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
+
+        // // 归一化偏差并下发电机控制任务
         {
             float errorNorm = static_cast<float>(Data_Path_s.SteerErrorPx) / 160.0f;
             errorNorm = std::max(-1.0f, std::min(1.0f, errorNorm));

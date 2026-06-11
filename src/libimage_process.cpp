@@ -252,32 +252,30 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
 	Img_Store_p->Img_Track = Img_Store_p->Img_Color.clone();
 
 	vector<Mat> bgrChannels;
-	split(Img_Store_p->Img_Color, bgrChannels);
 	Mat rgSum;
-	add(bgrChannels[2], bgrChannels[1], rgSum);          // R + G
-	subtract(rgSum, bgrChannels[0], Img_Store_p->Img_Gray); // R + G - B（8U 饱和裁剪）
 
-	if (EnsureVisionTransformReady() && g_vision_transform_pipeline.isEnabled())
-	{
-		Mat transformedBinary;
-		if (g_vision_transform_pipeline.apply(Img_Store_p->Img_Gray, transformedBinary, cv::INTER_NEAREST))
-		{
-			Img_Store_p->Img_Gray = std::move(transformedBinary);
-		}
-		else
-		{
-			cerr << "Warning: Vision transform apply failed, using original binary image." << endl;
-		}
-	}
+	// split(Img_Store_p->Img_Color, bgrChannels);
+	// add(bgrChannels[2], bgrChannels[1], rgSum);          // R + G
+	// subtract(rgSum, bgrChannels[0], Img_Store_p->Img_Gray); // R + G - B（8U 饱和裁剪）
+
+	// 上下相差 10% 左右
+
+	cvtColor(Img_Store_p->Img_Track, Img_Store_p->Img_Gray, cv::COLOR_BGR2GRAY);
+
+	/**
+	 * 手动算法: 2.343 ms
+	 * cvtColor: 1.359 ms
+	 * cvtColor 快 1.724 倍
+	 **/
 
 	Mat blurred;
 	// remap(Img_Store_p->Img_Gray, blurred, map1, map2, cv::INTER_CUBIC);
 	// Mat kernel = getStructuringElement(MORPH_RECT, Size(5, 5));
 	// morphologyEx(Img_Store_p->Img_Gray, blurred, MORPH_CLOSE, kernel);
 	// bilateralFilter(Img_Store_p->Img_Gray, blurred, 7, 100, 100);
-    GaussianBlur(Img_Store_p->Img_Gray, blurred, Size(5, 5), 0);
+    GaussianBlur(Img_Store_p->Img_Gray, blurred, Size(3, 3), 0);
     threshold(blurred, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
-
+	// 上下相差占用 6% 左右
     // threshold(Img_Store_p->Img_Gray, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
 	// 将Img_Track改为二值化图像的彩色版本，用于绘制线条

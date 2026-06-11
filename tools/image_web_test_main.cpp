@@ -30,7 +30,7 @@ namespace
 
     struct AppConfig
     {
-        std::string dataset_dir = "/home/fhfh/Work/LS2K0300CAR/document/img/20260409_141917";
+        std::string dataset_dir = "/home/fhfh/Work/LS2K0300CAR/document/img/20260602_113553";
         std::string config_file = "config/config_0.json";
         std::string frontend_dir;
         std::string host = "0.0.0.0";

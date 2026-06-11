@@ -10,7 +10,7 @@ void RunCameraCatchTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
     // imgProcess.ImgCompress(Img_Store_p->Img_Color, false);   // 图像压缩
     imgProcess_p->imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
     imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
-    judge_p->TransitionScanDetect(Img_Store_p, Data_Path_p, Function_EN_p); // 独立黑块检测
+    // judge_p->TransitionScanDetect(Img_Store_p, Data_Path_p, Function_EN_p); // 独立黑块检测
     judge_p->Search_Data_Analysis(Img_Store_p, Data_Path_p, Function_EN_p);
 }
 
