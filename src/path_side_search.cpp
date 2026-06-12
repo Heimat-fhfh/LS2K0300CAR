@@ -5,6 +5,8 @@
 using namespace std;
 using namespace cv;
 
+void ImgSideLineTransitionSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
+
 
 int my_abs(int value)
 {
@@ -482,6 +484,130 @@ inline int clamp_int(int value, int low, int high) {
     return value;
 }
 
+struct EdgeLineRawRun {
+    int color = 0;
+    int length = 0;
+    cv::Point start;
+    cv::Point end;
+};
+
+void reset_edge_line_transition(Data_Path *data_path)
+{
+    for (int side = 0; side < 2; ++side) {
+        data_path->EdgeLineColorBlockNum[side] = 0;
+        data_path->EdgeLineJumpNum[side] = 0;
+        for (int i = 0; i < Data_Path::kEdgeLineColorBlockMax; ++i) {
+            data_path->EdgeLineColorBlockColor[side][i] = 0;
+            data_path->EdgeLineColorBlockLength[side][i] = 0;
+            data_path->EdgeLineColorBlockStart[side][i] = cv::Point();
+            data_path->EdgeLineColorBlockEnd[side][i] = cv::Point();
+        }
+    }
+}
+
+bool has_valid_binary_source(const Img_Store *img_store)
+{
+    return img_store->Img_OTSU.empty() ||
+           (img_store->Img_OTSU.rows == image_h &&
+            img_store->Img_OTSU.cols == image_w &&
+            img_store->Img_OTSU.type() == CV_8UC1);
+}
+
+int read_binary_color(const Img_Store *img_store, int x, int y)
+{
+    const uchar value = img_store->Img_OTSU.empty()
+        ? img_store->bin_image[y][x]
+        : img_store->Img_OTSU.at<uchar>(y, x);
+    return value >= 128 ? 255 : 0;
+}
+
+void record_edge_line_run(Data_Path *data_path,
+                          int side,
+                          const EdgeLineRawRun& run,
+                          int& last_valid_color,
+                          bool& has_valid_color)
+{
+    if (run.length < 3) {
+        return;
+    }
+
+    int& block_count = data_path->EdgeLineColorBlockNum[side];
+    if (!has_valid_color) {
+        has_valid_color = true;
+        last_valid_color = run.color;
+    } else if (run.color != last_valid_color) {
+        ++data_path->EdgeLineJumpNum[side];
+        last_valid_color = run.color;
+    } else if (block_count > 0) {
+        const int last_index = block_count - 1;
+        data_path->EdgeLineColorBlockLength[side][last_index] += run.length;
+        data_path->EdgeLineColorBlockEnd[side][last_index] = run.end;
+        return;
+    }
+
+    if (block_count >= Data_Path::kEdgeLineColorBlockMax) {
+        return;
+    }
+
+    data_path->EdgeLineColorBlockColor[side][block_count] = run.color;
+    data_path->EdgeLineColorBlockLength[side][block_count] = run.length;
+    data_path->EdgeLineColorBlockStart[side][block_count] = run.start;
+    data_path->EdgeLineColorBlockEnd[side][block_count] = run.end;
+    ++block_count;
+}
+
+void scan_one_edge_line_transition(const Img_Store *img_store,
+                                   Data_Path *data_path,
+                                   int side,
+                                   const uint16 points[][2],
+                                   int point_count)
+{
+    point_count = clamp_int(point_count, 0, static_cast<int>(USE_num));
+
+    EdgeLineRawRun current_run;
+    bool has_raw_run = false;
+    bool has_valid_color = false;
+    int last_valid_color = 0;
+
+    for (int i = 0; i < point_count; ++i) {
+        const int x = static_cast<int>(points[i][0]);
+        const int y = static_cast<int>(points[i][1]);
+        if (!in_image_bounds(x, y)) {
+            if (has_raw_run) {
+                record_edge_line_run(data_path, side, current_run, last_valid_color, has_valid_color);
+                has_raw_run = false;
+            }
+            continue;
+        }
+
+        const int color = read_binary_color(img_store, x, y);
+        if (!has_raw_run) {
+            current_run.color = color;
+            current_run.length = 1;
+            current_run.start = cv::Point(x, y);
+            current_run.end = current_run.start;
+            has_raw_run = true;
+            continue;
+        }
+
+        if (color == current_run.color) {
+            ++current_run.length;
+            current_run.end = cv::Point(x, y);
+            continue;
+        }
+
+        record_edge_line_run(data_path, side, current_run, last_valid_color, has_valid_color);
+        current_run.color = color;
+        current_run.length = 1;
+        current_run.start = cv::Point(x, y);
+        current_run.end = current_run.start;
+    }
+
+    if (has_raw_run) {
+        record_edge_line_run(data_path, side, current_run, last_valid_color, has_valid_color);
+    }
+}
+
 bool find_seed_points_eight(const uint8 bin_image[image_h][image_w],
                             int start_row,
                             int start_x,
@@ -706,6 +832,7 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
 
 
     dataMove(Data_Path_p);
+    ImgSideLineTransitionSearch(Img_Store_p, Data_Path_p);
 
 }
 
@@ -714,3 +841,31 @@ void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
     ImgSideSearchEightNeighborhood(Img_Store_p, Data_Path_p);
 }
 
+/*
+    ImgSideLineTransitionSearch 说明
+    遍历八邻域得到的左右边线点，记录二值颜色跳变规律。
+    连续同色点数量小于3时视作噪点，不作为一次有效颜色段。
+*/
+void ImgSideLineTransitionSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
+{
+    if (Img_Store_p == nullptr || Data_Path_p == nullptr) {
+        return;
+    }
+
+    reset_edge_line_transition(Data_Path_p);
+    if (!has_valid_binary_source(Img_Store_p)) {
+        cerr << "Error: Img_OTSU has unexpected size/type in ImgSideLineTransitionSearch!" << endl;
+        return;
+    }
+
+    scan_one_edge_line_transition(Img_Store_p,
+                                  Data_Path_p,
+                                  0,
+                                  Data_Path_p->points_l,
+                                  Data_Path_p->NumSearch[0]);
+    scan_one_edge_line_transition(Img_Store_p,
+                                  Data_Path_p,
+                                  1,
+                                  Data_Path_p->points_r,
+                                  Data_Path_p->NumSearch[1]);
+}

@@ -24,6 +24,7 @@ void ImgPathSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 */
 void ImgSideSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
+void ImgSideLineTransitionSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
 // 十字赛道预补线

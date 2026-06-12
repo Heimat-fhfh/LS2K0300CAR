@@ -76,155 +76,166 @@ LoopKind Judge::TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Fu
     static int Judge_Num = 0;    // 决策循环帧数计数器
     static int TrackKindCount[6] = {0};    // 赛道类型计数器，顺序为：直赛道、弯赛道、左十字赛道、右十字赛道、左圆环赛道、右圆环赛道
 
-    int left_border_num = 0, right_border_num = 0;
-    Point left_border_point_bottom(0,0), left_border_point_top(0,0);
-    Point right_border_point_bottom(0,0), right_border_point_top(0,0);
-
     // 计算搜索范围
     int start_row = image_h - JSON_TrackConfigData.Path_Search_Start;
     int end_row = Data_Path_p->search_print_h_max;
 
-    // 搜索左边界
-    for (int i = start_row; i >= end_row; i--) {
-        if (Data_Path_p->l_border[i] <= 5) {
-            left_border_num++;
-            
-            // 记录边界点
-            if (left_border_num == 1) {
-                left_border_point_bottom = Point(Data_Path_p->l_border[i], i);
-            }
-            left_border_point_top = Point(Data_Path_p->l_border[i], i);
-        }
-    }
+    /**
+     * 如果左/右侧无临界点，但是右/左侧存在 1->0 跳变 + 0->1 跳变 + 1->0 跳变，则判定为 右/左 圆环赛道循环；
+     * 如果左/右侧同时存在 1->0 跳变 + 0->1 跳变，则判定为圆环赛道循环；
+     * 否则判定为普通赛道循环。
+     */
 
-    // 搜索右边界
-    for (int i = start_row; i >= end_row; i--) {
-        if (Data_Path_p->r_border[i] >= image_w - 5) {
-            right_border_num++;
-            
-            // 记录边界点
-            if (right_border_num == 1) {
-                right_border_point_bottom = Point(Data_Path_p->r_border[i], i);
-            }
-            right_border_point_top = Point(Data_Path_p->r_border[i], i);
-        }
-    }
+    
+
+
+
+
 
     /**
      * 如果存在左/右侧独立黑块，并且右/左侧存在拐点，则判定为十字赛道循环；
      * 如果存在左/右侧独立黑块, 并且右/左侧不存在拐点，则判定为圆环赛道循环；
+     * 如果左/右侧无临界点，但是右/左侧存在 1->0 跳变 + 0->1 跳变，则判定为圆环赛道循环；
      * 否则判定为普通赛道循环。
      */
-    if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] >= 1 && Data_Path_p->InflectionPointNum[0] >= 1 && left_border_num+right_border_num >= 30))
-    {
-        Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
-        TrackKindCount[L_ACROSS_TRACK]++;
-        if (TrackKindCount[L_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
-            Data_Path_p->Track_Kind = L_ACROSS_TRACK;
-            Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
-            Data_Path_p->Across_Track_Step = ACROSS_PREPARE;   // 十字赛道步骤机状态初始化为准备进入十字
-            // 清空其他赛道类型计数器
-            for (int i = 0; i < 6; ++i) {
-                if (i != L_ACROSS_TRACK) {
-                    TrackKindCount[i] = 0;
-                }
-            }
-        }else{
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        }
-    }
-    else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] >= 1 && Data_Path_p->InflectionPointNum[1] >= 1 && left_border_num+right_border_num >= 30))
-    {
-        Data_Path_p->Temp_Track_Kind = R_ACROSS_TRACK;
-        TrackKindCount[R_ACROSS_TRACK]++;
-        if (TrackKindCount[R_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
-            Data_Path_p->Track_Kind = R_ACROSS_TRACK;
-            Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
-            Data_Path_p->Across_Track_Step = ACROSS_PREPARE;   // 十字赛道步骤机状态初始化为准备进入十字
-            // 清空其他赛道类型计数器
-            for (int i = 0; i < 6; ++i) {
-                if (i != R_ACROSS_TRACK) {
-                    TrackKindCount[i] = 0;
-                }
-            }
-        }else{
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        }
-    }
-    else if (Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] <= 1 && Data_Path_p->InflectionPointNum[0] >= 1 && left_border_num >= 10)
-    {
-        Data_Path_p->Temp_Track_Kind = L_CIRCLE_TRACK;
-        TrackKindCount[L_CIRCLE_TRACK]++;
-        if (TrackKindCount[L_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
-            Data_Path_p->Track_Kind = L_CIRCLE_TRACK;
-            Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
-            Data_Path_p->Circle_Track_Step = IN_PREPARE;   // 圆环赛道步骤机状态初始化为准备入环
-            cout << "圆环循环" << endl;
-            // 清空其他赛道类型计数器
-            for (int i = 0; i < 6; ++i) {
-                if (i != L_CIRCLE_TRACK) {
-                    TrackKindCount[i] = 0;
-                }
-            }
-        }else{
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        }
-    }
-    else if (Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] <= 1 && Data_Path_p->InflectionPointNum[1] >= 1 && right_border_num >= 10)
-    {
-        Data_Path_p->Temp_Track_Kind = R_CIRCLE_TRACK;
-        TrackKindCount[R_CIRCLE_TRACK]++;
-        if (TrackKindCount[R_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
-            Data_Path_p->Track_Kind = R_CIRCLE_TRACK;
-            Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
-            Data_Path_p->Circle_Track_Step = IN_PREPARE;   // 圆环赛道步骤机状态初始化为准备入环
-            // 清空其他赛道类型计数器
-            for (int i = 0; i < 6; ++i) {
-                if (i != R_CIRCLE_TRACK) {
-                    TrackKindCount[i] = 0;
-                }
-            }
-        }else{
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        }
-    }
-    else if (Data_Path_p->BendPointNum[0] > JSON_TrackConfigData.BendPointNum[0] 
-        && Data_Path_p->BendPointNum[0] < JSON_TrackConfigData.BendPointNum[1]
-        && Data_Path_p->BendPointNum[1] > JSON_TrackConfigData.BendPointNum[0]
-        && Data_Path_p->BendPointNum[1] < JSON_TrackConfigData.BendPointNum[1])
-    {
-        Data_Path_p->Temp_Track_Kind = BEND_TRACK;
-        TrackKindCount[BEND_TRACK]++;
-        if (TrackKindCount[BEND_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
-            Data_Path_p->Track_Kind = BEND_TRACK;
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-            // 清空其他赛道类型计数器
-            for (int i = 0; i < 6; ++i) {
-                if (i != BEND_TRACK) {
-                    TrackKindCount[i] = 0;
-                }
-            }
-        }else{
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        }
-     }
-    else
-    {
-        Data_Path_p->Temp_Track_Kind = STRIGHT_TRACK;
-        TrackKindCount[STRIGHT_TRACK]++;
-        if (TrackKindCount[STRIGHT_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
-            Data_Path_p->Track_Kind = STRIGHT_TRACK;
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-            // 清空其他赛道类型计数器
-            for (int i = 0; i < 6; ++i) {
-                if (i != STRIGHT_TRACK) {
-                    TrackKindCount[i] = 0;
-                }
-            }
-        }else{
-            Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        }
-    }
+    // int left_border_num = 0, right_border_num = 0;
+    // Point left_border_point_bottom(0,0), left_border_point_top(0,0);
+    // Point right_border_point_bottom(0,0), right_border_point_top(0,0);
+
+    // // 搜索左边界
+    // for (int i = start_row; i >= end_row; i--) {
+    //     if (Data_Path_p->l_border[i] <= 5) {
+    //         left_border_num++;
+    //         // 记录边界点
+    //         if (left_border_num == 1) {
+    //             left_border_point_bottom = Point(Data_Path_p->l_border[i], i);
+    //         }
+    //         left_border_point_top = Point(Data_Path_p->l_border[i], i);
+    //     }
+    // }
+
+    // // 搜索右边界
+    // for (int i = start_row; i >= end_row; i--) {
+    //     if (Data_Path_p->r_border[i] >= image_w - 5) {
+    //         right_border_num++;
+    //         // 记录边界点
+    //         if (right_border_num == 1) {
+    //             right_border_point_bottom = Point(Data_Path_p->r_border[i], i);
+    //         }
+    //         right_border_point_top = Point(Data_Path_p->r_border[i], i);
+    //     }
+    // }
+
+    // if ((Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] >= 1 && Data_Path_p->InflectionPointNum[0] >= 1 && left_border_num+right_border_num >= 30))
+    // {
+    //     Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
+    //     TrackKindCount[L_ACROSS_TRACK]++;
+    //     if (TrackKindCount[L_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+    //         Data_Path_p->Track_Kind = L_ACROSS_TRACK;
+    //         Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
+    //         Data_Path_p->Across_Track_Step = ACROSS_PREPARE;   // 十字赛道步骤机状态初始化为准备进入十字
+    //         // 清空其他赛道类型计数器
+    //         for (int i = 0; i < 6; ++i) {
+    //             if (i != L_ACROSS_TRACK) {
+    //                 TrackKindCount[i] = 0;
+    //             }
+    //         }
+    //     }else{
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //     }
+    // }
+    // else if ((Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] >= 1 && Data_Path_p->InflectionPointNum[1] >= 1 && left_border_num+right_border_num >= 30))
+    // {
+    //     Data_Path_p->Temp_Track_Kind = R_ACROSS_TRACK;
+    //     TrackKindCount[R_ACROSS_TRACK]++;
+    //     if (TrackKindCount[R_ACROSS_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+    //         Data_Path_p->Track_Kind = R_ACROSS_TRACK;
+    //         Data_Path_p->Loop_Kind = ACROSS_TRACK_LOOP;
+    //         Data_Path_p->Across_Track_Step = ACROSS_PREPARE;   // 十字赛道步骤机状态初始化为准备进入十字
+    //         // 清空其他赛道类型计数器
+    //         for (int i = 0; i < 6; ++i) {
+    //             if (i != R_ACROSS_TRACK) {
+    //                 TrackKindCount[i] = 0;
+    //             }
+    //         }
+    //     }else{
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //     }
+    // }
+    // else if (Data_Path_p->black_left_found && Data_Path_p->InflectionPointNum[1] <= 1 && Data_Path_p->InflectionPointNum[0] >= 1 && left_border_num >= 10)
+    // {
+    //     Data_Path_p->Temp_Track_Kind = L_CIRCLE_TRACK;
+    //     TrackKindCount[L_CIRCLE_TRACK]++;
+    //     if (TrackKindCount[L_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+    //         Data_Path_p->Track_Kind = L_CIRCLE_TRACK;
+    //         Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
+    //         Data_Path_p->Circle_Track_Step = IN_PREPARE;   // 圆环赛道步骤机状态初始化为准备入环
+    //         cout << "圆环循环" << endl;
+    //         // 清空其他赛道类型计数器
+    //         for (int i = 0; i < 6; ++i) {
+    //             if (i != L_CIRCLE_TRACK) {
+    //                 TrackKindCount[i] = 0;
+    //             }
+    //         }
+    //     }else{
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //     }
+    // }
+    // else if (Data_Path_p->black_right_found && Data_Path_p->InflectionPointNum[0] <= 1 && Data_Path_p->InflectionPointNum[1] >= 1 && right_border_num >= 10)
+    // {
+    //     Data_Path_p->Temp_Track_Kind = R_CIRCLE_TRACK;
+    //     TrackKindCount[R_CIRCLE_TRACK]++;
+    //     if (TrackKindCount[R_CIRCLE_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+    //         Data_Path_p->Track_Kind = R_CIRCLE_TRACK;
+    //         Data_Path_p->Loop_Kind = CIRCLE_TRACK_LOOP;
+    //         Data_Path_p->Circle_Track_Step = IN_PREPARE;   // 圆环赛道步骤机状态初始化为准备入环
+    //         // 清空其他赛道类型计数器
+    //         for (int i = 0; i < 6; ++i) {
+    //             if (i != R_CIRCLE_TRACK) {
+    //                 TrackKindCount[i] = 0;
+    //             }
+    //         }
+    //     }else{
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //     }
+    // }
+    // else if (Data_Path_p->BendPointNum[0] > JSON_TrackConfigData.BendPointNum[0] 
+    //     && Data_Path_p->BendPointNum[0] < JSON_TrackConfigData.BendPointNum[1]
+    //     && Data_Path_p->BendPointNum[1] > JSON_TrackConfigData.BendPointNum[0]
+    //     && Data_Path_p->BendPointNum[1] < JSON_TrackConfigData.BendPointNum[1])
+    // {
+    //     Data_Path_p->Temp_Track_Kind = BEND_TRACK;
+    //     TrackKindCount[BEND_TRACK]++;
+    //     if (TrackKindCount[BEND_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+    //         Data_Path_p->Track_Kind = BEND_TRACK;
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //         // 清空其他赛道类型计数器
+    //         for (int i = 0; i < 6; ++i) {
+    //             if (i != BEND_TRACK) {
+    //                 TrackKindCount[i] = 0;
+    //             }
+    //         }
+    //     }else{
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //     }
+    //  }
+    // else
+    // {
+    //     Data_Path_p->Temp_Track_Kind = STRIGHT_TRACK;
+    //     TrackKindCount[STRIGHT_TRACK]++;
+    //     if (TrackKindCount[STRIGHT_TRACK] > JSON_TrackConfigData.TrackKindCountThreshold) {
+    //         Data_Path_p->Track_Kind = STRIGHT_TRACK;
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //         // 清空其他赛道类型计数器
+    //         for (int i = 0; i < 6; ++i) {
+    //             if (i != STRIGHT_TRACK) {
+    //                 TrackKindCount[i] = 0;
+    //             }
+    //         }
+    //     }else{
+    //         Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
+    //     }
+    // }
     
     Judge_Num++;
     return Data_Path_p->Loop_Kind;

@@ -296,6 +296,14 @@ typedef struct Data_Path
     uint16 points_r[(uint16)USE_num][2] = { {  0 } };//右线
     int SideCoordinate_Eight[(uint16)USE_num][4] = {0};   // 左右边线坐标(八邻域)
 
+    static constexpr int kEdgeLineColorBlockMax = 3;
+    int EdgeLineColorBlockNum[2] = {0}; // 左右边线有效同色段数量，最多记录3段
+    int EdgeLineJumpNum[2] = {0}; // 左右边线有效同色段之间的跳变次数
+    int EdgeLineColorBlockColor[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段颜色
+    int EdgeLineColorBlockLength[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段长度
+    cv::Point EdgeLineColorBlockStart[2][kEdgeLineColorBlockMax] = {}; // 有效同色段起点
+    cv::Point EdgeLineColorBlockEnd[2][kEdgeLineColorBlockMax] = {}; // 有效同色段终点
+
     uint16 l_border[image_h];            //左线数组
     uint16 r_border[image_h];            //右线数组
     int SideCoordinate[(uint16)USE_num][4] = {0};   // 左右边线坐标(中线寻线法)

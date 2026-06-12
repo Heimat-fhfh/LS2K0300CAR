@@ -1,0 +1,5 @@
+#define RESULT_ROW 320//结果图行列
+#define RESULT_COL 240
+#define         USED_ROW                320  //用于透视图的行列
+#define         USED_COL                240
+double change_un_Mat[3][3] ={{-2.388857,4.090252,-701.530597},{0.057342,2.329624,-693.438730},{0.001596,0.028233,-7.590749}};

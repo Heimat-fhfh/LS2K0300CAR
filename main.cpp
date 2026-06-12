@@ -54,10 +54,10 @@ int main(int argc, char** argv)
     }
 
     // 4. 启动电机控制任务  26-27% --> 39-44% CPU占用率 提升了15% 左右
-    // if (!StartMotorControlTask())
-    // {
-    //     return EXIT_FAILURE;
-    // }
+    if (!StartMotorControlTask())
+    {
+        return EXIT_FAILURE;
+    }
 
     // 5. 初始化摄像头并启动图像采集线程
     VideoCapture Camera;
