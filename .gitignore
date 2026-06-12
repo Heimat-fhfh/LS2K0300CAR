@@ -1,5 +1,5 @@
 .rubbish/
-test/
+tests/
 build/
 build_host/
 build_rt1064/
