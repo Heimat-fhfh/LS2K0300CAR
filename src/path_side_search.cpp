@@ -484,130 +484,6 @@ inline int clamp_int(int value, int low, int high) {
     return value;
 }
 
-struct EdgeLineRawRun {
-    int color = 0;
-    int length = 0;
-    cv::Point start;
-    cv::Point end;
-};
-
-void reset_edge_line_transition(Data_Path *data_path)
-{
-    for (int side = 0; side < 2; ++side) {
-        data_path->EdgeLineColorBlockNum[side] = 0;
-        data_path->EdgeLineJumpNum[side] = 0;
-        for (int i = 0; i < Data_Path::kEdgeLineColorBlockMax; ++i) {
-            data_path->EdgeLineColorBlockColor[side][i] = 0;
-            data_path->EdgeLineColorBlockLength[side][i] = 0;
-            data_path->EdgeLineColorBlockStart[side][i] = cv::Point();
-            data_path->EdgeLineColorBlockEnd[side][i] = cv::Point();
-        }
-    }
-}
-
-bool has_valid_binary_source(const Img_Store *img_store)
-{
-    return img_store->Img_OTSU.empty() ||
-           (img_store->Img_OTSU.rows == image_h &&
-            img_store->Img_OTSU.cols == image_w &&
-            img_store->Img_OTSU.type() == CV_8UC1);
-}
-
-int read_binary_color(const Img_Store *img_store, int x, int y)
-{
-    const uchar value = img_store->Img_OTSU.empty()
-        ? img_store->bin_image[y][x]
-        : img_store->Img_OTSU.at<uchar>(y, x);
-    return value >= 128 ? 255 : 0;
-}
-
-void record_edge_line_run(Data_Path *data_path,
-                          int side,
-                          const EdgeLineRawRun& run,
-                          int& last_valid_color,
-                          bool& has_valid_color)
-{
-    if (run.length < 3) {
-        return;
-    }
-
-    int& block_count = data_path->EdgeLineColorBlockNum[side];
-    if (!has_valid_color) {
-        has_valid_color = true;
-        last_valid_color = run.color;
-    } else if (run.color != last_valid_color) {
-        ++data_path->EdgeLineJumpNum[side];
-        last_valid_color = run.color;
-    } else if (block_count > 0) {
-        const int last_index = block_count - 1;
-        data_path->EdgeLineColorBlockLength[side][last_index] += run.length;
-        data_path->EdgeLineColorBlockEnd[side][last_index] = run.end;
-        return;
-    }
-
-    if (block_count >= Data_Path::kEdgeLineColorBlockMax) {
-        return;
-    }
-
-    data_path->EdgeLineColorBlockColor[side][block_count] = run.color;
-    data_path->EdgeLineColorBlockLength[side][block_count] = run.length;
-    data_path->EdgeLineColorBlockStart[side][block_count] = run.start;
-    data_path->EdgeLineColorBlockEnd[side][block_count] = run.end;
-    ++block_count;
-}
-
-void scan_one_edge_line_transition(const Img_Store *img_store,
-                                   Data_Path *data_path,
-                                   int side,
-                                   const uint16 points[][2],
-                                   int point_count)
-{
-    point_count = clamp_int(point_count, 0, static_cast<int>(USE_num));
-
-    EdgeLineRawRun current_run;
-    bool has_raw_run = false;
-    bool has_valid_color = false;
-    int last_valid_color = 0;
-
-    for (int i = 0; i < point_count; ++i) {
-        const int x = static_cast<int>(points[i][0]);
-        const int y = static_cast<int>(points[i][1]);
-        if (!in_image_bounds(x, y)) {
-            if (has_raw_run) {
-                record_edge_line_run(data_path, side, current_run, last_valid_color, has_valid_color);
-                has_raw_run = false;
-            }
-            continue;
-        }
-
-        const int color = read_binary_color(img_store, x, y);
-        if (!has_raw_run) {
-            current_run.color = color;
-            current_run.length = 1;
-            current_run.start = cv::Point(x, y);
-            current_run.end = current_run.start;
-            has_raw_run = true;
-            continue;
-        }
-
-        if (color == current_run.color) {
-            ++current_run.length;
-            current_run.end = cv::Point(x, y);
-            continue;
-        }
-
-        record_edge_line_run(data_path, side, current_run, last_valid_color, has_valid_color);
-        current_run.color = color;
-        current_run.length = 1;
-        current_run.start = cv::Point(x, y);
-        current_run.end = current_run.start;
-    }
-
-    if (has_raw_run) {
-        record_edge_line_run(data_path, side, current_run, last_valid_color, has_valid_color);
-    }
-}
-
 bool find_seed_points_eight(const uint8 bin_image[image_h][image_w],
                             int start_row,
                             int start_x,
@@ -843,29 +719,71 @@ void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 
 /*
     ImgSideLineTransitionSearch 说明
-    遍历八邻域得到的左右边线点，记录二值颜色跳变规律。
-    连续同色点数量小于3时视作噪点，不作为一次有效颜色段。
+    直接扫描 bin_image 的左右边界列，记录 0/255 二值跳变点。
+    左侧扫描列为 border_min，右侧扫描列为 border_max。
+    EdgeLineColorBlockStart[side][0] 保存扫描起点；
+    EdgeLineColorBlockStart[side][1..] 保存每次跳变后的第一个点，供 ImgLabel 标注。
+    
+    static constexpr int kEdgeLineColorBlockMax = 3;
+    int EdgeLineColorBlockNum[2] = {0}; // 左右边线有效同色段数量，最多记录3段
+    int EdgeLineJumpNum[2] = {0}; // 左右边线有效同色段之间的跳变次数
+    int EdgeLineColorBlockColor[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段颜色
+    int EdgeLineColorBlockLength[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段长度
+    cv::Point EdgeLineColorBlockStart[2][kEdgeLineColorBlockMax] = {}; // 有效同色段起点
+    cv::Point EdgeLineColorBlockEnd[2][kEdgeLineColorBlockMax] = {}; // 有效同色段终点
 */
 void ImgSideLineTransitionSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
-    if (Img_Store_p == nullptr || Data_Path_p == nullptr) {
-        return;
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+
+    const int LEFT_EDGE = 5;
+    const int RIGHT_EDGE = image_w - 1 - 5;
+
+    const int start_row = static_cast<int>(Data_Path_p->search_print_h_max);
+    const int end_row = image_h - JSON_TrackConfigData.Path_Search_Start;
+
+    Data_Path_p->EdgeLineJumpNum[0] = 0;
+    Data_Path_p->EdgeLineJumpNum[1] = 0;
+
+    if (start_row >= end_row) return;
+
+    // --- left border (side 0) ---
+    {
+        bool prev_bnd = (Data_Path_p->l_border[start_row] <= LEFT_EDGE);
+        int jump_cnt = 0;
+        int last_jump_row = -999;
+
+        for (int r = start_row; r < end_row; r++) {
+            uint16 bx = Data_Path_p->l_border[r];
+            bool cur_bnd = (bx <= LEFT_EDGE);
+            if (cur_bnd && !prev_bnd && jump_cnt < 3 && (r - last_jump_row) >= 20) {
+                printf("[L] JUMP row=%d x=%d -> BOUNDARY\n", r, bx);
+                Data_Path_p->EdgeLineColorBlockStart[0][jump_cnt] = cv::Point(bx, r);
+                last_jump_row = r;
+                jump_cnt++;
+            }
+            prev_bnd = cur_bnd;
+        }
+        Data_Path_p->EdgeLineJumpNum[0] = jump_cnt;
     }
 
-    reset_edge_line_transition(Data_Path_p);
-    if (!has_valid_binary_source(Img_Store_p)) {
-        cerr << "Error: Img_OTSU has unexpected size/type in ImgSideLineTransitionSearch!" << endl;
-        return;
-    }
+    // --- right border (side 1) ---
+    {
+        bool prev_bnd = (Data_Path_p->r_border[start_row] >= RIGHT_EDGE);
+        int jump_cnt = 0;
+        int last_jump_row = -999;
 
-    scan_one_edge_line_transition(Img_Store_p,
-                                  Data_Path_p,
-                                  0,
-                                  Data_Path_p->points_l,
-                                  Data_Path_p->NumSearch[0]);
-    scan_one_edge_line_transition(Img_Store_p,
-                                  Data_Path_p,
-                                  1,
-                                  Data_Path_p->points_r,
-                                  Data_Path_p->NumSearch[1]);
+        for (int r = start_row; r < end_row; r++) {
+            uint16 bx = Data_Path_p->r_border[r];
+            bool cur_bnd = (bx >= RIGHT_EDGE);
+            if (cur_bnd && !prev_bnd && jump_cnt < 3 && (r - last_jump_row) >= 20) {
+                printf("[R] JUMP row=%d x=%d -> BOUNDARY\n", r, bx);
+                Data_Path_p->EdgeLineColorBlockStart[1][jump_cnt] = cv::Point(bx, r);
+                last_jump_row = r;
+                jump_cnt++;
+            }
+            prev_bnd = cur_bnd;
+        }
+        Data_Path_p->EdgeLineJumpNum[1] = jump_cnt;
+    }
 }

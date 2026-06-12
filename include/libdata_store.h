@@ -296,7 +296,7 @@ typedef struct Data_Path
     uint16 points_r[(uint16)USE_num][2] = { {  0 } };//右线
     int SideCoordinate_Eight[(uint16)USE_num][4] = {0};   // 左右边线坐标(八邻域)
 
-    static constexpr int kEdgeLineColorBlockMax = 3;
+    static constexpr int kEdgeLineColorBlockMax = 7;
     int EdgeLineColorBlockNum[2] = {0}; // 左右边线有效同色段数量，最多记录3段
     int EdgeLineJumpNum[2] = {0}; // 左右边线有效同色段之间的跳变次数
     int EdgeLineColorBlockColor[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段颜色

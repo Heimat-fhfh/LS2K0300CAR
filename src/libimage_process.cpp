@@ -694,4 +694,33 @@ void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function
 		circle(Img_Store_p->Img_Track, Point(Data_Path_p->r_border[i],i), 1, Scalar(0, 255, 0), FILLED);//显示起点 显示右边线
 		circle(Img_Store_p->Img_Track, Point(Data_Path_p->center_line[i],i), 1, Scalar(0, 0, 0), FILLED);//显示起点 显示中线	
 	}
+
+	for (int side = 0; side < 2; ++side)
+	{
+		const Scalar jump_color = (side == 0) ? Scalar(0, 255, 255) : Scalar(255, 255, 0);
+		for (int i = 0; i < Data_Path_p->EdgeLineJumpNum[side]; ++i)
+		{
+			const Point& jump_point = Data_Path_p->EdgeLineColorBlockStart[side][i];
+			if (jump_point.x < 0 || jump_point.x >= Img_Store_p->Img_Track.cols ||
+				jump_point.y < 0 || jump_point.y >= Img_Store_p->Img_Track.rows)
+			{
+				continue;
+			}
+
+			circle(Img_Store_p->Img_Track, jump_point, 6, jump_color, 2);
+			line(Img_Store_p->Img_Track, Point(jump_point.x - 4, jump_point.y), Point(jump_point.x + 4, jump_point.y), jump_color, 1);
+			line(Img_Store_p->Img_Track, Point(jump_point.x, jump_point.y - 4), Point(jump_point.x, jump_point.y + 4), jump_color, 1);
+
+			const string label = string(side == 0 ? "LJ" : "RJ") + to_string(i + 1);
+			putText(Img_Store_p->Img_Track, label, Point(jump_point.x + 6, jump_point.y - 6),
+				FONT_HERSHEY_COMPLEX, 0.4, jump_color, 1);
+		}
+	}
+
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "%d %d", Data_Path_p->EdgeLineJumpNum[0], Data_Path_p->EdgeLineJumpNum[1]);
+		putText(Img_Store_p->Img_Track, buf, Point(5, 18),
+			FONT_HERSHEY_COMPLEX, 0.6, Scalar(0, 255, 255), 1);
+	}
 }
