@@ -161,85 +161,82 @@ void RunCircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
 
 void ProcessAlgo_AcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
-    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p->JSON_TrackConfigData_v[0];    // 赛道识别设置参数
-    // cout << "AcrossTrack_Step: " << Data_Path_p->Across_Track_Step << endl;
-    static int status_change_count = 0; // 状态变化计数器，用于监控状态持续时间
+    JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p->JSON_TrackConfigData_v[0];
+    static int status_change_count = 0;
+    static int frame_count = 0;
 
-    
-    switch(Data_Path_p->Across_Track_Step)
+    int side = (Data_Path_p->Track_Kind == L_ACROSS_TRACK) ? 1 : 0;
+
+    frame_count++;
+    if (frame_count > JSON_TrackConfigData.AcrossMaxFrames) {
+        Data_Path_p->Across_Track_Step = INIT_ACROSS;
+        Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
+        status_change_count = 0;
+        frame_count = 0;
+        return;
+    }
+
+    switch (Data_Path_p->Across_Track_Step)
     {
         case ACROSS_PREPARE:
         {
-            if(!Data_Path_p->black_left_found && !Data_Path_p->black_right_found){
+            if (Data_Path_p->BorderPointNum[side] < JSON_TrackConfigData.AcrossBorderPrepareMax) {
                 status_change_count++;
                 if (status_change_count > 2) {
                     Data_Path_p->Across_Track_Step = ACROSS;
-                    status_change_count = 0; // 重置计数器
-                }else{
-
+                    status_change_count = 0;
                 }
-            }else {
-                AcrossTrack_Step_ACROSS_PREPARE(Img_Store_p,Data_Path_p);   // 十字赛道预补线
+            } else {
                 status_change_count = 0;
             }
             break;
         }
         case ACROSS:
         {
-            if(Data_Path_p->InflectionPointNum[0] > 0 && Data_Path_p->InflectionPointNum[1] > 0){
+            if (Data_Path_p->EdgeLineJumpNum[side] >= 1 && Data_Path_p->BorderPointNum[side] > 40) {
                 status_change_count++;
                 if (status_change_count > 2) {
                     Data_Path_p->Across_Track_Step = ACROSS_OUT;
-                    status_change_count = 0; // 重置计数器
-                    AcrossTrack_Step_ACROSS_OUT(Img_Store_p,Data_Path_p);   // 十字赛道出十字补线
-                }else {
-                    AcrossTrack_Step_ACROSS_OUT(Img_Store_p,Data_Path_p);   // 十字赛道内补线
+                    status_change_count = 0;
                 }
-            }else {
+            } else {
                 status_change_count = 0;
             }
             break;
         }
         case ACROSS_OUT:
         {
-            if(Data_Path_p->l_border[image_h-JSON_TrackConfigData.Path_Search_Start] < 10 && Data_Path_p->r_border[image_h-JSON_TrackConfigData.Path_Search_Start] > 310){
+            if (Data_Path_p->BorderPointNum[side] > JSON_TrackConfigData.AcrossBorderOutMin) {
                 status_change_count++;
                 if (status_change_count > 2) {
                     Data_Path_p->Across_Track_Step = ACROSS_OUT_2;
-                    status_change_count = 0; // 重置计数器
-                    AcrossTrack_Step_ACROSS_OUT(Img_Store_p,Data_Path_p);
-                }else {
-                    AcrossTrack_Step_ACROSS_OUT(Img_Store_p,Data_Path_p);
+                    status_change_count = 0;
                 }
-            }else {
-                AcrossTrack_Step_ACROSS_OUT(Img_Store_p,Data_Path_p);
+            } else {
                 status_change_count = 0;
             }
             break;
         }
         case ACROSS_OUT_2:
         {
-            if(Data_Path_p->r_border[image_h-JSON_TrackConfigData.Path_Search_Start] - Data_Path_p->l_border[image_h-JSON_TrackConfigData.Path_Search_Start] < 250){
+            if (Data_Path_p->BorderPointNum[0] < JSON_TrackConfigData.AcrossBorderExitMax ||
+                Data_Path_p->BorderPointNum[1] < JSON_TrackConfigData.AcrossBorderExitMax)
+            {
                 status_change_count++;
                 if (status_change_count > 2) {
                     Data_Path_p->Across_Track_Step = INIT_ACROSS;
                     Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
-                    status_change_count = 0; // 重置计数器
-                }else {
-                    
+                    status_change_count = 0;
+                    frame_count = 0;
                 }
-            }else {
-                AcrossTrack_Step_ACROSS_OUT(Img_Store_p,Data_Path_p);
+            } else {
                 status_change_count = 0;
             }
             break;
         }
         default:
-        {
             break;
-        }
     }
-
 }
 
 void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)

@@ -204,6 +204,27 @@ typedef struct JSON_TrackConfigData
     int TransitionMinArea = 1000; // 独立黑色区域最小面积
     int TransitionDebounceFrames = 5; // 防抖连续帧数
 
+    int CircleJumpMax = 1;          // 圆环判定：安静侧最大跳变点数量
+    int CircleBorderQuietMax = 30;  // 圆环判定：安静侧最大边缘区域点数量
+    int CircleJumpExpected = 2;     // 圆环判定：活跃侧期望跳变点数量
+    int CircleBorderActiveMin = 90; // 圆环判定：活跃侧最小边缘区域点数量
+    int CircleJudgeInflectionMax = 1;  // 圆环判定：安静侧最大拐点数量
+    int CircleJudgePartialScore = 4;   // 圆环判定：4/5条件满足每帧得分
+
+    int CrossJumpPrimary = 2;       // 十字判定：主侧跳变点数量
+    int CrossJumpSecondaryMin = 1;  // 十字判定：副侧最小跳变点数量
+    int CrossJumpSecondaryMax = 2;  // 十字判定：副侧最大跳变点数量
+    int CrossBorderMin = 90;        // 十字判定：两侧最小边缘区域点数量
+
+    int AcrossBorderPrepareMax = 30;   // ACROSS_PREPARE→ACROSS: 对侧边缘点数量上限
+    int AcrossBorderOutMin = 70;       // ACROSS_OUT→ACROSS_OUT_2: 对侧边缘点数量下限
+    int AcrossBorderExitMax = 20;      // ACROSS_OUT_2→退出: 任意侧边缘点数量上限
+    int AcrossMaxFrames = 100;         // 十字内最大帧数
+
+    int TrackJudgeFullScore = 8;        // 帧累积评分：4/4条件满足得分
+    int TrackJudgePartialScore = 5;     // 帧累积评分：3/4条件满足得分
+    int TrackJudgeConfirmThreshold = 40; // 帧累积评分：确认阈值
+
 }JSON_TrackConfigData;
 
 struct InversePerspectiveMap {
@@ -299,6 +320,7 @@ typedef struct Data_Path
     static constexpr int kEdgeLineColorBlockMax = 7;
     int EdgeLineColorBlockNum[2] = {0}; // 左右边线有效同色段数量，最多记录3段
     int EdgeLineJumpNum[2] = {0}; // 左右边线有效同色段之间的跳变次数
+    int BorderPointNum[2] = {0};  // 左右边线中位于图像左右边界区域的点的个数
     int EdgeLineColorBlockColor[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段颜色
     int EdgeLineColorBlockLength[2][kEdgeLineColorBlockMax] = {{0}}; // 有效同色段长度
     cv::Point EdgeLineColorBlockStart[2][kEdgeLineColorBlockMax] = {}; // 有效同色段起点
@@ -342,6 +364,8 @@ typedef struct Data_Path
     int TrackKindHistoryCount = 0;
     CircleTrackStep Circle_Track_Step = INIT_CIRCLE;  // 圆环入环步骤：1.准备入环 2.入环 3.
     AcrossTrackStep Across_Track_Step = INIT_ACROSS;  // 十字赛道步骤：1.准备进入十字 2.十字内 3.出十字
+
+    int TrackJudgeScore[6] = {0};   // 赛道类型判断分数（由TrackKind_Judge写入）
 
     // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask）
     int SteerErrorPx = 0;                 // 带符号的横向误差（像素）

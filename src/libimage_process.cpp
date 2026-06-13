@@ -477,6 +477,9 @@ void ImgProcess::ImgText(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_
 	putText((Img_Store_p -> Img_Text),TextTrackKind[int(Data_Path_p -> Track_Kind)],Point(5,65),FONT_HERSHEY_COMPLEX,1,(255),2);
 	putText((Img_Store_p -> Img_Text),TextLoopKind[int(Data_Path_p -> Loop_Kind)],Point(5,105),FONT_HERSHEY_COMPLEX,1,(255),2);	
 	putText((Img_Store_p -> Img_Text),TextCircleTrackStep[int(Data_Path_p -> Circle_Track_Step)],Point(5,145),FONT_HERSHEY_COMPLEX,1,(255),2);
+	if (Data_Path_p->Track_Kind == L_ACROSS_TRACK || Data_Path_p->Track_Kind == R_ACROSS_TRACK) {
+		putText((Img_Store_p -> Img_Text),TextAcrossTrackStep[int(Data_Path_p -> Across_Track_Step)],Point(5,185),FONT_HERSHEY_COMPLEX,1,(255),2);
+	}
 }
 
 
@@ -719,8 +722,29 @@ void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function
 
 	{
 		char buf[32];
-		snprintf(buf, sizeof(buf), "%d %d", Data_Path_p->EdgeLineJumpNum[0], Data_Path_p->EdgeLineJumpNum[1]);
+		snprintf(buf, sizeof(buf), "J:%d %d", Data_Path_p->EdgeLineJumpNum[0], Data_Path_p->EdgeLineJumpNum[1]);
 		putText(Img_Store_p->Img_Track, buf, Point(5, 18),
 			FONT_HERSHEY_COMPLEX, 0.6, Scalar(0, 255, 255), 1);
+	}
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "B:%d %d", Data_Path_p->BorderPointNum[0], Data_Path_p->BorderPointNum[1]);
+		putText(Img_Store_p->Img_Track, buf, Point(5, 36),
+			FONT_HERSHEY_COMPLEX, 0.6, Scalar(0, 255, 255), 1);
+	}
+	{
+		int right_x = Img_Store_p->Img_Track.cols - 200;
+		char buf[48];
+		snprintf(buf, sizeof(buf), "LA%02d RA%02d LC%02d RC%02d",
+			Data_Path_p->TrackJudgeScore[L_ACROSS_TRACK],
+			Data_Path_p->TrackJudgeScore[R_ACROSS_TRACK],
+			Data_Path_p->TrackJudgeScore[L_CIRCLE_TRACK],
+			Data_Path_p->TrackJudgeScore[R_CIRCLE_TRACK]);
+		putText(Img_Store_p->Img_Track, buf, Point(right_x, 18),
+			FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
+		// snprintf(buf, sizeof(buf), "/%d",
+		// 	Data_Path_p->JSON_TrackConfigData_v[0].TrackJudgeConfirmThreshold);
+		// putText(Img_Store_p->Img_Track, buf, Point(right_x, 36),
+		// 	FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
 	}
 }

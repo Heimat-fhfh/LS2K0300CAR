@@ -710,6 +710,30 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
     dataMove(Data_Path_p);
     ImgSideLineTransitionSearch(Img_Store_p, Data_Path_p);
 
+    // --- border edge traversal: count points in left/right border regions ---
+    {
+        const int BORDER_MARGIN = 5; // 边界区域阈值（像素），与 LEFT_EDGE/RIGHT_EDGE 保持一致
+        int left_border_cnt = 0;
+        int right_border_cnt = 0;
+
+        // 统计左边线中位于左边界区域（x <= BORDER_MARGIN）的点
+        for (int i = 0; i < left_count; i++) {
+            if (Data_Path_p->points_l[i][0] <= static_cast<uint16>(BORDER_MARGIN)) {
+                left_border_cnt++;
+            }
+        }
+
+        // 统计右边线中位于右边界区域（x >= image_w - 1 - BORDER_MARGIN）的点
+        for (int i = 0; i < right_count; i++) {
+            if (Data_Path_p->points_r[i][0] >= static_cast<uint16>(image_w - 1 - BORDER_MARGIN)) {
+                right_border_cnt++;
+            }
+        }
+
+        Data_Path_p->BorderPointNum[0] = left_border_cnt;
+        Data_Path_p->BorderPointNum[1] = right_border_cnt;
+    }
+
 }
 
 void imgSearch_l_r(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
@@ -757,7 +781,6 @@ void ImgSideLineTransitionSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
             uint16 bx = Data_Path_p->l_border[r];
             bool cur_bnd = (bx <= LEFT_EDGE);
             if (cur_bnd && !prev_bnd && jump_cnt < 3 && (r - last_jump_row) >= 20) {
-                printf("[L] JUMP row=%d x=%d -> BOUNDARY\n", r, bx);
                 Data_Path_p->EdgeLineColorBlockStart[0][jump_cnt] = cv::Point(bx, r);
                 last_jump_row = r;
                 jump_cnt++;
@@ -777,7 +800,6 @@ void ImgSideLineTransitionSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
             uint16 bx = Data_Path_p->r_border[r];
             bool cur_bnd = (bx >= RIGHT_EDGE);
             if (cur_bnd && !prev_bnd && jump_cnt < 3 && (r - last_jump_row) >= 20) {
-                printf("[R] JUMP row=%d x=%d -> BOUNDARY\n", r, bx);
                 Data_Path_p->EdgeLineColorBlockStart[1][jump_cnt] = cv::Point(bx, r);
                 last_jump_row = r;
                 jump_cnt++;

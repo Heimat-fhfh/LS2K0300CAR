@@ -151,6 +151,58 @@ namespace
             track_cfg.TransitionMinArea = cfg.at("TRANSITION_MIN_AREA");
         }
 
+        if (cfg.contains("CIRCLE_JUMP_MAX")) {
+            track_cfg.CircleJumpMax = cfg.at("CIRCLE_JUMP_MAX");
+        }
+        if (cfg.contains("CIRCLE_BORDER_QUIET_MAX")) {
+            track_cfg.CircleBorderQuietMax = cfg.at("CIRCLE_BORDER_QUIET_MAX");
+        }
+        if (cfg.contains("CIRCLE_JUMP_EXPECTED")) {
+            track_cfg.CircleJumpExpected = cfg.at("CIRCLE_JUMP_EXPECTED");
+        }
+        if (cfg.contains("CIRCLE_BORDER_ACTIVE_MIN")) {
+            track_cfg.CircleBorderActiveMin = cfg.at("CIRCLE_BORDER_ACTIVE_MIN");
+        }
+        if (cfg.contains("CIRCLE_JUDGE_INFLECTION_MAX")) {
+            track_cfg.CircleJudgeInflectionMax = cfg.at("CIRCLE_JUDGE_INFLECTION_MAX");
+        }
+        if (cfg.contains("CIRCLE_JUDGE_PARTIAL_SCORE")) {
+            track_cfg.CircleJudgePartialScore = cfg.at("CIRCLE_JUDGE_PARTIAL_SCORE");
+        }
+        if (cfg.contains("CROSS_JUMP_PRIMARY")) {
+            track_cfg.CrossJumpPrimary = cfg.at("CROSS_JUMP_PRIMARY");
+        }
+        if (cfg.contains("CROSS_JUMP_SECONDARY_MIN")) {
+            track_cfg.CrossJumpSecondaryMin = cfg.at("CROSS_JUMP_SECONDARY_MIN");
+        }
+        if (cfg.contains("CROSS_JUMP_SECONDARY_MAX")) {
+            track_cfg.CrossJumpSecondaryMax = cfg.at("CROSS_JUMP_SECONDARY_MAX");
+        }
+        if (cfg.contains("CROSS_BORDER_MIN")) {
+            track_cfg.CrossBorderMin = cfg.at("CROSS_BORDER_MIN");
+        }
+        if (cfg.contains("ACROSS_BORDER_PREPARE_MAX")) {
+            track_cfg.AcrossBorderPrepareMax = cfg.at("ACROSS_BORDER_PREPARE_MAX");
+        }
+        if (cfg.contains("ACROSS_BORDER_OUT_MIN")) {
+            track_cfg.AcrossBorderOutMin = cfg.at("ACROSS_BORDER_OUT_MIN");
+        }
+        if (cfg.contains("ACROSS_BORDER_EXIT_MAX")) {
+            track_cfg.AcrossBorderExitMax = cfg.at("ACROSS_BORDER_EXIT_MAX");
+        }
+        if (cfg.contains("ACROSS_MAX_FRAMES")) {
+            track_cfg.AcrossMaxFrames = cfg.at("ACROSS_MAX_FRAMES");
+        }
+        if (cfg.contains("TRACK_JUDGE_FULL_SCORE")) {
+            track_cfg.TrackJudgeFullScore = cfg.at("TRACK_JUDGE_FULL_SCORE");
+        }
+        if (cfg.contains("TRACK_JUDGE_PARTIAL_SCORE")) {
+            track_cfg.TrackJudgePartialScore = cfg.at("TRACK_JUDGE_PARTIAL_SCORE");
+        }
+        if (cfg.contains("TRACK_JUDGE_CONFIRM_THRESHOLD")) {
+            track_cfg.TrackJudgeConfirmThreshold = cfg.at("TRACK_JUDGE_CONFIRM_THRESHOLD");
+        }
+
         function_en->JSON_FunctionConfigData_v.clear();
         data_path->JSON_TrackConfigData_v.clear();
         function_en->JSON_FunctionConfigData_v.push_back(function_cfg);
