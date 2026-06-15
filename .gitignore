@@ -1,4 +1,5 @@
 .rubbish/
+.reasonix/
 tests/
 build/
 build_host/

@@ -284,6 +284,7 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
 
     if (Data_Path_p->Loop_Kind == CIRCLE_TRACK_LOOP) {
         // 圆环循环：根据当前 Circle_Track_Step 执行对应补线策略。
+        Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
         RunCircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
     }
 
