@@ -2,6 +2,9 @@
 
 #include "main.hpp"
 
+class Buzzer;
+Buzzer& GetBuzzer();
+
 bool ParseCameraFpsArgument(int argc, char** argv);
 bool IsVideoSpeedTestMode(int argc, char** argv);
 bool IsMotorDeadMode(int argc, char** argv);

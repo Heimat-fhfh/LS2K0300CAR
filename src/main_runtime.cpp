@@ -39,18 +39,18 @@ Judge judge;
 SYNC Sync;
 CameraCalibrationCorrector g_calibration_corrector;
 
+Buzzer& GetBuzzer()
+{
+    static Buzzer buzzer;
+    return buzzer;
+}
+
 namespace
 {
 constexpr int kVideoSpeedTestWidth = 320;
 constexpr int kVideoSpeedTestHeight = 240;
 constexpr int kVideoSpeedTestReportFrames = 30;
 constexpr double kVideoSpeedTestAutoExposureMode = 3.0;
-
-Buzzer& GetBuzzer()
-{
-    static Buzzer buzzer;
-    return buzzer;
-}
 
 bool ParsePositiveInt(const std::string& text, int* value)
 {
@@ -432,6 +432,15 @@ bool StartMotorControlTask()
     motorTask->enableLowPassFilter(true);
     motorTask->setSpeedFilterTimeConstant(JSON_VehicleConfigData_s.lpfSpeedTau);
     motorTask->setAngularFilterTimeConstant(JSON_VehicleConfigData_s.lpfAngularTau);
+    motorTask->setSteerErrorFilterTimeConstant(0.04);
+
+    motorTask->setRampRates(JSON_VehicleConfigData_s.rampAccelRate,
+                            JSON_VehicleConfigData_s.rampDecelRate);
+    motorTask->enableRampControl(true);
+    motorTask->enableDiffOutputRamp(JSON_VehicleConfigData_s.diffOutputRampEnable);
+    motorTask->setDiffOutputRampRates(JSON_VehicleConfigData_s.diffOutputRampAccelRate,
+                                      JSON_VehicleConfigData_s.diffOutputRampDecelRate);
+
     motorTask->start();
     return true;
 }
@@ -440,7 +449,7 @@ void argument_config(void)
 {
     test_config.buzzer_test = false;
     test_config.imu_test = false;
-    test_config.motor_test = false;
+    test_config.motor_test = false;                 // true
     test_config.angular_velocity_test = false;
     test_config.encoder_test = false;
 
@@ -657,9 +666,9 @@ int main_test_task(const MainTestConfig& test_config)
                     const imu_unit_data_t& comp_data = imu.get_compensated_unit_data();
 
                     printf("Sample %d:\n", i + 1);
-                    printf("  Raw Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n",
+                    printf("  Raw Gyro: X=%.2f, Y=%.2f, Z=%.2f rad/s\n",
                            raw_data.gyro_x, raw_data.gyro_y, raw_data.gyro_z);
-                    printf("  Comp Gyro: X=%.2f, Y=%.2f, Z=%.2f °/s\n",
+                    printf("  Comp Gyro: X=%.2f, Y=%.2f, Z=%.2f rad/s\n",
                            comp_data.gyro_x, comp_data.gyro_y, comp_data.gyro_z);
                     printf("\n");
                 }
@@ -685,7 +694,7 @@ int main_test_task(const MainTestConfig& test_config)
 
                 printf("Sample %d:\n", i + 1);
                 printf("  Acc: X=%6d(%.2fg), Y=%6d(%.2fg), Z=%6d(%.2fg)\n", data.acc_x, unit_data.acc_x, data.acc_y, unit_data.acc_y, data.acc_z, unit_data.acc_z);
-                printf("  Gyro: X=%6d(%.2f°/s), Y=%6d(%.2f°/s), Z=%6d(%.2f°/s)\n", data.gyro_x, unit_data.gyro_x, data.gyro_y, unit_data.gyro_y, data.gyro_z, unit_data.gyro_z);
+                printf("  Gyro: X=%6d(%.2f rad/s), Y=%6d(%.2f rad/s), Z=%6d(%.2f rad/s)\n", data.gyro_x, unit_data.gyro_x, data.gyro_y, unit_data.gyro_y, data.gyro_z, unit_data.gyro_z);
 
                 printf("\n");
                 sleep_for(milliseconds(20));
@@ -701,7 +710,19 @@ int main_test_task(const MainTestConfig& test_config)
             printf("\n=== 电机基本功能测试 ===\n");
             motorTask->setTargetSpeed(1.0);
             motorTask->setSteerError(0.0);
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(20));
+
+            motorTask->setTargetSpeed(3.0);
+            motorTask->setSteerError(0.0);
+            std::this_thread::sleep_for(std::chrono::seconds(7));
+
+            motorTask->setTargetSpeed(5.0);
+            motorTask->setSteerError(0.0);
+            std::this_thread::sleep_for(std::chrono::seconds(7));
+
+            motorTask->setTargetSpeed(1.0);
+            motorTask->setSteerError(0.0);
+            std::this_thread::sleep_for(std::chrono::seconds(7));
 
             printf("\n=== 差速测试 ===\n");
             motorTask->setSteerError(0.5);

@@ -312,7 +312,10 @@ void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
     Data_Path_p->forword_line_h = std::max(image_h-JSON_TrackConfigData.Default_Forward, int(Data_Path_p->search_print_h_max));
     
     Data_Path_p->SteerErrorPx = (Data_Path_p->center_line[Data_Path_p->forword_line_h] - image_w / 2) 
-                + JSON_TrackConfigData.ForwardHeightCompensationPxPerRow * (Data_Path_p->search_print_h_max-image_h-JSON_TrackConfigData.Default_Forward);
+                + JSON_TrackConfigData.ForwardHeightCompensationPxPerRow * 
+                (Data_Path_p->forword_line_h-(image_h-JSON_TrackConfigData.Default_Forward));
+
+    judge_p->MotorSpeed_Judge(Img_Store_p,Data_Path_p);
 }
 
 void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)

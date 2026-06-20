@@ -141,6 +141,11 @@ typedef struct JSON_VehicleConfigData
     int collisionStallCycles;        // 堵转确认周期数 (×控制周期)
     int collisionResetKey;           // 复位按键 (0=KEY0, 1=KEY1, 2=KEY2, 3=KEY3)
     int collisionBumperKey;          // 碰撞开关按键 (-1=禁用, 0=KEY0, ...)
+    double rampAccelRate;            // 电机输出加速斜坡限制 (%/s)
+    double rampDecelRate;            // 电机输出减速斜坡限制 (%/s)
+    bool diffOutputRampEnable;       // 外环PD输出斜坡使能
+    double diffOutputRampAccelRate;  // 外环PD输出角加速度限幅 (rad/s²)
+    double diffOutputRampDecelRate;  // 外环PD输出角减速度限幅 (rad/s²)
 } JSON_VehicleConfigData;
 
 
@@ -224,6 +229,8 @@ typedef struct JSON_TrackConfigData
     int TrackJudgeFullScore = 8;        // 帧累积评分：4/4条件满足得分
     int TrackJudgePartialScore = 5;     // 帧累积评分：3/4条件满足得分
     int TrackJudgeConfirmThreshold = 40; // 帧累积评分：确认阈值
+
+    int Seed_Search_Fail_Threshold = 10; // 起始点搜索连续失败帧数阈值，超出触发出界保护
 
 }JSON_TrackConfigData;
 
@@ -338,6 +345,8 @@ typedef struct Data_Path
 
     uint16 search_print_h_max = 0;//最高点
     int forword_line_h = 0; // 前瞻点高度
+
+    int SeedSearchFailCount = 0; // 起始点搜索连续失败帧数计数(出界保护用)
 
     int InflectionPointCoordinate[(uint16)USE_num][4] = {0};  // 左右边线元素拐点坐标
     int BendPointCoordinate[(uint16)USE_num][4] = {0};  // 左右边线弯点坐标

@@ -43,9 +43,9 @@ typedef struct
     float acc_x;      // 加速度X轴，单位g
     float acc_y;      // 加速度Y轴，单位g
     float acc_z;      // 加速度Z轴，单位g
-    float gyro_x;     // 陀螺仪X轴，单位°/s
-    float gyro_y;     // 陀螺仪Y轴，单位°/s
-    float gyro_z;     // 陀螺仪Z轴，单位°/s
+    float gyro_x;     // 陀螺仪X轴，单位rad/s
+    float gyro_y;     // 陀螺仪Y轴，单位rad/s
+    float gyro_z;     // 陀螺仪Z轴，单位rad/s
     float mag_x;      // 磁力计X轴，单位mG
     float mag_y;      // 磁力计Y轴，单位mG
     float mag_z;      // 磁力计Z轴，单位mG

@@ -72,6 +72,25 @@ public:
     void setSteerErrorFilterTimeConstant(double tau);
     void resetFilters(double leftValue = 0.0, double rightValue = 0.0, double angularValue = 0.0);
 
+    // ==================== 斜坡控制 API ====================
+
+    void enableRampControl(bool enable = true);
+    bool isRampControlEnabled() const;
+    void setRampRates(double accelRate, double decelRate);
+    void resetRampState();
+
+    // ==================== 外环PD输出斜坡控制 API ====================
+
+    void enableDiffOutputRamp(bool enable = true);
+    bool isDiffOutputRampEnabled() const;
+    void setDiffOutputRampRates(double accelRate, double decelRate);
+
+    // ==================== 紧急停机/出界保护 API ====================
+
+    void emergencyStop();               // 紧急停机：电机输出立即归零
+    void clearEmergencyStop();          // 清除紧急停机并复位所有PID积分
+    bool isEmergencyStopActive() const;
+
 private:
     void run();
 
@@ -101,6 +120,23 @@ private:
         double tau_;
         double dt_;
         double alpha_;
+        double lastValue_;
+        bool initialized_;
+    };
+
+    class RampLimiter {
+    public:
+        RampLimiter(double accelRate = 50.0, double decelRate = 100.0, double dt = 0.01);
+        double apply(double target);
+        void reset(double value = 0.0);
+        void setAccelRate(double rate);
+        void setDecelRate(double rate);
+        double getAccelRate() const { return accelRate_; }
+        double getDecelRate() const { return decelRate_; }
+    private:
+        double accelRate_;
+        double decelRate_;
+        double dt_;
         double lastValue_;
         bool initialized_;
     };
@@ -144,6 +180,19 @@ private:
     LowPassFilter rightSpeedFilter;
     LowPassFilter angularVelocityFilter;
     LowPassFilter steerErrorFilter;
+
+    // 斜坡控制
+    std::atomic<bool> rampControlEnabled;
+    RampLimiter leftRampLimiter;
+    RampLimiter rightRampLimiter;
+
+    // 外环PD输出斜坡控制
+    std::atomic<bool> diffOutputRampEnabled;
+    RampLimiter diffOutputRampLimiter;
+
+    // 紧急停机/出界保护
+    std::atomic<bool> emergencyStopActive{false};
+    std::atomic<bool> pidResetRequested{false};
 
     // 控制周期
     const double controlPeriod;

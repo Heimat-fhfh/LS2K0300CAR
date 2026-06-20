@@ -6,6 +6,9 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+
+// 陀螺仪: 原始值 / 16.4 = °/s, 再乘以 π/180 = rad/s
+static constexpr float GYRO_DEG_TO_RAD = 0.01745329252f; // M_PI / 180.0f
 #include <unistd.h>
 #include <fcntl.h>
 #include <cerrno>
@@ -201,11 +204,11 @@ bool IMUDevice::update_all_data()
     
     // 读取陀螺仪数据
     raw_data_.gyro_x = read_sensor_data(SENSOR_GYRO_X);
-    unit_data_.gyro_x = raw_data_.gyro_x / 16.4f;
+    unit_data_.gyro_x = raw_data_.gyro_x / 16.4f * GYRO_DEG_TO_RAD;
     raw_data_.gyro_y = read_sensor_data(SENSOR_GYRO_Y);
-    unit_data_.gyro_y = raw_data_.gyro_y / 16.4f;
+    unit_data_.gyro_y = raw_data_.gyro_y / 16.4f * GYRO_DEG_TO_RAD;
     raw_data_.gyro_z = read_sensor_data(SENSOR_GYRO_Z);
-    unit_data_.gyro_z = raw_data_.gyro_z / 16.4f;
+    unit_data_.gyro_z = raw_data_.gyro_z / 16.4f * GYRO_DEG_TO_RAD;
 
     return true;
 }
@@ -237,7 +240,7 @@ const imu_raw_data_t& IMUDevice::get_raw_data() const
 //-------------------------------------------------------------------------------------------------------------------
 // 获取带单位的数据
 // 加速度=原始数据/4096，单位为g
-// 陀螺仪=原始数据/16.4，单位为°/s
+// 陀螺仪=原始数据/16.4*π/180，单位为rad/s
 //-------------------------------------------------------------------------------------------------------------------
 const imu_unit_data_t& IMUDevice::get_unit_data() const
 {
@@ -284,10 +287,10 @@ bool IMUDevice::measure_zero_drift()
 
         const imu_unit_data_t& unit = get_unit_data();
 
-        // 判断是否接近静止（简单判断法）
-        if (fabs(unit.gyro_x) > 5 ||
-            fabs(unit.gyro_y) > 5 ||
-            fabs(unit.gyro_z) > 5)
+        // 判断是否接近静止（简单判断法, 5°/s ≈ 0.087 rad/s）
+        if (fabs(unit.gyro_x) > 5.0f * GYRO_DEG_TO_RAD ||
+            fabs(unit.gyro_y) > 5.0f * GYRO_DEG_TO_RAD ||
+            fabs(unit.gyro_z) > 5.0f * GYRO_DEG_TO_RAD)
         {
             printf("Motion detected! Calibration failed.\n");
             return false;
@@ -319,9 +322,9 @@ bool IMUDevice::measure_zero_drift()
     double var_z = sum_sq_z / valid_count - bias_z * bias_z;
 
     printf("\n===== Zero Drift Result =====\n");
-    printf("Bias X: %.6f °/s\n", bias_x);
-    printf("Bias Y: %.6f °/s\n", bias_y);
-    printf("Bias Z: %.6f °/s\n", bias_z);
+    printf("Bias X: %.6f rad/s\n", bias_x);
+    printf("Bias Y: %.6f rad/s\n", bias_y);
+    printf("Bias Z: %.6f rad/s\n", bias_z);
     printf("Z variance: %.6f\n", var_z);
 
     if(var_z > 0.5)
@@ -346,7 +349,7 @@ void IMUDevice::set_zero_drift_bias(float bias_x, float bias_y, float bias_z)
     zero_drift_bias_y_ = bias_y;
     zero_drift_bias_z_ = bias_z;
     
-    printf("Zero drift bias set: X=%.6f, Y=%.6f, Z=%.6f °/s\n", 
+    printf("Zero drift bias set: X=%.6f, Y=%.6f, Z=%.6f rad/s\n", 
            zero_drift_bias_x_, zero_drift_bias_y_, zero_drift_bias_z_);
 }
 

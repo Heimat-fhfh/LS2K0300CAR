@@ -102,6 +102,51 @@ int main(int argc, char** argv)
         // 主要占用为图像预处理
         FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
 
+        // 十字状态蜂鸣器：进入十字时持续短鸣，退出时停止
+        {
+            static bool acrossBuzzerOn = false;
+            const bool inAcross = (Data_Path_s.Track_Kind == L_ACROSS_TRACK ||
+                                   Data_Path_s.Track_Kind == R_ACROSS_TRACK);
+            if (inAcross && !acrossBuzzerOn)
+            {
+                GetBuzzer().customPattern({60}, {60}, 999);
+                acrossBuzzerOn = true;
+            }
+            else if (!inAcross && acrossBuzzerOn)
+            {
+                GetBuzzer().stop();
+                acrossBuzzerOn = false;
+            }
+        }
+
+        // 出界保护：连续多帧第一行搜索不到起始点时触发
+        if (!Data_Path_s.JSON_TrackConfigData_v.empty())
+        {
+            const int failThreshold = Data_Path_s.JSON_TrackConfigData_v[0].Seed_Search_Fail_Threshold;
+            if (failThreshold > 0 && Data_Path_s.SeedSearchFailCount >= failThreshold)
+            {
+                motorTask->emergencyStop();
+                GetBuzzer().customPattern({60, 60, 60, 60}, {60, 60, 60, 400}, 999);
+                printf("[OUT_OF_BOUNDS] 出界保护触发！连续 %d 帧未搜到起始点。按 KEY_1 复位。\n",
+                       Data_Path_s.SeedSearchFailCount);
+
+                while (g_running.load())
+                {
+                    CameraImgGet(&Img_Store_s);
+                    if (gpio_get_level(KEY_1) == 0)
+                    {
+                        Data_Path_s.SeedSearchFailCount = 0;
+                        GetBuzzer().stop();
+                        motorTask->clearEmergencyStop();
+                        printf("[OUT_OF_BOUNDS] 已复位，恢复巡线。\n");
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                continue;
+            }
+        }
+
         // // 归一化偏差并下发电机控制任务
         {
             float errorNorm = static_cast<float>(Data_Path_s.SteerErrorPx) / 160.0f;
@@ -120,6 +165,20 @@ int main(int argc, char** argv)
             imgProcess.ImgReferenceLine(&Img_Store_s, &Data_Path_s);
             displayMatOnIPS200(Img_Store_s.Img_Track);
             ips200_show_int(0,200,Data_Path_s.SteerErrorPx,3);
+            {
+                const char* trackName = "Unknown";
+                switch (Data_Path_s.Track_Kind)
+                {
+                    case STRIGHT_TRACK:    trackName = "Straight"; break;
+                    case BEND_TRACK:       trackName = "Bend";     break;
+                    case L_ACROSS_TRACK:   trackName = "L-Across"; break;
+                    case R_ACROSS_TRACK:   trackName = "R-Across"; break;
+                    case L_CIRCLE_TRACK:   trackName = "L-Circle"; break;
+                    case R_CIRCLE_TRACK:   trackName = "R-Circle"; break;
+                    default:               trackName = "Unknown";  break;
+                }
+                ips200_show_string(0, 220, trackName);
+            }
         }
 
         if (!Function_EN_s.Control_EN)

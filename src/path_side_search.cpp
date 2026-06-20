@@ -592,9 +592,11 @@ void ImgSideSearchEightNeighborhood(Img_Store *Img_Store_p,Data_Path *Data_Path_
     Point start_point_r;
     if (!find_seed_points_eight(Img_Store_p->bin_image, start_row, start_x, start_point_l, start_point_r)) {
         if (!find_seed_points_eight(Img_Store_p->bin_image, start_row, image_w / 2, start_point_l, start_point_r)) {
+            Data_Path_p->SeedSearchFailCount++;
             return;
         }
     }
+    Data_Path_p->SeedSearchFailCount = 0;
 
     last_mid_x = (start_point_l.x + start_point_r.x) / 2;
 

@@ -518,6 +518,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "COLLISION_PROTECT_ENABLE", "COLLISION_IMU_JERK_THRESHOLD",
         "COLLISION_STALL_DUTY_THRESHOLD", "COLLISION_STALL_SPEED_THRESHOLD",
         "COLLISION_STALL_CYCLES", "COLLISION_RESET_KEY", "COLLISION_BUMPER_KEY",
+        "RAMP_ACCEL_RATE", "RAMP_DECEL_RATE",
+        "DIFF_OUTPUT_RAMP_ENABLE", "DIFF_OUTPUT_RAMP_ACCEL_RATE", "DIFF_OUTPUT_RAMP_DECEL_RATE",
         "ACROSS_BORDER_EXIT_MAX",
         "ACROSS_MAX_FRAMES"
     };
@@ -588,6 +590,15 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_VehicleConfigData.collisionStallCycles = ConfigData.at("COLLISION_STALL_CYCLES");
     JSON_VehicleConfigData.collisionResetKey = ConfigData.at("COLLISION_RESET_KEY");
     JSON_VehicleConfigData.collisionBumperKey = ConfigData.at("COLLISION_BUMPER_KEY");
+
+    // 斜坡控制参数
+    JSON_VehicleConfigData.rampAccelRate = ConfigData.at("RAMP_ACCEL_RATE");
+    JSON_VehicleConfigData.rampDecelRate = ConfigData.at("RAMP_DECEL_RATE");
+
+    // 外环PD输出斜坡控制参数
+    JSON_VehicleConfigData.diffOutputRampEnable = ConfigData.at("DIFF_OUTPUT_RAMP_ENABLE");
+    JSON_VehicleConfigData.diffOutputRampAccelRate = ConfigData.at("DIFF_OUTPUT_RAMP_ACCEL_RATE");
+    JSON_VehicleConfigData.diffOutputRampDecelRate = ConfigData.at("DIFF_OUTPUT_RAMP_DECEL_RATE");
 
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数
@@ -683,6 +694,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     }
     if (ConfigData.contains("TRACK_JUDGE_CONFIRM_THRESHOLD")) {
         JSON_TrackConfigData.TrackJudgeConfirmThreshold = ConfigData.at("TRACK_JUDGE_CONFIRM_THRESHOLD");
+    }
+
+    if (ConfigData.contains("SEED_SEARCH_FAIL_THRESHOLD")) {
+        JSON_TrackConfigData.Seed_Search_Fail_Threshold = ConfigData.at("SEED_SEARCH_FAIL_THRESHOLD");
     }
 
     // 同步配置到运行时容器（覆盖旧值，保持单配置生效）。

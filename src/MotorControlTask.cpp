@@ -1,4 +1,5 @@
 #include "MotorControlTask.hpp"
+#include "MotorCommandAllocator.hpp"
 #include <pthread.h>
 #include <cmath>
 #include <cstring>
@@ -41,6 +42,11 @@ MotorControlTask::MotorControlTask(
     , rightSpeedFilter(0.02, controlPeriod)
     , angularVelocityFilter(0.02, controlPeriod)
     , steerErrorFilter(0.02, controlPeriod)
+    , rampControlEnabled(true)
+    , leftRampLimiter(50.0, 100.0, controlPeriod)
+    , rightRampLimiter(50.0, 100.0, controlPeriod)
+    , diffOutputRampEnabled(true)
+    , diffOutputRampLimiter(15.0, 30.0, controlPeriod)
     , controlPeriod(controlPeriod)
     , running(false)
     , taskError(false)
@@ -112,7 +118,7 @@ bool MotorControlTask::isValidSpeed(double speed) const {
 
 bool MotorControlTask::isValidAngularVelocity(double angularVelocity) const {
     return !std::isnan(angularVelocity) && !std::isinf(angularVelocity) &&
-           angularVelocity >= -1000.0 && angularVelocity <= 1000.0;
+           angularVelocity >= -20.0 && angularVelocity <= 20.0;
 }
 
 // ==================== 串级差速环 API 实现 ====================
@@ -190,6 +196,9 @@ void MotorControlTask::run() {
     int intervalCounter = 0;
 
     printf("Motor control task initialized (cascade differential + incremental PID speed)\n");
+    leftRampLimiter.reset(0.0);
+    rightRampLimiter.reset(0.0);
+    diffOutputRampLimiter.reset(0.0);
     state = ControlState::RUNNING;
 
     auto next_time = std::chrono::steady_clock::now();
@@ -208,6 +217,9 @@ void MotorControlTask::run() {
                 }
                 if (checkCollisionReset()) {
                     resetCollisionState();
+                    leftRampLimiter.reset(0.0);
+                    rightRampLimiter.reset(0.0);
+                    diffOutputRampLimiter.reset(0.0);
                     state = ControlState::RUNNING;
                     diffOuterPID.reset();
                     diffInnerPID.reset();
@@ -217,6 +229,39 @@ void MotorControlTask::run() {
                 intervalCounter++;
                 std::this_thread::sleep_until(next_time);
                 continue;
+            }
+
+            // ============================================================
+            // 紧急停机状态（出界保护）
+            // ============================================================
+            if (emergencyStopActive.load()) {
+                motors->setSpeeds(0.0f, 0.0f);
+                if (pidResetRequested.load()) {
+                    diffOuterPID.reset();
+                    diffInnerPID.reset();
+                    speedPID.reset();
+                    leftRampLimiter.reset(0.0);
+                    rightRampLimiter.reset(0.0);
+                    diffOutputRampLimiter.reset(0.0);
+                    steerErrorFilter.reset(0.0);
+                    pidResetRequested.store(false);
+                }
+                intervalCounter++;
+                std::this_thread::sleep_until(next_time);
+                continue;
+            }
+
+            // PID 复位请求（恢复时清除积分）
+            if (pidResetRequested.load()) {
+                diffOuterPID.reset();
+                diffInnerPID.reset();
+                speedPID.reset();
+                leftRampLimiter.reset(0.0);
+                rightRampLimiter.reset(0.0);
+                diffOutputRampLimiter.reset(0.0);
+                steerErrorFilter.reset(0.0);
+                pidResetRequested.store(false);
+                printf("PID controllers reset\n");
             }
 
             // ============================================================
@@ -316,7 +361,7 @@ void MotorControlTask::run() {
             if (imuValid) {
                 if (!isValidAngularVelocity(gyroZ)) {
                     imuErrorCount++;
-                    printf("Warning: Invalid angular velocity: %.3f °/s (error %d/%d)\n",
+                    printf("Warning: Invalid angular velocity: %.3f rad/s (error %d/%d)\n",
                            gyroZ, imuErrorCount, maxErrorCount);
                     gyroZ = lastValidAngularVelocity;
                     if (imuErrorCount >= maxErrorCount) {
@@ -341,13 +386,17 @@ void MotorControlTask::run() {
             // ============================================================
             double desiredDiffSpeed = diffOuterPID.calculate(0.0, currentError, controlPeriod);
 
+            if (diffOutputRampEnabled.load()) {
+                desiredDiffSpeed = diffOutputRampLimiter.apply(desiredDiffSpeed);
+            }
+
             // ============================================================
             // 9. 内环角速度PI
             //    setpoint=desiredDiffSpeed, feedback=gyroZ
             // ============================================================
             double diffOutput;
             if (imuValid) {
-                diffOutput = diffInnerPID.calculate(desiredDiffSpeed, gyroZ, controlPeriod);
+                diffOutput = diffInnerPID.calculate(desiredDiffSpeed, gyroZ, controlPeriod)/2.0;
             } else {
                 diffOutput = desiredDiffSpeed;
             }
@@ -360,13 +409,22 @@ void MotorControlTask::run() {
             double avgSpeed = (leftSpeed + rightSpeed) / 2.0;
             double speedOutput = speedPID.calculate(desiredSpeed, avgSpeed, controlPeriod);
 
+            
             // ============================================================
             // 11. 组合输出
             //     左电机 = 速度输出 - 差速输出
             //     右电机 = 速度输出 + 差速输出
             // ============================================================
-            double leftCmd = speedOutput - diffOutput;
-            double rightCmd = speedOutput + diffOutput;
+            double leftCmd = std::max(0.0, speedOutput - diffOutput);
+            double rightCmd = std::max(0.0, speedOutput + diffOutput);
+
+            // ============================================================
+            // 11. 斜坡控制 (限制速度输出变化率)
+            // ============================================================
+            if (rampControlEnabled.load()) {
+                leftCmd = leftRampLimiter.apply(leftCmd);
+                rightCmd = rightRampLimiter.apply(rightCmd);
+            }
 
             // UDP遥测
             std::array<float, 10> data = {
@@ -384,7 +442,7 @@ void MotorControlTask::run() {
             send_udp_data("status", data.data(), data.size());
 
             // ============================================================
-            // 11. 输出到电机
+            // 12. 输出到电机
             // ============================================================
             motors->setSpeeds(static_cast<float>(leftCmd), static_cast<float>(rightCmd));
 
@@ -393,6 +451,9 @@ void MotorControlTask::run() {
         } catch (const std::exception& e) {
             printf("Exception in control loop: %s\n", e.what());
             motors->setSpeeds(0.0f, 0.0f);
+            leftRampLimiter.reset(0.0);
+            rightRampLimiter.reset(0.0);
+            diffOutputRampLimiter.reset(0.0);
             state = ControlState::ERROR;
             taskError = true;
             break;
@@ -443,6 +504,51 @@ void MotorControlTask::LowPassFilter::setTimeConstant(double tau) {
     alpha_ = dt_ / (dt_ + tau_);
     if (alpha_ < 0.0) alpha_ = 0.0;
     if (alpha_ > 1.0) alpha_ = 1.0;
+}
+
+// ==================== 斜坡限制器实现 ====================
+
+MotorControlTask::RampLimiter::RampLimiter(double accelRate, double decelRate, double dt)
+    : accelRate_(accelRate)
+    , decelRate_(decelRate)
+    , dt_(dt)
+    , lastValue_(0.0)
+    , initialized_(false) {
+}
+
+double MotorControlTask::RampLimiter::apply(double target) {
+    if (!initialized_) {
+        lastValue_ = target;
+        initialized_ = true;
+        return target;
+    }
+
+    double delta = target - lastValue_;
+    double maxDelta;
+
+    if (delta > 0.0) {
+        maxDelta = accelRate_ * dt_;
+        if (delta > maxDelta) delta = maxDelta;
+    } else {
+        maxDelta = decelRate_ * dt_;
+        if (delta < -maxDelta) delta = -maxDelta;
+    }
+
+    lastValue_ = lastValue_ + delta;
+    return lastValue_;
+}
+
+void MotorControlTask::RampLimiter::reset(double value) {
+    lastValue_ = value;
+    initialized_ = true;
+}
+
+void MotorControlTask::RampLimiter::setAccelRate(double rate) {
+    if (rate > 0.0) accelRate_ = rate;
+}
+
+void MotorControlTask::RampLimiter::setDecelRate(double rate) {
+    if (rate > 0.0) decelRate_ = rate;
 }
 
 // ==================== 低通滤波控制 API ====================
@@ -507,6 +613,93 @@ void MotorControlTask::setSteerErrorFilterTimeConstant(double tau) {
     steerFilterTau.store(tau);
     printf("Steer error low-pass filter time constant set to: %.4f s (alpha=%.4f)\n",
            tau, steerErrorFilter.getAlpha());
+}
+
+// ==================== 斜坡控制 API ====================
+
+void MotorControlTask::enableRampControl(bool enable) {
+    bool wasEnabled = rampControlEnabled.load();
+    rampControlEnabled.store(enable);
+
+    if (enable && !wasEnabled) {
+        leftRampLimiter.reset(0.0);
+        rightRampLimiter.reset(0.0);
+        printf("Ramp control enabled\n");
+    } else if (!enable && wasEnabled) {
+        printf("Ramp control disabled\n");
+    }
+}
+
+bool MotorControlTask::isRampControlEnabled() const {
+    return rampControlEnabled.load();
+}
+
+void MotorControlTask::setRampRates(double accelRate, double decelRate) {
+    if (accelRate <= 0.0 || decelRate <= 0.0) {
+        printf("Warning: Invalid ramp rates (accel=%.1f, decel=%.1f)\n", accelRate, decelRate);
+        return;
+    }
+    leftRampLimiter.setAccelRate(accelRate);
+    leftRampLimiter.setDecelRate(decelRate);
+    rightRampLimiter.setAccelRate(accelRate);
+    rightRampLimiter.setDecelRate(decelRate);
+    printf("Ramp rates set: accel=%.1f %%/s, decel=%.1f %%/s\n", accelRate, decelRate);
+}
+
+void MotorControlTask::resetRampState() {
+    leftRampLimiter.reset(0.0);
+    rightRampLimiter.reset(0.0);
+    printf("Ramp state reset\n");
+}
+
+// ==================== 外环PD输出斜坡控制 API ====================
+
+void MotorControlTask::enableDiffOutputRamp(bool enable) {
+    bool wasEnabled = diffOutputRampEnabled.load();
+    diffOutputRampEnabled.store(enable);
+
+    if (enable && !wasEnabled) {
+        diffOutputRampLimiter.reset(0.0);
+        printf("Diff output ramp control enabled\n");
+    } else if (!enable && wasEnabled) {
+        printf("Diff output ramp control disabled\n");
+    }
+}
+
+bool MotorControlTask::isDiffOutputRampEnabled() const {
+    return diffOutputRampEnabled.load();
+}
+
+void MotorControlTask::setDiffOutputRampRates(double accelRate, double decelRate) {
+    if (accelRate <= 0.0 || decelRate <= 0.0) {
+        printf("Warning: Invalid diff output ramp rates (accel=%.1f, decel=%.1f)\n",
+               accelRate, decelRate);
+        return;
+    }
+    diffOutputRampLimiter.setAccelRate(accelRate);
+    diffOutputRampLimiter.setDecelRate(decelRate);
+    printf("Diff output ramp rates set: accel=%.1f rad/s², decel=%.1f rad/s²\n",
+           accelRate, decelRate);
+}
+
+// ==================== 紧急停机/出界保护实现 ====================
+
+void MotorControlTask::emergencyStop() {
+    emergencyStopActive.store(true);
+    motors->setSpeeds(0.0f, 0.0f);
+    leftRampLimiter.reset(0.0);
+    rightRampLimiter.reset(0.0);
+    printf("*** EMERGENCY STOP - Motors zeroed ***\n");
+}
+
+void MotorControlTask::clearEmergencyStop() {
+    pidResetRequested.store(true);
+    emergencyStopActive.store(false);
+    printf("Emergency stop cleared - PID integrals will be reset\n");
+}
+
+bool MotorControlTask::isEmergencyStopActive() const {
+    return emergencyStopActive.load();
 }
 
 // ==================== 碰撞保护实现 ====================
@@ -620,6 +813,8 @@ bool MotorControlTask::detectGpioCollision() const {
 void MotorControlTask::handleCollision() {
     collisionDetected.store(true);
     motors->setSpeeds(0.0f, 0.0f);
+    leftRampLimiter.reset(0.0);
+    rightRampLimiter.reset(0.0);
     printf("*** COLLISION PROTECTION ACTIVATED - Motors stopped ***\n");
 }
 
