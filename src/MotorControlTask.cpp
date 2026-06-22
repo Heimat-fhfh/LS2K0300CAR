@@ -415,8 +415,10 @@ void MotorControlTask::run() {
             //     左电机 = 速度输出 - 差速输出
             //     右电机 = 速度输出 + 差速输出
             // ============================================================
-            double leftCmd = std::max(0.0, speedOutput - diffOutput);
-            double rightCmd = std::max(0.0, speedOutput + diffOutput);
+            // double leftCmd = std::max(0.0, speedOutput - diffOutput);
+            // double rightCmd = std::max(0.0, speedOutput + diffOutput);
+            double leftCmd = speedOutput - diffOutput;
+            double rightCmd = speedOutput + diffOutput;
 
             // ============================================================
             // 11. 斜坡控制 (限制速度输出变化率)
