@@ -51,6 +51,10 @@ public:
     void setDiffInnerParams(const Control::PID::Parameters& params);
     void setSpeedIncrementalParams(const Control::IncrementalPID::Parameters& params);
     void setMotorMaxDuty(double duty);
+    void setCurvatureSpeedGain(double gain);
+    double getCurvatureSpeedGain() const;
+    void setCurvatureSpeedMin(double minSpeed);
+    double getCurvatureSpeedMin() const;
 
     // ==================== 碰撞保护 API ====================
 
@@ -189,6 +193,10 @@ private:
     // 外环PD输出斜坡控制
     std::atomic<bool> diffOutputRampEnabled;
     RampLimiter diffOutputRampLimiter;
+
+    // 曲率自适应降速
+    std::atomic<double> curvatureSpeedGain{0.0};
+    std::atomic<double> curvatureSpeedMin{0.1};
 
     // 紧急停机/出界保护
     std::atomic<bool> emergencyStopActive{false};

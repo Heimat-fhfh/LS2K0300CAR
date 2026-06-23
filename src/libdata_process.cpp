@@ -423,9 +423,6 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     const char* ConfigFilePath;
 
     if (changetimes == 0){
-        cout << "<---------------------JSON文件选择--------------------->" << endl;
-        cout << "0.低速参数\n1.中速参数\n2.高速参数" << endl;
-        cout << "参数选择：";
         cin >> JSON_FileNum;
         if (cin.fail())
         {
@@ -456,7 +453,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         default:{ ConfigFilePath = "config/config_0.json"; break; }
     }
 
-    std::cout << "[Config] OPENING JSON FILE: " << ConfigFilePath << std::endl;
+
     ifstream ConfigFile(ConfigFilePath);
     if (!ConfigFile.is_open())
     {
@@ -469,7 +466,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     ConfigFile.seekg(0, std::ios::end);
     std::streampos file_size = ConfigFile.tellg();
     ConfigFile.seekg(0, std::ios::beg);
-    std::cout << "[Config] 文件大小: " << static_cast<long long>(file_size) << " bytes" << std::endl;
+
     if (file_size <= 0)
     {
         std::cerr << "[Config] 配置文件为空: " << ConfigFilePath << std::endl;
@@ -520,6 +517,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         "COLLISION_STALL_CYCLES", "COLLISION_RESET_KEY", "COLLISION_BUMPER_KEY",
         "RAMP_ACCEL_RATE", "RAMP_DECEL_RATE",
         "DIFF_OUTPUT_RAMP_ENABLE", "DIFF_OUTPUT_RAMP_ACCEL_RATE", "DIFF_OUTPUT_RAMP_DECEL_RATE",
+        "CURVATURE_SPEED_GAIN",
+        "CURVATURE_SPEED_MIN",
         "ACROSS_BORDER_EXIT_MAX",
         "ACROSS_MAX_FRAMES"
     };
@@ -544,7 +543,6 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
         return;
     }
 
-    std::cout << "[Config] JSON 根节点字段数量: " << ConfigData.size() << std::endl;
 
     // 外环差速PD参数
     JSON_DifferentialPDConfigData.Kp = ConfigData.at("DIFF_OUTER_PD_KP");
@@ -600,6 +598,9 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_VehicleConfigData.diffOutputRampAccelRate = ConfigData.at("DIFF_OUTPUT_RAMP_ACCEL_RATE");
     JSON_VehicleConfigData.diffOutputRampDecelRate = ConfigData.at("DIFF_OUTPUT_RAMP_DECEL_RATE");
 
+    JSON_VehicleConfigData.curvatureSpeedGain = ConfigData.at("CURVATURE_SPEED_GAIN");
+    JSON_VehicleConfigData.curvatureSpeedMin = ConfigData.at("CURVATURE_SPEED_MIN");
+
     JSON_FunctionConfigData.Uart_EN = ConfigData.at("UART_EN");    // 获取串口使能参数
     JSON_FunctionConfigData.ImgCompress_EN = ConfigData.at("IMG_COMPRESS_EN");  // 获取图像压缩使能参数
     JSON_FunctionConfigData.Camera_EN = CameraKind(ConfigData.at("CAMERA_EN"));   // 获取摄像头使能参数
@@ -608,6 +609,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     JSON_FunctionConfigData.DataPrint_EN = ConfigData.at("DATA_PRINT_EN");  // 获取数据显示使能参数
     JSON_FunctionConfigData.AcrossIdentify_EN = ConfigData.at("ACROSS_IDENTIFY_EN");   // 获取十字识别使能参数
     JSON_FunctionConfigData.CircleIdentify_EN = ConfigData.at("CIRCLE_IDENTIFY_EN");   // 获取圆环识别使能参数
+    JSON_FunctionConfigData.IPS200_Show_EN = ConfigData.at("IPS200_SHOW_EN");
+    JSON_FunctionConfigData.UDP_Image_Upload_EN = ConfigData.at("UDP_IMAGE_UPLOAD_EN");
 
     JSON_TrackConfigData.Track_width = ConfigData.at("Track_width");
 
@@ -664,6 +667,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     if (ConfigData.contains("CIRCLE_JUDGE_PARTIAL_SCORE")) {
         JSON_TrackConfigData.CircleJudgePartialScore = ConfigData.at("CIRCLE_JUDGE_PARTIAL_SCORE");
     }
+    JSON_TrackConfigData.CircleMaxFrames = ConfigData.at("CIRCLE_MAX_FRAMES");
     if (ConfigData.contains("CROSS_JUMP_PRIMARY")) {
         JSON_TrackConfigData.CrossJumpPrimary = ConfigData.at("CROSS_JUMP_PRIMARY");
     }
@@ -684,8 +688,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     }
     JSON_TrackConfigData.AcrossBorderExitMax = ConfigData.at("ACROSS_BORDER_EXIT_MAX");
     JSON_TrackConfigData.AcrossMaxFrames = ConfigData.at("ACROSS_MAX_FRAMES");
-    std::cout << "[Config] ACROSS_MAX_FRAMES=" << JSON_TrackConfigData.AcrossMaxFrames
-              << " ACROSS_BORDER_EXIT_MAX=" << JSON_TrackConfigData.AcrossBorderExitMax << std::endl;
+
     if (ConfigData.contains("TRACK_JUDGE_FULL_SCORE")) {
         JSON_TrackConfigData.TrackJudgeFullScore = ConfigData.at("TRACK_JUDGE_FULL_SCORE");
     }
@@ -714,15 +717,9 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSO
     Data_Path_p->JSON_SpeedIncrementalPIConfigData_v.push_back(JSON_SpeedIncrementalPIConfigData);
     Data_Path_p->JSON_VehicleConfigData_v.push_back(JSON_VehicleConfigData);
 
-    std::cout << "[Config] Function 配置数量: " << Function_EN_p->JSON_FunctionConfigData_v.size()
-              << ", Track 配置数量: " << Data_Path_p->JSON_TrackConfigData_v.size() << std::endl;
-    std::cout << "[Config] Camera_EN=" << static_cast<int>(JSON_FunctionConfigData.Camera_EN)
-              << ", Forward=" << JSON_TrackConfigData.Forward
-              << ", ForwardHeightCompensationPxPerRow=" << JSON_TrackConfigData.ForwardHeightCompensationPxPerRow
-              << ", PathSearch=[" << JSON_TrackConfigData.Path_Search_Start
-              << ", " << JSON_TrackConfigData.Path_Search_End << "]" << std::endl;
-
-    cout << "<---------------------JSON参数获取成功--------------------->" << endl;
+    std::cout << "[配置] 加载 " << ConfigFilePath
+              << " | 摄像头: VIDEO" << static_cast<int>(JSON_FunctionConfigData.Camera_EN)
+              << " | ACROSS_MAX_FRAMES: " << JSON_TrackConfigData.AcrossMaxFrames << std::endl;
 }
 
 std::string SYNC::GetConfigFilePath() const

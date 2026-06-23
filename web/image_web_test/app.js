@@ -11,6 +11,26 @@ document.getElementById('nextBtn').addEventListener('click', nextFrame);
 playBtn.addEventListener('click', togglePlay);
 slider.addEventListener('input', () => render(Number(slider.value)));
 
+const ROAD_NAMES = {
+  0: 'Normol', 1: 'Straight', 2: 'Cross', 3: 'Ramp',
+  4: 'L-Cirque', 5: 'R-Cirque', 6: 'Forkin', 7: 'Forkout',
+  8: 'Barn_out', 9: 'Barn_in', 10: 'CrossTure'
+};
+
+const TRACK_NAMES = {
+  0: 'Straight', 1: 'Bend',
+  2: 'L-Across', 3: 'R-Across',
+  4: 'L-Circle', 5: 'R-Circle'
+};
+
+function roadName(t) {
+  return ROAD_NAMES[t] || ('?' + t);
+}
+
+function trackName(t) {
+  return TRACK_NAMES[t] || ('?' + t);
+}
+
 async function loadMeta() {
   const res = await fetch('/api/meta');
   const meta = await res.json();
@@ -34,8 +54,10 @@ async function render(idx) {
   metaEl.textContent =
     `Frame: ${idx + 1}/${frameCount}\n` +
     `file: ${stat.file}\n` +
-    `track_kind: ${stat.track_kind}  servo_angle: ${stat.servo_angle}  motor_speed: ${stat.motor_speed}\n` +
-    `inflection(L/R): ${stat.inflection_left}/${stat.inflection_right}   bend(L/R): ${stat.bend_left}/${stat.bend_right}`;
+    `TK:${trackName(stat.track_kind)}  Road:${roadName(stat.my_zf_road_type)}  Det:${stat.my_zf_det_true}\n` +
+    `Ring:${stat.my_zf_rings} Flag:${stat.my_zf_ring_flag} Size:${stat.my_zf_ring_size}\n` +
+    `OFFLine:${stat.my_zf_off_line}  WL:${stat.my_zf_white_line}\n` +
+    `SErrPx:${stat.steer_error_px}  TBS:${(stat.target_base_speed || 0).toFixed(1)}`;
 }
 
 function prevFrame() {

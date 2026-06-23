@@ -64,7 +64,7 @@ class CameraCalibrationCorrector;
 	#define SWITCH_1    "/dev/zf_driver_gpio_switch_1"
 
 	// 另外一端的IP地址
-	#define SERVER_IP "172.25.80.138"
+	#define SERVER_IP "172.25.80.183"
 	// 端口号
 	#define PORT 8086
 

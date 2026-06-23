@@ -1,7 +1,7 @@
 #include "common_system.h"
 #include "common_program.h"
 #include "AAAdefine.h"
-#include "vision_transform.h"
+#include "image_my_zf.h"
 #include <condition_variable>
 #include <display_show.h>
 #include <iomanip>
@@ -10,24 +10,6 @@ using namespace cv;
 
 namespace
 {
-VisionTransformPipeline g_vision_transform_pipeline;
-std::once_flag g_vision_transform_init_once;
-bool g_vision_transform_ready = false;
-
-bool EnsureVisionTransformReady()
-{
-	std::call_once(g_vision_transform_init_once, []() {
-		std::string errorMessage;
-		// 使用相对于项目根目录的绝对路径
-		g_vision_transform_ready = g_vision_transform_pipeline.loadConfig("./config/vision_transform.json", &errorMessage);
-		if (!g_vision_transform_ready)
-		{
-			std::cerr << "[VisionTransform] 配置加载失败，后续按原图处理: " << errorMessage << std::endl;
-		}
-	});
-	return g_vision_transform_ready;
-}
-
 std::string FourccToText(double fourccValue)
 {
 	const int fourcc = static_cast<int>(fourccValue);
@@ -111,22 +93,15 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 		// Camera.set(CAP_PROP_CONTRAST, 0.7);      // 对比度，让画面更通透
 		double actualWidth = Camera.get(CAP_PROP_FRAME_WIDTH); 
 		double actualHeight = Camera.get(CAP_PROP_FRAME_HEIGHT); 
-		double actualFps = Camera.get(CAP_PROP_FPS); 
-		printf("摄像头配置信息：\n"); 
-		printf("请求帧率：%d FPS\n", FPS);
-		printf("分辨率：%.0fx%.0f\n", actualWidth, actualHeight); 
-		printf("帧率：%.0f FPS\n", actualFps);
-		printf("格式：%s\n", FourccToText(Camera.get(CAP_PROP_FOURCC)).c_str());
-		printf("自动曝光：%.0f\n", Camera.get(CAP_PROP_AUTO_EXPOSURE));
 
 		if (!Camera.isOpened())
 		{
-			cout << "<---------------------相机初始化失败--------------------->" << endl;
+			cout << "\u003c摄像头\u003e \u521d\u59cb\u5316\u5931\u8d25" << endl;
 			abort();
 		}
 		else
 		{
-			cout << "<---------------------相机初始化成功--------------------->" << endl;
+			printf("\u003c摄像头\u003e \u521d\u59cb\u5316\u6210\u529f %.0fx%.0f YUYV @%dFPS\n", actualWidth, actualHeight, FPS);
 		}
 
 	}
@@ -140,8 +115,6 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 {
 	Mat Img;
 	double cameraFps = Camera.get(CAP_PROP_FPS);
-	cout << "摄像头获取图像线程 Camera FPS: " << cameraFps
-	     << " FOURCC: " << FourccToText(Camera.get(CAP_PROP_FOURCC)) << endl;
 	uint64_t threadFrameCount = 0;
 	uint64_t threadFailedCount = 0;
 	uint64_t threadEmptyCount = 0;
@@ -193,11 +166,6 @@ void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 		const auto elapsedMs = chrono::duration_cast<chrono::milliseconds>(now - statsStart).count();
 		if (elapsedMs >= 1000)
 		{
-			const double readFps = threadFrameCount * 1000.0 / static_cast<double>(elapsedMs);
-			cout << "[CameraThread] read_fps=" << fixed << setprecision(2) << readFps
-			     << " camera_fps=" << cameraFps
-			     << " failed=" << threadFailedCount
-			     << " empty=" << threadEmptyCount << endl;
 			threadFrameCount = 0;
 			threadFailedCount = 0;
 			threadEmptyCount = 0;
@@ -233,11 +201,10 @@ void CameraImgGet(Img_Store *Img_Store_p)
 
 /**
  * @brief 图像预处理
- * 图像预处理函数，包含以下步骤：
- * 1. 将彩色图像转换为灰度图像。
- * 2. 对灰度图像进行高斯模糊以减少噪声。
- * 3. 使用Otsu's方法对模糊后的图像进行二值化处理。
- * 4. 在二值化图像的边界绘制白色边框以防止八邻域寻线出错。
+ * 使用 my_zf 的图像处理管线：
+ * 1. BGR转灰度。
+ * 2. 按 PATH_SEARCH 区间裁剪 → 下采样到 80x60。
+ * 3. 调用 my_zf 的 ImageProcess_my_zf() 进行二值化、寻线、元素检测、偏差计算。
  * @param Img_Store_p 图像存储指针，包含原始图像和处理后的图像。
  * @param Data_Path_p 路径数据指针。
  * @param Function_EN_p 功能使能状态指针。
@@ -250,49 +217,20 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
     }
 	
 	Img_Store_p->Img_Track = Img_Store_p->Img_Color.clone();
-
-	vector<Mat> bgrChannels;
-	Mat rgSum;
-
-	// split(Img_Store_p->Img_Color, bgrChannels);
-	// add(bgrChannels[2], bgrChannels[1], rgSum);          // R + G
-	// subtract(rgSum, bgrChannels[0], Img_Store_p->Img_Gray); // R + G - B（8U 饱和裁剪）
-
-	// 上下相差 10% 左右
-
 	cvtColor(Img_Store_p->Img_Track, Img_Store_p->Img_Gray, cv::COLOR_BGR2GRAY);
 
-	/**
-	 * 手动算法: 2.343 ms
-	 * cvtColor: 1.359 ms
-	 * cvtColor 快 1.724 倍
-	 **/
+	Mat gray_cropped = Img_Store_p->Img_Gray(Rect(0, 30, 160, 60));
+	Mat gray_80x60;
+	resize(gray_cropped, gray_80x60, Size(80, 60), 0, 0, INTER_AREA);
+	ImageProcess_my_zf(gray_80x60);
 
-	Mat blurred;
-	// remap(Img_Store_p->Img_Gray, blurred, map1, map2, cv::INTER_CUBIC);
-	// Mat kernel = getStructuringElement(MORPH_RECT, Size(5, 5));
-	// morphologyEx(Img_Store_p->Img_Gray, blurred, MORPH_CLOSE, kernel);
-	// bilateralFilter(Img_Store_p->Img_Gray, blurred, 7, 100, 100);
-    GaussianBlur(Img_Store_p->Img_Gray, blurred, Size(3, 3), 0);
-    threshold(blurred, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
-	// 上下相差占用 6% 左右
-    // threshold(Img_Store_p->Img_Gray, Img_Store_p->Img_OTSU, 0, 255, THRESH_BINARY | THRESH_OTSU);
-
-	// 将Img_Track改为二值化图像的彩色版本，用于绘制线条
-	// cv::Mat temp;
-	// cv::cvtColor(Img_Store_p->Img_OTSU, temp, cv::COLOR_GRAY2BGR);
-	// Img_Store_p->Img_Track = temp.clone();
-
-	const int imgWidth = Img_Store_p->Img_OTSU.cols;
-	const int imgHeight = Img_Store_p->Img_OTSU.rows;
-	line(Img_Store_p->Img_OTSU,Point(0,0),Point(imgWidth-1,0),Scalar(0),3);
-	line(Img_Store_p->Img_OTSU,Point(imgWidth-1,0),Point(imgWidth-1,imgHeight-1),Scalar(0),3);
-	line(Img_Store_p->Img_OTSU,Point(imgWidth-1,imgHeight-1),Point(0,imgHeight-1),Scalar(0),3);
-	line(Img_Store_p->Img_OTSU,Point(0,imgHeight-1),Point(0,0),Scalar(0),3);
-
-	
-	
-}	
+	Img_Store_p->Img_OTSU = Mat(60, 80, CV_8UC1);
+	for (int i = 0; i < 60; i++) {
+		for (int j = 0; j < 80; j++) {
+			Img_Store_p->Img_OTSU.at<uint8_t>(i, j) = Pixle[i][j] ? 255 : 0;
+		}
+	}
+}
 
 /*
 	ImgPrepare说明
@@ -304,7 +242,7 @@ void ImgProcess::imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Functi
 void ImgProcess::ImgPrepare(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
 	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-	
+	(void)JSON_TrackConfigData;
 	// 加白框防止八邻域寻线出错
 	int border_thickness = 3;
 	rectangle(Img_Store_p->Img_OTSU, 
@@ -610,7 +548,7 @@ void ImgProcess::ImgBendPointDraw(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 */
 void ImgProcess::ImgForwardLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 {
-	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
+	(void)Data_Path_p;
 	circle(Img_Store_p -> Img_Track,Point(Data_Path_p -> center_line[Data_Path_p->forword_line_h],Data_Path_p->forword_line_h),3,Scalar(255,0,0),2);
 	// line((Img_Store_p -> Img_Track),Point(0,Data_Path_p->forword_line_h),Point(image_w-1,Data_Path_p->forword_line_h),Scalar(255,0,0),3);
     // line((Img_Store_p -> Img_Track),Point(image_w/2,300),Point((Data_Path_p -> center_line[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][0]),(Data_Path_p -> TrackCoordinate[(JSON_TrackConfigData.Forward)-(JSON_TrackConfigData.Path_Search_Start)][1])),Scalar(255,0,0),3);
@@ -674,77 +612,55 @@ void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_P
 void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
 	JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
-	circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_l[0][0],Data_Path_p->points_l[0][1]), 6, Scalar(0, 0, 255), 1);
-	circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_r[0][0],Data_Path_p->points_r[0][1]), 6, Scalar(0, 0, 255), 1);
 
-	// circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_l[1][0],Data_Path_p->points_l[1][1]), 6, Scalar(0, 255, 0), 1);
-	// circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_r[1][0],Data_Path_p->points_r[1][1]), 6, Scalar(0, 255, 0), 1);
-
-	for (int i = 0; i < Data_Path_p->NumSearch[0]; i++)
-	{
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_l[i][0],Data_Path_p->points_l[i][1]), 2, Scalar(0, 125, 0), FILLED); // 
-	}
-	for (int i = 0; i < Data_Path_p->NumSearch[1]; i++)
-	{
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->points_r[i][0],Data_Path_p->points_r[i][1]), 2, Scalar(125, 0, 0), FILLED);
-	}
-
+	// 绘制 my_zf 输出的 left/right/center 边线
 	for (int i = Data_Path_p->search_print_h_max; i < image_h-JSON_TrackConfigData.Path_Search_Start; i++)
 	{
-		// Data_Path_p->center_line[i] = (Data_Path_p->l_border[i] + Data_Path_p->r_border[i]) >> 1;//求中线
-
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->l_border[i],i), 1, Scalar(0, 0, 255), FILLED);//显示起点 显示左边线
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->r_border[i],i), 1, Scalar(0, 255, 0), FILLED);//显示起点 显示右边线
-		circle(Img_Store_p->Img_Track, Point(Data_Path_p->center_line[i],i), 1, Scalar(0, 0, 0), FILLED);//显示起点 显示中线	
+		circle(Img_Store_p->Img_Track, Point(Data_Path_p->l_border[i],i), 1, Scalar(0, 0, 255), FILLED);
+		circle(Img_Store_p->Img_Track, Point(Data_Path_p->r_border[i],i), 1, Scalar(0, 255, 0), FILLED);
+		circle(Img_Store_p->Img_Track, Point(Data_Path_p->center_line[i],i), 1, Scalar(0, 0, 0), FILLED);
 	}
 
-	for (int side = 0; side < 2; ++side)
+	// 显示 my_zf 元素识别和偏差信息
 	{
-		const Scalar jump_color = (side == 0) ? Scalar(0, 255, 255) : Scalar(255, 255, 0);
-		for (int i = 0; i < Data_Path_p->EdgeLineJumpNum[side]; ++i)
-		{
-			const Point& jump_point = Data_Path_p->EdgeLineColorBlockStart[side][i];
-			if (jump_point.x < 0 || jump_point.x >= Img_Store_p->Img_Track.cols ||
-				jump_point.y < 0 || jump_point.y >= Img_Store_p->Img_Track.rows)
-			{
-				continue;
-			}
-
-			circle(Img_Store_p->Img_Track, jump_point, 6, jump_color, 2);
-			line(Img_Store_p->Img_Track, Point(jump_point.x - 4, jump_point.y), Point(jump_point.x + 4, jump_point.y), jump_color, 1);
-			line(Img_Store_p->Img_Track, Point(jump_point.x, jump_point.y - 4), Point(jump_point.x, jump_point.y + 4), jump_color, 1);
-
-			const string label = string(side == 0 ? "LJ" : "RJ") + to_string(i + 1);
-			putText(Img_Store_p->Img_Track, label, Point(jump_point.x + 6, jump_point.y - 6),
-				FONT_HERSHEY_COMPLEX, 0.4, jump_color, 1);
+		char buf[64];
+		const char* road_name = "Normol";
+		switch (ImageStatus.Road_type) {
+			case Straight:     road_name = "Straight";   break;
+			case LeftCirque:   road_name = "L-Cirque";   break;
+			case RightCirque:  road_name = "R-Cirque";   break;
+			case Cross:        road_name = "Cross";      break;
+			case Cross_ture:   road_name = "CrossTure";  break;
+			case Ramp:         road_name = "Ramp";       break;
+			case Barn_in:      road_name = "Barn_in";    break;
+			case Barn_out:     road_name = "Barn_out";   break;
+			default:           road_name = "Normol";     break;
 		}
-	}
-
-	{
-		char buf[32];
-		snprintf(buf, sizeof(buf), "J:%d %d", Data_Path_p->EdgeLineJumpNum[0], Data_Path_p->EdgeLineJumpNum[1]);
+		snprintf(buf, sizeof(buf), "Road:%s OFF:%d Det:%d",
+			road_name, ImageStatus.OFFLine, ImageStatus.Det_True);
 		putText(Img_Store_p->Img_Track, buf, Point(5, 18),
-			FONT_HERSHEY_COMPLEX, 0.6, Scalar(0, 255, 255), 1);
+			FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
+	}
+	{
+		char buf[64];
+		snprintf(buf, sizeof(buf), "RingFlag:%d Ring:%d Size:%d LL:%d RL:%d WL:%d",
+			ImageFlag.image_element_rings_flag, ImageFlag.image_element_rings,
+			ImageFlag.ring_big_small,
+			ImageStatus.Left_Line, ImageStatus.Right_Line, ImageStatus.WhiteLine);
+		putText(Img_Store_p->Img_Track, buf, Point(5, 36),
+			FONT_HERSHEY_COMPLEX, 0.4, Scalar(0, 255, 255), 1);
+	}
+	{
+		char buf[48];
+		snprintf(buf, sizeof(buf), "SErrPx:%d TBS:%.0f",
+			Data_Path_p->SteerErrorPx, Data_Path_p->TargetBaseSpeedMps);
+		putText(Img_Store_p->Img_Track, buf, Point(5, 54),
+			FONT_HERSHEY_COMPLEX, 0.4, Scalar(255, 255, 0), 1);
 	}
 	{
 		char buf[32];
-		snprintf(buf, sizeof(buf), "B:%d %d", Data_Path_p->BorderPointNum[0], Data_Path_p->BorderPointNum[1]);
-		putText(Img_Store_p->Img_Track, buf, Point(5, 36),
-			FONT_HERSHEY_COMPLEX, 0.6, Scalar(0, 255, 255), 1);
-	}
-	{
-		int right_x = Img_Store_p->Img_Track.cols - 200;
-		char buf[48];
-		snprintf(buf, sizeof(buf), "LA%02d RA%02d LC%02d RC%02d",
-			Data_Path_p->TrackJudgeScore[L_ACROSS_TRACK],
-			Data_Path_p->TrackJudgeScore[R_ACROSS_TRACK],
-			Data_Path_p->TrackJudgeScore[L_CIRCLE_TRACK],
-			Data_Path_p->TrackJudgeScore[R_CIRCLE_TRACK]);
-		putText(Img_Store_p->Img_Track, buf, Point(right_x, 18),
+		snprintf(buf, sizeof(buf), "TK:%d", static_cast<int>(Data_Path_p->Track_Kind));
+		putText(Img_Store_p->Img_Track, buf, Point(Img_Store_p->Img_Track.cols - 50, 18),
 			FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
-		// snprintf(buf, sizeof(buf), "/%d",
-		// 	Data_Path_p->JSON_TrackConfigData_v[0].TrackJudgeConfirmThreshold);
-		// putText(Img_Store_p->Img_Track, buf, Point(right_x, 36),
-		// 	FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
 	}
 }

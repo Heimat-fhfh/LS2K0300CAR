@@ -11,8 +11,10 @@
 #include "/home/fhfh/Work/LS2K0300CAR/include/common_program.h"
 #include "/home/fhfh/Work/LS2K0300CAR/include/camera_calibration.h"
 #include "/home/fhfh/Work/LS2K0300CAR/include/json.hpp"
+#include "/home/fhfh/Work/LS2K0300CAR/include/image_my_zf.h"
 
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p);
+void ApplyDifferentialControl(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, Judge *judge_p);
 
 Function_EN Function_EN_s;
 JSON_PIDConfigData JSON_PIDConfigData_s;
@@ -45,13 +47,18 @@ namespace
         std::vector<unsigned char> track_jpg;
         std::vector<unsigned char> all_jpg;
 
-        int servo_angle = 0;
-        int motor_speed = 0;
-        int inflection_left = 0;
-        int inflection_right = 0;
-        int bend_left = 0;
-        int bend_right = 0;
         int track_kind = 0;
+        int my_zf_road_type = 0;
+        int my_zf_det_true = 0;
+        int my_zf_off_line = 0;
+        int my_zf_ring_flag = 0;
+        int my_zf_rings = 0;
+        int my_zf_ring_size = 0;
+        int my_zf_left_line = 0;
+        int my_zf_right_line = 0;
+        int my_zf_white_line = 0;
+        int steer_error_px = 0;
+        double target_base_speed = 0.0;
     };
 
     bool ends_with_jpg(const std::string &name)
@@ -368,6 +375,7 @@ namespace
             // judge_.ServoDirAngle_Judge(&data_path_);
             // judge_.MotorSpeed_Judge(&img_store, &data_path_);
             // judge_.AngularVelocityTarget_Judge(&data_path_);
+            ApplyDifferentialControl(&img_store, &data_path_, &function_en_, &judge_);
             img_process_.ImgShow(&img_store, &data_path_, &function_en_);
 
             FrameResult current;
@@ -377,13 +385,18 @@ namespace
             current.track_jpg = encode_jpeg(img_store.Img_Track);
             current.all_jpg = encode_jpeg(img_store.Img_All);
 
-            current.servo_angle = data_path_.ServoAngle;
-            current.motor_speed = data_path_.TargetBaseSpeedMps;
-            current.inflection_left = data_path_.InflectionPointNum[0];
-            current.inflection_right = data_path_.InflectionPointNum[1];
-            current.bend_left = data_path_.BendPointNum[0];
-            current.bend_right = data_path_.BendPointNum[1];
             current.track_kind = static_cast<int>(data_path_.Track_Kind);
+            current.my_zf_road_type = static_cast<int>(ImageStatus.Road_type);
+            current.my_zf_det_true = ImageStatus.Det_True;
+            current.my_zf_off_line = ImageStatus.OFFLine;
+            current.my_zf_ring_flag = ImageFlag.image_element_rings_flag;
+            current.my_zf_rings = ImageFlag.image_element_rings;
+            current.my_zf_ring_size = ImageFlag.ring_big_small;
+            current.my_zf_left_line = ImageStatus.Left_Line;
+            current.my_zf_right_line = ImageStatus.Right_Line;
+            current.my_zf_white_line = ImageStatus.WhiteLine;
+            current.steer_error_px = data_path_.SteerErrorPx;
+            current.target_base_speed = data_path_.TargetBaseSpeedMps;
 
             cache_ = current;
             cache_idx_ = idx;
@@ -543,12 +556,15 @@ int main(int argc, char **argv)
     json stat;
     stat["file"] = processor.frame_name(idx);
     stat["track_kind"] = frame.track_kind;
-    stat["servo_angle"] = frame.servo_angle;
-    stat["motor_speed"] = frame.motor_speed;
-    stat["inflection_left"] = frame.inflection_left;
-    stat["inflection_right"] = frame.inflection_right;
-    stat["bend_left"] = frame.bend_left;
-    stat["bend_right"] = frame.bend_right;
+    stat["my_zf_road_type"] = frame.my_zf_road_type;
+    stat["my_zf_det_true"] = frame.my_zf_det_true;
+    stat["my_zf_off_line"] = frame.my_zf_off_line;
+    stat["my_zf_ring_flag"] = frame.my_zf_ring_flag;
+    stat["my_zf_rings"] = frame.my_zf_rings;
+    stat["my_zf_ring_size"] = frame.my_zf_ring_size;
+    stat["my_zf_white_line"] = frame.my_zf_white_line;
+    stat["steer_error_px"] = frame.steer_error_px;
+    stat["target_base_speed"] = frame.target_base_speed;
     res.set_content(stat.dump(), "application/json; charset=UTF-8"); });
 
     server.Get("/api/image", [&](const httplib::Request &req, httplib::Response &res)

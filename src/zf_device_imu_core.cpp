@@ -161,7 +161,7 @@ bool IMUDevice::initialize()
         return false;
     }
     
-    printf("Detected IMU device: %s (type=%d)\n", device_name, device_type_);
+    printf("[IMU] \u68c0\u6d4b\u5230 %s\n", device_name);
     
     // 步骤3：打开传感器文件
     if (!open_sensor_files()) {

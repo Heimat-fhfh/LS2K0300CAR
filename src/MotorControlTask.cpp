@@ -86,7 +86,7 @@ bool MotorControlTask::start() {
         printf("Warning: Failed to set realtime priority for motor control thread\n");
     }
 
-    printf("Motor control task started with period %.3f s\n", controlPeriod);
+    printf("[电机] 控制任务启动, 周期 %.3fs\n", controlPeriod);
     return true;
 }
 
@@ -163,7 +163,33 @@ void MotorControlTask::setMotorMaxDuty(double duty) {
         return;
     }
     motorMaxDuty = duty;
-    printf("Motor max duty updated to: %.3f\n", duty);
+
+}
+
+void MotorControlTask::setCurvatureSpeedGain(double gain) {
+    if (gain < 0.0 || gain > 1.0) {
+        printf("Warning: Invalid curvature speed gain: %.3f, clamped to [0,1]\n", gain);
+        gain = std::max(0.0, std::min(1.0, gain));
+    }
+    curvatureSpeedGain.store(gain);
+    printf("Curvature speed gain set: %.3f\n", gain);
+}
+
+double MotorControlTask::getCurvatureSpeedGain() const {
+    return curvatureSpeedGain.load();
+}
+
+void MotorControlTask::setCurvatureSpeedMin(double minSpeed) {
+    if (minSpeed < 0.0 || minSpeed > 1.0) {
+        printf("Warning: Invalid curvature speed min: %.3f, clamped to [0,1]\n", minSpeed);
+        minSpeed = std::max(0.0, std::min(1.0, minSpeed));
+    }
+    curvatureSpeedMin.store(minSpeed);
+    printf("Curvature speed min set: %.3f\n", minSpeed);
+}
+
+double MotorControlTask::getCurvatureSpeedMin() const {
+    return curvatureSpeedMin.load();
 }
 
 // ==================== 主控制循环 ====================
@@ -195,7 +221,7 @@ void MotorControlTask::run() {
 
     int intervalCounter = 0;
 
-    printf("Motor control task initialized (cascade differential + incremental PID speed)\n");
+
     leftRampLimiter.reset(0.0);
     rightRampLimiter.reset(0.0);
     diffOutputRampLimiter.reset(0.0);
@@ -353,6 +379,20 @@ void MotorControlTask::run() {
             // ============================================================
             if (lowPassFilterEnabled.load()) {
                 currentError = steerErrorFilter.apply(currentError);
+            }
+
+            // ============================================================
+            // 6.5 曲率自适应降速：弯越大，目标速度越低
+            //     实现摩擦圆约束：横向力大时降低纵向力，防止轮胎突破抓地力极限
+            // ============================================================
+            {
+                double cg = curvatureSpeedGain.load();
+                if (cg > 0.0) {
+                    double turnFactor = 1.0 - cg * std::abs(currentError);
+                    double minFactor = curvatureSpeedMin.load();
+                    if (turnFactor < minFactor) turnFactor = minFactor;
+                    desiredSpeed *= turnFactor;
+                }
             }
 
             // ============================================================
@@ -584,8 +624,7 @@ void MotorControlTask::setSpeedFilterTimeConstant(double tau) {
     leftSpeedFilter.setTimeConstant(tau);
     rightSpeedFilter.setTimeConstant(tau);
     speedFilterTau.store(tau);
-    printf("Speed low-pass filter time constant set to: %.4f s (alpha=%.4f)\n",
-           tau, leftSpeedFilter.getAlpha());
+
 }
 
 void MotorControlTask::setAngularFilterTimeConstant(double tau) {
@@ -595,8 +634,7 @@ void MotorControlTask::setAngularFilterTimeConstant(double tau) {
     }
     angularVelocityFilter.setTimeConstant(tau);
     angularFilterTau.store(tau);
-    printf("Angular velocity low-pass filter time constant set to: %.4f s (alpha=%.4f)\n",
-           tau, angularVelocityFilter.getAlpha());
+
 }
 
 void MotorControlTask::resetFilters(double leftValue, double rightValue, double angularValue) {
@@ -613,8 +651,7 @@ void MotorControlTask::setSteerErrorFilterTimeConstant(double tau) {
     }
     steerErrorFilter.setTimeConstant(tau);
     steerFilterTau.store(tau);
-    printf("Steer error low-pass filter time constant set to: %.4f s (alpha=%.4f)\n",
-           tau, steerErrorFilter.getAlpha());
+
 }
 
 // ==================== 斜坡控制 API ====================
@@ -645,7 +682,7 @@ void MotorControlTask::setRampRates(double accelRate, double decelRate) {
     leftRampLimiter.setDecelRate(decelRate);
     rightRampLimiter.setAccelRate(accelRate);
     rightRampLimiter.setDecelRate(decelRate);
-    printf("Ramp rates set: accel=%.1f %%/s, decel=%.1f %%/s\n", accelRate, decelRate);
+
 }
 
 void MotorControlTask::resetRampState() {
@@ -721,7 +758,7 @@ void MotorControlTask::setCollisionImuJerkThreshold(double threshold) {
         return;
     }
     collisionImuJerkThreshold.store(threshold);
-    printf("Collision IMU jerk threshold set to: %.2f g\n", threshold);
+
 }
 
 void MotorControlTask::setCollisionStallThresholds(double dutyThreshold, double speedThreshold, int cycles) {
@@ -733,19 +770,18 @@ void MotorControlTask::setCollisionStallThresholds(double dutyThreshold, double 
     collisionStallSpeedThreshold.store(speedThreshold);
     collisionStallCycles.store(cycles);
     stallCounter_ = 0;
-    printf("Collision stall: duty>%.2f, speed<%.3f m/s, cycles=%d\n",
-           dutyThreshold, speedThreshold, cycles);
+
 }
 
 void MotorControlTask::setCollisionKeyConfig(int resetKeyIndex, int bumperKeyIndex) {
     collisionResetKey.store(resetKeyIndex);
     collisionBumperKey.store(bumperKeyIndex);
-    printf("Collision keys: reset=KEY%d, bumper=KEY%d\n", resetKeyIndex, bumperKeyIndex);
+
 }
 
 void MotorControlTask::configureCollisionGpio(const std::array<std::string, 4>& keyPaths) {
     collisionKeyPaths_ = keyPaths;
-    printf("Collision GPIO paths configured\n");
+
 }
 
 void MotorControlTask::resetCollisionState() {

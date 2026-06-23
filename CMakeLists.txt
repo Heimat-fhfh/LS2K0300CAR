@@ -93,6 +93,7 @@ if (NOT USE_EDGE_TOOLCHAIN)
     set(IMAGE_WEB_TEST_SRC
         ${PROJECT_SOURCE_DIR}/src/libimage_process.cpp
         ${PROJECT_SOURCE_DIR}/src/main_impl.cpp
+        ${PROJECT_SOURCE_DIR}/src/image_my_zf.cpp
         ${PROJECT_SOURCE_DIR}/src/camera_calibration.cpp
         ${PROJECT_SOURCE_DIR}/src/vision_transform.cpp
         ${PROJECT_SOURCE_DIR}/src/libdata_process.cpp

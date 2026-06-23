@@ -146,6 +146,8 @@ typedef struct JSON_VehicleConfigData
     bool diffOutputRampEnable;       // 外环PD输出斜坡使能
     double diffOutputRampAccelRate;  // 外环PD输出角加速度限幅 (rad/s²)
     double diffOutputRampDecelRate;  // 外环PD输出角减速度限幅 (rad/s²)
+    double curvatureSpeedGain;       // 曲率自适应降速增益 (0=禁用, 0.3~0.5=推荐)
+    double curvatureSpeedMin;        // 曲率自适应降速下限 (目标速度的最小比例, 推荐0.1)
 } JSON_VehicleConfigData;
 
 
@@ -162,6 +164,8 @@ typedef struct JSON_FunctionConfigData
     bool DataPrint_EN;  // 数据显示使能
     bool AcrossIdentify_EN;    // 十字特征点识别使能
     bool CircleIdentify_EN;    // 圆环特征点识别使能
+    bool IPS200_Show_EN;       // IPS200 屏幕显示使能（my_zf 80x60）
+    bool UDP_Image_Upload_EN;  // UDP 图像上传使能
     float cap_exposure;   // 摄像头曝光
     int exposure_auto;   // 摄像头曝光
     int imgshownum;   // 图像显示序号
@@ -215,6 +219,7 @@ typedef struct JSON_TrackConfigData
     int CircleBorderActiveMin = 90; // 圆环判定：活跃侧最小边缘区域点数量
     int CircleJudgeInflectionMax = 1;  // 圆环判定：安静侧最大拐点数量
     int CircleJudgePartialScore = 4;   // 圆环判定：4/5条件满足每帧得分
+    int CircleMaxFrames = 300;         // 圆环最大帧数限制
 
     int CrossJumpPrimary = 2;       // 十字判定：主侧跳变点数量
     int CrossJumpSecondaryMin = 1;  // 十字判定：副侧最小跳变点数量

@@ -1,10 +1,12 @@
 #include "display_show.h"
+#include "image_my_zf.h"
 #include <sys/socket.h>
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cstdio>
 
 /**
  * @brief 将OpenCV的Mat图像显示到IPS200屏幕上
@@ -109,4 +111,92 @@ void display_ip_address(uint16 x, uint16 y) {
     
     // 在屏幕上显示
     ips200_show_string(x, y, display_str.c_str());
+}
+
+#define SCALE_PX 3
+#define IMG_OFFSET_X 0
+#define IMG_OFFSET_Y 0
+
+void displayMyZFOnIPS200() {
+    uint8_t off_line = ImageStatus.OFFLine;
+
+    // draw 80x60 binary image at 3x scale
+    for (int i = 0; i < 60; i++) {
+        for (int j = 0; j < 80; j++) {
+            uint16_t color = Pixle[i][j] ? RGB565_WHITE : RGB565_BLACK;
+            for (int dy = 0; dy < SCALE_PX; dy++) {
+                for (int dx = 0; dx < SCALE_PX; dx++) {
+                    ips200_draw_point(IMG_OFFSET_X + j * SCALE_PX + dx,
+                                      IMG_OFFSET_Y + i * SCALE_PX + dy, color);
+                }
+            }
+        }
+    }
+
+    // draw left border (red), right border (green), center (black) - 2x2 blocks
+    for (int i = off_line; i < 60; i++) {
+        int base_y = IMG_OFFSET_Y + i * SCALE_PX;
+        for (int dy = 0; dy < 2; dy++) {
+            int y = base_y + dy;
+            if (y < 0 || y >= 320) continue;
+
+            int left_x = IMG_OFFSET_X + ImageDeal[i].LeftBorder * SCALE_PX;
+            for (int dx = 0; dx < 2; dx++) {
+                int lx = left_x + dx;
+                if (lx >= 0 && lx < 240) ips200_draw_point(lx, y, RGB565_RED);
+            }
+
+            int right_x = IMG_OFFSET_X + ImageDeal[i].RightBorder * SCALE_PX;
+            for (int dx = 0; dx < 2; dx++) {
+                int rx = right_x + dx;
+                if (rx >= 0 && rx < 240) ips200_draw_point(rx, y, RGB565_GREEN);
+            }
+
+            int center_x = IMG_OFFSET_X + ImageDeal[i].Center * SCALE_PX;
+            for (int dx = 0; dx < 2; dx++) {
+                int cx = center_x + dx;
+                if (cx >= 0 && cx < 240) ips200_draw_point(cx, y, RGB565_BLACK);
+            }
+        }
+    }
+
+    // draw enlarged forward point (5x5 cross) at TowPoint_True row
+    {
+        int tp = ImageStatus.TowPoint_True;
+        if (tp >= off_line && tp < 60) {
+            int fx = IMG_OFFSET_X + ImageDeal[tp].Center * SCALE_PX + 1;
+            int fy = IMG_OFFSET_Y + tp * SCALE_PX + 1;
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dx = -2; dx <= 2; dx++) {
+                    if (abs(dx) == abs(dy) || dx == 0 || dy == 0) {
+                        int px = fx + dx, py = fy + dy;
+                        if (px >= 0 && px < 240 && py >= 0 && py < 320)
+                            ips200_draw_point(px, py, RGB565_BLUE);
+                    }
+                }
+            }
+        }
+    }
+
+    // text info below image (y >= 180)
+    char buf[64];
+    int text_y = IMG_OFFSET_Y + 60 * SCALE_PX + 2;  // 182
+
+    float norm_dev = (float)((int)ImageStatus.Det_True - 40) / 40.0f;
+    const char* road_names[] = {"Normol","Straight","Cross","Ramp","LCirque","RCirque","ForkIn","ForkOut","BarnOut","BarnIn","CrossT"};
+    int road_idx = (int)ImageStatus.Road_type;
+    if (road_idx < 0 || road_idx > 10) road_idx = 0;
+
+    snprintf(buf, sizeof(buf), "Det:%d NDev:%.2f", ImageStatus.Det_True, norm_dev);
+    ips200_show_string(0, text_y, buf); text_y += 16;
+
+    snprintf(buf, sizeof(buf), "Road:%s", road_names[road_idx]);
+    ips200_show_string(0, text_y, buf); text_y += 16;
+
+    snprintf(buf, sizeof(buf), "Ring:%d Flag:%d", ImageFlag.image_element_rings, ImageFlag.image_element_rings_flag);
+    ips200_show_string(0, text_y, buf); text_y += 16;
+
+    snprintf(buf, sizeof(buf), "OFF:%d  L_L:%d R_L:%d W_L:%d",
+             ImageStatus.OFFLine, ImageStatus.Left_Line, ImageStatus.Right_Line, ImageStatus.WhiteLine);
+    ips200_show_string(0, text_y, buf);
 }

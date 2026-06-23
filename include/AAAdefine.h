@@ -1,11 +1,11 @@
 #pragma once
 
-#define CAMERA_W 320
-#define CAMERA_H 240
+#define CAMERA_W 160
+#define CAMERA_H 120
 
-#define image_w	320	        //图像宽度
+#define image_w	160	        //图像宽度
 #define img_resize_h    0
-#define image_h	(240-img_resize_h)	//图像高度
+#define image_h	(120-img_resize_h)	//图像高度
 
 #define white_pixel	255
 #define black_pixel	0

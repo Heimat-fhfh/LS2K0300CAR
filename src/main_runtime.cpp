@@ -441,6 +441,9 @@ bool StartMotorControlTask()
     motorTask->setDiffOutputRampRates(JSON_VehicleConfigData_s.diffOutputRampAccelRate,
                                       JSON_VehicleConfigData_s.diffOutputRampDecelRate);
 
+    motorTask->setCurvatureSpeedGain(JSON_VehicleConfigData_s.curvatureSpeedGain);
+    motorTask->setCurvatureSpeedMin(JSON_VehicleConfigData_s.curvatureSpeedMin);
+
     motorTask->start();
     return true;
 }
@@ -482,7 +485,6 @@ void argument_config(void)
         }
         else
         {
-            std::cout << "[Calibration] 图像标定使能关闭: " << calibrationJsonPath << std::endl;
         }
 
         JSON_DifferentialPDConfigData_s = Data_Path_s.JSON_DifferentialPDConfigData_v[0];
@@ -588,7 +590,7 @@ int main_init_task()
 
     if (udp_dev.init(SERVER_IP, PORT) == 0)
     {
-        printf("tcp_client ok\r\n");
+        printf("[UDP] \u521d\u59cb\u5316\u6210\u529f, %s:%d\n", SERVER_IP, PORT);
     }
     else
     {
@@ -605,7 +607,7 @@ int main_init_task()
         return EXIT_FAILURE;
     }
 
-    printf("IMU device initialized successfully\n");
+    printf("[IMU] \u521d\u59cb\u5316\u6210\u529f\n");
     return EXIT_SUCCESS;
 }
 
@@ -825,7 +827,6 @@ int main_test_task(const MainTestConfig& test_config)
         }
     }
 
-    std::cout << "自检完成..." << std::endl;
     motorTask->stop();
     return EXIT_SUCCESS;
 }

@@ -1,5 +1,6 @@
 #include "main.hpp"
 #include "camera_calibration.h"
+#include "image_my_zf.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -7,11 +8,23 @@ using namespace std::this_thread;
 
 void RunCameraCatchTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
 {
-    // imgProcess.ImgCompress(Img_Store_p->Img_Color, false);   // 图像压缩
-    imgProcess_p->imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p); // 图像预处理
-    imgSearch_l_r(Img_Store_p,Data_Path_p);   // 边线八邻域寻线
-    // judge_p->TransitionScanDetect(Img_Store_p, Data_Path_p, Function_EN_p); // 独立黑块检测
-    judge_p->Search_Data_Analysis(Img_Store_p, Data_Path_p, Function_EN_p);
+    // 同步元素识别使能标志到 my_zf
+    if (!Function_EN_p->JSON_FunctionConfigData_v.empty()) {
+        g_circle_identify_en = Function_EN_p->JSON_FunctionConfigData_v[0].CircleIdentify_EN;
+        g_across_identify_en = Function_EN_p->JSON_FunctionConfigData_v[0].AcrossIdentify_EN;
+    }
+
+    imgProcess_p->imgPreProc(Img_Store_p,Data_Path_p,Function_EN_p);
+
+    uint8_t off_line = ImageStatus.OFFLine;
+    for (int row = off_line; row < 60 && row < image_h; row++) {
+        Data_Path_p->l_border[row] = ImageDeal[row].LeftBorder;
+        Data_Path_p->r_border[row] = ImageDeal[row].RightBorder;
+        Data_Path_p->center_line[row] = ImageDeal[row].Center;
+    }
+    Data_Path_p->search_print_h_max = off_line;
+    if (Data_Path_p->search_print_h_max > image_h - 1)
+        Data_Path_p->search_print_h_max = image_h - 1;
 }
 
 void ProcessAlgo_CircleTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
@@ -249,13 +262,12 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
 /**
  * @brief 处理每帧的赛道任务
  *
- * 根据当前循环类型调度不同的赛道处理任务。
- * 这里是主状态机的执行入口：
- * 1. CAMERA_CATCH_LOOP 负责采集后的基础图像处理
- * 2. JUDGE_LOOP 负责识别当前赛道并更新下一阶段状态
- * 3. COMMON_TRACK_LOOP 负责普通赛道的方向/速度计算
- * 4. L_CIRCLE_TRACK_LOOP / R_CIRCLE_TRACK_LOOP 负责圆环补线
- * 5. RIGHT_ACROSS_TRACK_LOOP 负责十字赛道处理
+ * 使用 my_zf 图像处理管线完成全部视觉处理：
+ * 1. my_zf 的 ImageProcess_my_zf() 内部已完成二值化、寻线、元素检测与处理。
+ * 2. 此处仅将 my_zf 的 Road_type 映射到当前 TrackKind 枚举供显示用。
+ * 3. 控制偏差由 my_zf 的 Det_True 提供，在 ApplyDifferentialControl 中使用。
+ * 4. 圆环状态帧数限制：超过最大帧数自动清除圆环状态。
+ * 5. 图像丢线帧数统计：供出赛道保护使用。
  *
  * @param Img_Store_p 图像存储指针
  * @param Data_Path_p 路径数据指针
@@ -264,35 +276,62 @@ void RunAcrossTrackTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
  */
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
 {
-    if (Data_Path_p->Loop_Kind == CAMERA_CATCH_LOOP) {
-        // 图像循环：负责采集后的基础图像处理和赛道状态更新。
-        RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
-        Data_Path_p->Loop_Kind = JUDGE_LOOP;
+    static const int RING_MAX_FRAMES = 300;
+    static const int OFFLINE_ROW_THRESHOLD = 55;
+    static int ring_frame_count = 0;
+    static int offline_frame_count = 0;
+
+    JSON_TrackConfigData cfg = Data_Path_p->JSON_TrackConfigData_v[0];
+
+    RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
+
+    // 圆环帧数限制
+    if (ImageFlag.image_element_rings_flag != 0) {
+        ring_frame_count++;
+        if (ring_frame_count > cfg.CircleMaxFrames) {
+            ImageFlag.image_element_rings_flag = 0;
+            ImageFlag.image_element_rings = 0;
+            ImageFlag.ring_big_small = 0;
+            ImageStatus.Road_type = Normol;
+            ring_frame_count = 0;
+        }
+    } else {
+        ring_frame_count = 0;
     }
 
-    if (Data_Path_p->Loop_Kind == JUDGE_LOOP) {
-        // 赛道判断循环：根据当前图像处理结果判断赛道类型，并切换到对应的赛道处理循环。
-        // Data_Path_p->Track_Kind = STRIGHT_TRACK;
-        // Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
-        judge_p->TrackKind_Judge(Img_Store_p, Data_Path_p, Function_EN_p);
+    // 丢线帧数统计
+    if (ImageStatus.OFFLine >= OFFLINE_ROW_THRESHOLD) {
+        offline_frame_count++;
+    } else {
+        offline_frame_count = 0;
     }
 
-    if (Data_Path_p->Loop_Kind == COMMON_TRACK_LOOP) {
-        // 普通赛道循环：输出常规路径控制结果，并立即回到图像循环。
-        Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
+    // 将 my_zf 的 Road_type 映射到当前 TrackKind
+    switch (ImageStatus.Road_type) {
+        case LeftCirque:
+            Data_Path_p->Track_Kind = L_CIRCLE_TRACK;
+            Data_Path_p->Temp_Track_Kind = L_CIRCLE_TRACK;
+            break;
+        case RightCirque:
+            Data_Path_p->Track_Kind = R_CIRCLE_TRACK;
+            Data_Path_p->Temp_Track_Kind = R_CIRCLE_TRACK;
+            break;
+        case Cross:
+        case Cross_ture:
+            Data_Path_p->Track_Kind = L_ACROSS_TRACK;
+            Data_Path_p->Temp_Track_Kind = L_ACROSS_TRACK;
+            break;
+        case Straight:
+            Data_Path_p->Track_Kind = STRIGHT_TRACK;
+            Data_Path_p->Temp_Track_Kind = STRIGHT_TRACK;
+            break;
+        default:
+            Data_Path_p->Track_Kind = STRIGHT_TRACK;
+            Data_Path_p->Temp_Track_Kind = STRIGHT_TRACK;
+            break;
     }
 
-    if (Data_Path_p->Loop_Kind == CIRCLE_TRACK_LOOP) {
-        // 圆环循环：根据当前 Circle_Track_Step 执行对应补线策略。
-        Data_Path_p->Loop_Kind = CAMERA_CATCH_LOOP;
-        RunCircleTrackTask(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
-    }
-
-    if (Data_Path_p->Loop_Kind == ACROSS_TRACK_LOOP) {
-        // 十字循环：执行十字赛道的特殊处理逻辑，然后回到图像循环。
-        RunAcrossTrackTask(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
-    }
-
+    Data_Path_p->Loop_Kind = COMMON_TRACK_LOOP;
 }
 
 /**
@@ -308,12 +347,12 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
  */
 void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
 {
+    // 使用 my_zf 的加权偏差 Det_True（80宽度空间），减法归一化
+    // Det_True 范围 [0, 79]，偏差 = Det_True - 40，main.cpp 中除以 40 得到 [-1, 1]
+    Data_Path_p->SteerErrorPx = static_cast<int>(ImageStatus.Det_True) - 40;
+
     JSON_TrackConfigData JSON_TrackConfigData = Data_Path_p -> JSON_TrackConfigData_v[0];
     Data_Path_p->forword_line_h = std::max(image_h-JSON_TrackConfigData.Default_Forward, int(Data_Path_p->search_print_h_max));
-    
-    Data_Path_p->SteerErrorPx = (Data_Path_p->center_line[Data_Path_p->forword_line_h] - image_w / 2) 
-                + JSON_TrackConfigData.ForwardHeightCompensationPxPerRow * 
-                (Data_Path_p->forword_line_h-(image_h-JSON_TrackConfigData.Default_Forward));
 
     judge_p->MotorSpeed_Judge(Img_Store_p,Data_Path_p);
 }
