@@ -1,10 +1,10 @@
 #define MAKE_MAIN_CPP
 
-#include "main.hpp"
-#include "main_runtime.hpp"
-#include "AAAtools.h"
-#include "image_my_zf.h"
-#include "seekfree_udp.h"
+#include "common/main.hpp"
+#include "common/main_runtime.hpp"
+#include "common/AAAtools.h"
+#include "vision/image_my_zf.h"
+#include "network/seekfree_udp.h"
 
 
 using namespace std;
@@ -86,32 +86,15 @@ int main(int argc, char** argv)
     auto t_fps_begin = std::chrono::steady_clock::now();
     while (g_running.load() && Function_EN_s.Game_EN)
     {
-        if (!tempCapture.handleKeyEvent())
-        {
-            break;
-        }
+        if (!tempCapture.handleKeyEvent()){break;}
 
         CameraImgGet(&Img_Store_s);
 
-        if (!g_running.load())
-        {
-            printf("退出信号已接收，正在停止摄像头捕获线程...\n");
-            break;
-        }
-
-        if (Img_Store_s.Img_Color.empty())
-        {
-            printf("Warning: Captured image is empty, skipping this frame.\n");
-            continue;
-        }
+        if (!g_running.load()){printf("退出信号已接收，正在停止摄像头捕获线程...\n");break;}
+        if (Img_Store_s.Img_Color.empty()){printf("Warning: Captured image is empty, skipping this frame.\n");continue;}
 
         tempCapture.saveFrameIfNeeded(Img_Store_s.Img_Color);
 
-        // 69-75% , 提升了 50% 左右
-        // 独立黑块检测占用5%左右
-        // 数据分析占用 64% ，降低了 10% 左右
-        // 八邻域占用 63% 几乎没有占用
-        // 主要占用为图像预处理
         FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
         frame_count++;
 
@@ -268,12 +251,6 @@ int main(int argc, char** argv)
                                     right_x_buf, right_y_buf,
                                     max_dot);
         }
-
-        if (!Function_EN_s.Control_EN)
-        {
-            continue;
-        }
-
 
     }
 

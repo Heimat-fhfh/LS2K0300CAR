@@ -3,18 +3,26 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/include/**",
-                "/usr/local/include/**",
-                // "/home/fhfh/Work/LS2K0300CAR/ls2k0300_linux_4.19/include/**",
-                // "/home/fhfh/Work/LS2K0300CAR/ls2k0300_linux_4.19/arch/loongarch/include/**",
-                // "/home/fhfh/Work/LS2K0300CAR/ls2k0300_linux_4.19/arch/loongarch/include/generated/**",
-                "/home/fhfh/Work/LS2K0300CAR/third_party/**"
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/third_party/cpp-httplib-master",
+                "${workspaceFolder}/opencv_4_10_build/include/opencv4",
+                "/usr/include",
+                "/usr/local/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/g++",
             "cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "linux-gcc-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/include",
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/third_party/cpp-httplib-master"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

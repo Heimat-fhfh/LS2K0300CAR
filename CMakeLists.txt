@@ -38,8 +38,8 @@ else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall")
 endif()
 
-# 源文件收集
-file(GLOB SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
+# 源文件收集（递归所有子目录）
+file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 # 头文件路径
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -91,17 +91,18 @@ target_link_libraries(main PUBLIC
 # 上位机图像处理离线测试（WebUI展示），仅非边缘构建时生成
 if (NOT USE_EDGE_TOOLCHAIN)
     set(IMAGE_WEB_TEST_SRC
-        ${PROJECT_SOURCE_DIR}/src/libimage_process.cpp
-        ${PROJECT_SOURCE_DIR}/src/main_impl.cpp
-        ${PROJECT_SOURCE_DIR}/src/image_my_zf.cpp
-        ${PROJECT_SOURCE_DIR}/src/camera_calibration.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision_transform.cpp
-        ${PROJECT_SOURCE_DIR}/src/libdata_process.cpp
-        ${PROJECT_SOURCE_DIR}/src/path_side_search.cpp
-        ${PROJECT_SOURCE_DIR}/src/track_element_scan.cpp
-        ${PROJECT_SOURCE_DIR}/src/path_across.cpp
-        ${PROJECT_SOURCE_DIR}/src/path_circle.cpp
-        ${PROJECT_SOURCE_DIR}/src/path_refactor.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/libimage_process.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/image_display.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/main_impl.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/image_my_zf.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/vision_rings.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/camera_calibration.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/libdata_process.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/path_side_search.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/track_element_scan.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/path_across.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/path_circle.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/path_refactor.cpp
     )
 
     add_executable(image_web_test

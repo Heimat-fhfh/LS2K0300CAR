@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "/home/fhfh/Work/LS2K0300CAR/third_party/cpp-httplib-master/httplib.h"
-#include "/home/fhfh/Work/LS2K0300CAR/include/common_program.h"
-#include "/home/fhfh/Work/LS2K0300CAR/include/camera_calibration.h"
-#include "/home/fhfh/Work/LS2K0300CAR/include/json.hpp"
-#include "/home/fhfh/Work/LS2K0300CAR/include/image_my_zf.h"
+#include "common/common_program.h"
+#include "vision/camera_calibration.h"
+#include "common/json.hpp"
+#include "vision/image_my_zf.h"
 
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p);
 void ApplyDifferentialControl(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, Judge *judge_p);
