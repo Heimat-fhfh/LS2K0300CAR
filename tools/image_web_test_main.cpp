@@ -9,23 +9,18 @@
 
 #include "/home/fhfh/Work/LS2K0300CAR/third_party/cpp-httplib-master/httplib.h"
 #include "common/common_program.h"
-#include "vision/camera_calibration.h"
 #include "common/json.hpp"
-#include "vision/image_my_zf.h"
+#include "vision/Image_Process.h"
 
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p);
 void ApplyDifferentialControl(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, Judge *judge_p);
 
 Function_EN Function_EN_s;
-JSON_PIDConfigData JSON_PIDConfigData_s;
 Data_Path Data_Path_s;
 SYNC Sync;
 bool g_runtime_config_ok = false;
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-
-bool g_calibration_enabled = false;
-CameraCalibrationCorrector g_calibration_corrector;
 
 namespace
 {
@@ -112,103 +107,22 @@ namespace
         JSON_FunctionConfigData function_cfg{};
         JSON_TrackConfigData track_cfg{};
 
-        function_cfg.Uart_EN = cfg.at("UART_EN");
-        function_cfg.ImgCompress_EN = cfg.at("IMG_COMPRESS_EN");
         function_cfg.Camera_EN = CameraKind(cfg.at("CAMERA_EN"));
         function_cfg.ImageSave_EN = false;
-        function_cfg.VideoShow_EN = false;
-        function_cfg.DataPrint_EN = false;
         function_cfg.AcrossIdentify_EN = cfg.at("ACROSS_IDENTIFY_EN");
         function_cfg.CircleIdentify_EN = cfg.at("CIRCLE_IDENTIFY_EN");
 
         track_cfg.Track_width = cfg.at("Track_width");
 
-        track_cfg.Forward = cfg.at("FORWARD");
-        track_cfg.Default_Forward = cfg.at("FORWARD");
-        track_cfg.ForwardHeightCompensationPxPerRow = cfg.at("FORWARD_HEIGHT_COMPENSATION_PX_PER_ROW");
         track_cfg.Path_Search_Start = cfg.at("PATH_SEARCH_START");
         track_cfg.Path_Search_End = cfg.at("PATH_SEARCH_END");
-        track_cfg.Side_Search_Start = cfg.at("SIDE_SEARCH_START");
         track_cfg.Side_Search_End = cfg.at("SIDE_SEARCH_END");
 
-        track_cfg.InflectionPointVectorDistance = cfg.at("POINT_DISTANCE");
-        track_cfg.BendPointVectorDistance = cfg.at("POINT_DISTANCE");
-        track_cfg.BendPointNum[0] = cfg.at("LITTLE_ANGLE_BEND_POINT_NUM");
-        track_cfg.BendPointNum[1] = cfg.at("BIG_ANGLE_BEND_POINT_NUM");
-        track_cfg.InflectionPointIdentifyAngle[0] = cfg.at("MIN_INFLECTION_POINT_ANGLE");
-        track_cfg.InflectionPointIdentifyAngle[1] = cfg.at("MAX_INFLECTION_POINT_ANGLE");
-        track_cfg.BendPointIdentifyAngle[0] = cfg.at("MIN_BEND_POINT_ANGLE");
-        track_cfg.BendPointIdentifyAngle[1] = cfg.at("MAX_BEND_POINT_ANGLE");
+        track_cfg.CommonMotorSpeed = cfg.at("STRIGHT_TRACK_MOTOR_SPEED");
 
-        track_cfg.TrackWidth = cfg.at("TRACK_WIDTH");
-        track_cfg.TrackKindCountThreshold = cfg.at("TRACK_KIND_COUNT_THRESHOLD");
-        track_cfg.CircleOutWidth = cfg.at("CIRCLE_OUT_WIDTH");
-        track_cfg.CommonMotorSpeed[0] = cfg.at("STRIGHT_TRACK_MOTOR_SPEED");
-        track_cfg.CommonMotorSpeed[1] = cfg.at("LITTLE_ANGLE_BEND_TRACK_MOTOR_SPEED");
-        track_cfg.CommonMotorSpeed[2] = cfg.at("BIG_ANGLE_BEND_TRACK_MOTOR_SPEED");
-        track_cfg.CommonMotorSpeed[3] = cfg.at("ACROSS_TRACK_MOTOR_SPEED");
-        track_cfg.CommonMotorSpeed[4] = cfg.at("CIRCLE_TRACK_MOTOR_SPEED_OUTSIDE");
-        track_cfg.CommonMotorSpeed[5] = cfg.at("CIRCLE_TRACK_MOTOR_SPEED_INSIDE");
-        track_cfg.BridgeZoneMotorSpeed = cfg.at("BRIDGE_ZONE_MOTOR_SPEED");
-        track_cfg.CrosswalkZoneMotorSpeed = cfg.at("CROSSWALK_ZONE_MOTOR_SPEED_STOP_PREPARE");
-        track_cfg.Circle_In_Prepare_Time = cfg.at("CIRCLE_IN_PREPARE_TIME");
+        track_cfg.TransitionMinArea = cfg.at("TRANSITION_MIN_AREA");
 
-        if (cfg.contains("TRANSITION_MIN_AREA"))
-        {
-            track_cfg.TransitionMinArea = cfg.at("TRANSITION_MIN_AREA");
-        }
-
-        if (cfg.contains("CIRCLE_JUMP_MAX")) {
-            track_cfg.CircleJumpMax = cfg.at("CIRCLE_JUMP_MAX");
-        }
-        if (cfg.contains("CIRCLE_BORDER_QUIET_MAX")) {
-            track_cfg.CircleBorderQuietMax = cfg.at("CIRCLE_BORDER_QUIET_MAX");
-        }
-        if (cfg.contains("CIRCLE_JUMP_EXPECTED")) {
-            track_cfg.CircleJumpExpected = cfg.at("CIRCLE_JUMP_EXPECTED");
-        }
-        if (cfg.contains("CIRCLE_BORDER_ACTIVE_MIN")) {
-            track_cfg.CircleBorderActiveMin = cfg.at("CIRCLE_BORDER_ACTIVE_MIN");
-        }
-        if (cfg.contains("CIRCLE_JUDGE_INFLECTION_MAX")) {
-            track_cfg.CircleJudgeInflectionMax = cfg.at("CIRCLE_JUDGE_INFLECTION_MAX");
-        }
-        if (cfg.contains("CIRCLE_JUDGE_PARTIAL_SCORE")) {
-            track_cfg.CircleJudgePartialScore = cfg.at("CIRCLE_JUDGE_PARTIAL_SCORE");
-        }
-        if (cfg.contains("CROSS_JUMP_PRIMARY")) {
-            track_cfg.CrossJumpPrimary = cfg.at("CROSS_JUMP_PRIMARY");
-        }
-        if (cfg.contains("CROSS_JUMP_SECONDARY_MIN")) {
-            track_cfg.CrossJumpSecondaryMin = cfg.at("CROSS_JUMP_SECONDARY_MIN");
-        }
-        if (cfg.contains("CROSS_JUMP_SECONDARY_MAX")) {
-            track_cfg.CrossJumpSecondaryMax = cfg.at("CROSS_JUMP_SECONDARY_MAX");
-        }
-        if (cfg.contains("CROSS_BORDER_MIN")) {
-            track_cfg.CrossBorderMin = cfg.at("CROSS_BORDER_MIN");
-        }
-        if (cfg.contains("ACROSS_BORDER_PREPARE_MAX")) {
-            track_cfg.AcrossBorderPrepareMax = cfg.at("ACROSS_BORDER_PREPARE_MAX");
-        }
-        if (cfg.contains("ACROSS_BORDER_OUT_MIN")) {
-            track_cfg.AcrossBorderOutMin = cfg.at("ACROSS_BORDER_OUT_MIN");
-        }
-        if (cfg.contains("ACROSS_BORDER_EXIT_MAX")) {
-            track_cfg.AcrossBorderExitMax = cfg.at("ACROSS_BORDER_EXIT_MAX");
-        }
-        if (cfg.contains("ACROSS_MAX_FRAMES")) {
-            track_cfg.AcrossMaxFrames = cfg.at("ACROSS_MAX_FRAMES");
-        }
-        if (cfg.contains("TRACK_JUDGE_FULL_SCORE")) {
-            track_cfg.TrackJudgeFullScore = cfg.at("TRACK_JUDGE_FULL_SCORE");
-        }
-        if (cfg.contains("TRACK_JUDGE_PARTIAL_SCORE")) {
-            track_cfg.TrackJudgePartialScore = cfg.at("TRACK_JUDGE_PARTIAL_SCORE");
-        }
-        if (cfg.contains("TRACK_JUDGE_CONFIRM_THRESHOLD")) {
-            track_cfg.TrackJudgeConfirmThreshold = cfg.at("TRACK_JUDGE_CONFIRM_THRESHOLD");
-        }
+        track_cfg.CircleMaxFrames = cfg.at("CIRCLE_MAX_FRAMES");
 
         function_en->JSON_FunctionConfigData_v.clear();
         data_path->JSON_TrackConfigData_v.clear();
@@ -216,12 +130,8 @@ namespace
         data_path->JSON_TrackConfigData_v.push_back(track_cfg);
         function_en->Game_EN = true;
         function_en->Gyroscope_EN = false;
-        data_path->Loop_Kind = CAMERA_CATCH_LOOP;
         function_en->Control_EN = false;
 
-        data_path->Track_Kind = STRIGHT_TRACK;
-        data_path->Circle_Track_Step = INIT_CIRCLE;
-        data_path->Track_Kind = STRIGHT_TRACK;
     }
 
     std::vector<unsigned char> encode_jpeg(const cv::Mat &image)
@@ -385,7 +295,7 @@ namespace
             current.track_jpg = encode_jpeg(img_store.Img_Track);
             current.all_jpg = encode_jpeg(img_store.Img_All);
 
-            current.track_kind = static_cast<int>(data_path_.Track_Kind);
+            current.track_kind = static_cast<int>(ImageStatus.Road_type);
             current.my_zf_road_type = static_cast<int>(ImageStatus.Road_type);
             current.my_zf_det_true = ImageStatus.Det_True;
             current.my_zf_off_line = ImageStatus.OFFLine;
@@ -464,30 +374,10 @@ namespace
 int main(int argc, char **argv)
 {
     // 5. 配置文件同步
-    Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s,&JSON_PIDConfigData_s);
+    Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s);
     g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
     if (g_runtime_config_ok)
     {
-        std::string calibrationError;
-        const std::string calibrationJsonPath = "config/calibration.json";
-        const std::string calibrationYamlPath = "config/calibration.yaml";
-
-        if (g_calibration_enabled)
-        {
-            g_calibration_enabled = g_calibration_corrector.load(calibrationYamlPath, &calibrationError);
-            if (!g_calibration_enabled)
-            {
-                std::cerr << "[Calibration] YAML 加载失败: " << calibrationError << std::endl;
-            }
-            else
-            {
-                std::cout << "[Calibration] 已加载 YAML 标定参数: " << calibrationYamlPath << std::endl;
-            }
-        }
-        else
-        {
-            std::cout << "[Calibration] 图像标定使能关闭: " << calibrationJsonPath << std::endl;
-        }
     }
     else
     {

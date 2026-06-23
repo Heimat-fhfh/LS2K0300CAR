@@ -1,7 +1,7 @@
 #define MAKE_MAIN_CPP
 
 #include "common/main_runtime.hpp"
-#include "vision/camera_calibration.h"
+#include "vision/Image_Process.h"
 
 #include <fstream>
 #include <iomanip>
@@ -23,10 +23,8 @@ std::atomic<bool> g_running(true);
 bool g_runtime_config_ok = false;
 CameraKind g_camera_kind = CameraKind::VIDEO_0;
 int g_camera_fps = 120;
-bool g_calibration_enabled = false;
 bool g_simple_tracking_enabled = false;
 
-JSON_PIDConfigData JSON_PIDConfigData_s;
 JSON_DifferentialPDConfigData JSON_DifferentialPDConfigData_s;
 JSON_AngularVelocityPIDConfigData JSON_AngularVelocityPIDConfigData_s;
 JSON_SpeedIncrementalPIConfigData JSON_SpeedIncrementalPIConfigData_s;
@@ -37,7 +35,6 @@ Data_Path Data_Path_s;
 ImgProcess imgProcess;
 Judge judge;
 SYNC Sync;
-CameraCalibrationCorrector g_calibration_corrector;
 
 Buzzer& GetBuzzer()
 {
@@ -463,30 +460,10 @@ void argument_config(void)
 
     motors = std::make_unique<DualMotorController>();
 
-    Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s,&JSON_PIDConfigData_s);
+    Sync.ConfigData_SYNC(&Data_Path_s,&Function_EN_s);
     g_runtime_config_ok = !(Function_EN_s.JSON_FunctionConfigData_v.empty() || Data_Path_s.JSON_TrackConfigData_v.empty());
     if (g_runtime_config_ok)
     {
-        std::string calibrationError;
-        const std::string calibrationJsonPath = "config/calibration.json";
-        const std::string calibrationYamlPath = "config/calibration.yaml";
-
-        if (g_calibration_enabled)
-        {
-            g_calibration_enabled = g_calibration_corrector.load(calibrationYamlPath, &calibrationError);
-            if (!g_calibration_enabled)
-            {
-                std::cerr << "[Calibration] YAML 加载失败: " << calibrationError << std::endl;
-            }
-            else
-            {
-                std::cout << "[Calibration] 已加载 YAML 标定参数: " << calibrationYamlPath << std::endl;
-            }
-        }
-        else
-        {
-        }
-
         JSON_DifferentialPDConfigData_s = Data_Path_s.JSON_DifferentialPDConfigData_v[0];
         JSON_AngularVelocityPIDConfigData_s = Data_Path_s.JSON_AngularVelocityPIDConfigData_v[0];
         JSON_SpeedIncrementalPIConfigData_s = Data_Path_s.JSON_SpeedIncrementalPIConfigData_v[0];
@@ -516,7 +493,10 @@ void argument_config(void)
 
         g_camera_kind = Function_EN_s.JSON_FunctionConfigData_v[0].Camera_EN;
         Function_EN_s.Game_EN = true;
-        Data_Path_s.Loop_Kind = CAMERA_CATCH_LOOP;
+
+        g_circle_identify_en = Function_EN_s.JSON_FunctionConfigData_v[0].CircleIdentify_EN;
+        g_across_identify_en = Function_EN_s.JSON_FunctionConfigData_v[0].AcrossIdentify_EN;
+
     }
     else
     {
@@ -590,7 +570,7 @@ int main_init_task()
 
     if (udp_dev.init(SERVER_IP, PORT) == 0)
     {
-        printf("[UDP] \u521d\u59cb\u5316\u6210\u529f, %s:%d\n", SERVER_IP, PORT);
+        printf("[UDP] 初始化成功, %s:%d\n", SERVER_IP, PORT);
     }
     else
     {
@@ -607,7 +587,7 @@ int main_init_task()
         return EXIT_FAILURE;
     }
 
-    printf("[IMU] \u521d\u59cb\u5316\u6210\u529f\n");
+    printf("[IMU] 初始化成功\n");
     return EXIT_SUCCESS;
 }
 

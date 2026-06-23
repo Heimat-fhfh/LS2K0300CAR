@@ -11,31 +11,6 @@ namespace cv {
 class Mat;
 }
 
-class Display {
-public:
-    void update(const std::string& data);
-};
-
-class PerfWindowRecorder {
-public:
-    explicit PerfWindowRecorder(uint64_t windowSize, bool enablePerFrameLog);
-    void record(const std::chrono::steady_clock::duration& frameCost,
-                const std::chrono::steady_clock::duration& captureCost,
-                const std::chrono::steady_clock::duration& undistortCost,
-                bool undistortExecuted);
-    void flush();
-
-private:
-    uint64_t windowSize_ = 30;
-    bool enablePerFrameLog_ = false;
-    uint64_t frameIndex_ = 0;
-    uint64_t windowStartFrame_ = 0;
-    uint64_t undistortExecutedCount_ = 0;
-    std::vector<long long> totalSamples_;
-    std::vector<long long> captureSamples_;
-    std::vector<long long> undistortSamples_;
-};
-
 class TempCaptureSession {
 public:
     explicit TempCaptureSession(bool enableTempCapture);

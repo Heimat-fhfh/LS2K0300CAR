@@ -1,7 +1,7 @@
 #include "common/common_system.h"
 #include "common/common_program.h"
 #include "vision/AAAdefine.h"
-#include "vision/image_my_zf.h"
+#include "vision/Image_Process.h"
 #include "devices/display_show.h"
 #include <iomanip>
 using namespace std;
@@ -23,11 +23,6 @@ void ImgProcess::ImgSynthesis(Img_Store *Img_Store_p,Function_EN *Function_EN_p)
 	(Img_Store_p -> Img_Text).copyTo(ImgAll(Rect(ImgAllWidth+6,ImgAllHeight+6,ImgAllWidth,200))); 
 
     (Img_Store_p -> Img_All) = ImgAll;
-
-	if(JSON_FunctionConfigData.VideoShow_EN == true)
-	{
-		imshow("CAMERA",(Img_Store_p -> Img_All));
-	}
 }
 
 
@@ -39,30 +34,25 @@ void ImgProcess::ImgSave(Img_Store *Img_Store_p)
 }
 
 
-void ImgProcess::ImgCompress(Mat& Img,bool ImgCompress_EN)
-{
-	Mat ImgCompress;
-	if(ImgCompress_EN == true)
-	{
-		Size size = Size(320,240);
-		resize(Img,ImgCompress,size,0,0,INTER_AREA);
-		Img = ImgCompress;
-	}
-}
-
-
 void ImgProcess::ImgText(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 {
 	int ImgWidth = (Img_Store_p -> Img_Color).cols;
 	(Img_Store_p -> Img_Text) = Mat(200,ImgWidth,CV_8UC3,Scalar(0,0,0));
 
-	putText((Img_Store_p -> Img_Text),TextTrackKind[int(Data_Path_p -> Temp_Track_Kind)],Point(5,25),FONT_HERSHEY_COMPLEX,1,(255),2);
-	putText((Img_Store_p -> Img_Text),TextTrackKind[int(Data_Path_p -> Track_Kind)],Point(5,65),FONT_HERSHEY_COMPLEX,1,(255),2);
-	putText((Img_Store_p -> Img_Text),TextLoopKind[int(Data_Path_p -> Loop_Kind)],Point(5,105),FONT_HERSHEY_COMPLEX,1,(255),2);	
-	putText((Img_Store_p -> Img_Text),TextCircleTrackStep[int(Data_Path_p -> Circle_Track_Step)],Point(5,145),FONT_HERSHEY_COMPLEX,1,(255),2);
-	if (Data_Path_p->Track_Kind == L_ACROSS_TRACK || Data_Path_p->Track_Kind == R_ACROSS_TRACK) {
-		putText((Img_Store_p -> Img_Text),TextAcrossTrackStep[int(Data_Path_p -> Across_Track_Step)],Point(5,185),FONT_HERSHEY_COMPLEX,1,(255),2);
+	const char* road_name = "Normol";
+	switch (ImageStatus.Road_type) {
+		case Straight:     road_name = "Straight";   break;
+		case LeftCirque:   road_name = "L-Cirque";   break;
+		case RightCirque:  road_name = "R-Cirque";   break;
+		case Cross:        road_name = "Cross";      break;
+		case Cross_ture:   road_name = "CrossTure";  break;
+		case Ramp:         road_name = "Ramp";       break;
+		case Barn_in:      road_name = "Barn_in";    break;
+		case Barn_out:     road_name = "Barn_out";   break;
+		default:           road_name = "Normol";     break;
 	}
+	putText((Img_Store_p -> Img_Text),string("RT:") + road_name,Point(5,25),FONT_HERSHEY_COMPLEX,1,(255),2);
+	
 }
 
 
@@ -125,51 +115,6 @@ void ImgProcess::ImgInflectionPointDraw(Img_Store *Img_Store_p,Data_Path *Data_P
 			}
 		}
 	}
-}
-
-
-void ImgProcess::ImgBendPointDraw(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
-{
-	int i = 0;
-	int j = 0;
-	if((Data_Path_p -> BendPointNum[0]) >= 1)
-	{
-		for(i = 0;i <= (Data_Path_p -> BendPointNum[0])-1;i++)
-		{
-			if(i == 0)
-			{
-				putText((Img_Store_p -> Img_Track),to_string(Data_Path_p -> BendPointNum[0]),Point((Data_Path_p -> BendPointCoordinate[i][0]),(Data_Path_p -> BendPointCoordinate[i][1])),FONT_HERSHEY_COMPLEX,0.6,Scalar(0,0,255),1);
-				circle((Img_Store_p -> Img_Track),Point((Data_Path_p -> BendPointCoordinate[i][0]),(Data_Path_p -> BendPointCoordinate[i][1])),6,Scalar(0,128,128),2);
-			}
-			else
-			{
-				circle((Img_Store_p -> Img_Track),Point((Data_Path_p -> BendPointCoordinate[i][0]),(Data_Path_p -> BendPointCoordinate[i][1])),6,Scalar(0,255,255),1);
-			}
-		}
-	}
-	if((Data_Path_p -> BendPointNum[1]) >= 1)
-	{
-		for(j = 0;j <= (Data_Path_p -> BendPointNum[1])-1;j++)
-		{
-			if(j == 0)
-			{
-				putText((Img_Store_p -> Img_Track),to_string(Data_Path_p -> BendPointNum[1]),Point((Data_Path_p -> BendPointCoordinate[j][2]),(Data_Path_p -> BendPointCoordinate[j][3])),FONT_HERSHEY_COMPLEX,0.6,Scalar(0,0,255),1);
-				circle((Img_Store_p -> Img_Track),Point((Data_Path_p -> BendPointCoordinate[j][2]),(Data_Path_p -> BendPointCoordinate[j][3])),6,Scalar(0,128,128),2);
-
-			}
-			else
-			{
-				circle((Img_Store_p -> Img_Track),Point((Data_Path_p -> BendPointCoordinate[j][2]),(Data_Path_p -> BendPointCoordinate[j][3])),6,Scalar(0,255,255),1);
-			
-			}
-		}
-	}
-}
-
-void ImgProcess::ImgForwardLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
-{
-	(void)Data_Path_p;
-	circle(Img_Store_p -> Img_Track,Point(Data_Path_p -> center_line[Data_Path_p->forword_line_h],Data_Path_p->forword_line_h),3,Scalar(255,0,0),2);
 }
 
 
@@ -265,7 +210,7 @@ void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function
 	}
 	{
 		char buf[32];
-		snprintf(buf, sizeof(buf), "TK:%d", static_cast<int>(Data_Path_p->Track_Kind));
+		snprintf(buf, sizeof(buf), "RT:%d", static_cast<int>(ImageStatus.Road_type));
 		putText(Img_Store_p->Img_Track, buf, Point(Img_Store_p->Img_Track.cols - 50, 18),
 			FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 255, 255), 1);
 	}

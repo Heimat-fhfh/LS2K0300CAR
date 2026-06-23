@@ -9,24 +9,6 @@ class Judge
     public:
 
         /*
-            赛道循环类型决策
-            1.普通赛道类型
-            2.圆环赛道类型
-            3.十字赛道类型
-            @参数说明
-            Img_Store_p 图像存储指针
-            Data_Path_p 路径相关数据指针
-            Function_EN_p 函数使能相关指针
-            @返回值说明
-            返回赛道循环类型
-        */
-        LoopKind TrackKind_Judge(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
-        /*
-            对八邻域寻找到的数据和独立黑色区域寻找到的数据进行分析
-        */
-        void Search_Data_Analysis(Img_Store* Img_Store_p,Data_Path *Data_Path_p,Function_EN* Function_EN_p);
-
-        /*
             电机速度决策
             @参数说明
             Img_Store_p 图像存储指针
@@ -35,22 +17,6 @@ class Judge
         void MotorSpeed_Judge(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
 
-        /*
-             计算归一化偏差和期望速度
-             @参数说明
-             Data_Path_p 路径相关数据指针
-         */
-        void DifferentialPD_Calculate(Data_Path *Data_Path_p);
-
-        
-        /*
-            保护线程
-            @参数说明
-            Data_Path_p 路径相关数据指针
-        */
-        void Protect_Thread(Data_Path * Data_Path_p);
-
-        
         /*
             跳变扫描赛道元素识别
             使用横向跳变扫描识别圆环和十字赛道元素
@@ -81,13 +47,6 @@ class Judge
         void BendPointSearch(Img_Store* Img_Store_p,Data_Path *Data_Path_p);
 
 
-        /*
-            霍夫圆环识别
-            @ 参数说明
-            Img_Store_p 图像存储指针
-            Data_Path_p 路径相关数据指针
-        */
-        void HoughCircleSearch(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 };
 
 
@@ -100,24 +59,12 @@ class SYNC
             Function_EN_p 函数使能指针
             Data_Path_p 路径相关数据指针
         */
-        void ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p,JSON_PIDConfigData *JSON_PIDConfigData_p);
+        void ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p);
 
         // 获取当前选择的配置文件路径（config/config_*.json）
         std::string GetConfigFilePath() const;
 };
 
-
-/*
-    打印数据
-    程序参数：1.前瞻点 2.寻边线起始点 3.寻边线结束点 4.边线断点起始点 5.边线断点结束点 6.比赛状态
-    运动参数：1.舵机方向 2.舵机角度 3.点击速度
-    @参数说明
-    Data_Path_p 路径相关数据指针
-    Function_EN_p 函数使能指针
-    @注意
-    使用前必须使用 UartReceive_Change_To_Program_SYNC() 同步数据 和 ServoDirAngle_Judge() 计算运动参数
-*/
-        void DataPrint(Data_Path *Data_Path_p,Function_EN *Function_EN_p);
 
 #endif
 

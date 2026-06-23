@@ -30,19 +30,6 @@ typedef enum LoopKind
 }LoopKind;
 
 
-/*
-    发送赛道类型
-*/
-typedef enum TrackKind
-{
-    STRIGHT_TRACK = 0,   // 直赛道
-    BEND_TRACK = 1,   // 弯赛道
-    L_ACROSS_TRACK = 2,   // 左十字赛道
-    R_ACROSS_TRACK = 3,   // 右十字赛道
-    L_CIRCLE_TRACK = 4,   // 左圆环赛道
-    R_CIRCLE_TRACK = 5,   // 右圆环赛道
-}TrackKind;
-
 
 /*
     跳变扫描检测结果类型
@@ -156,87 +143,26 @@ typedef struct JSON_VehicleConfigData
 */
 typedef struct JSON_FunctionConfigData
 {
-    bool Uart_EN; // 串口使能
-    bool ImgCompress_EN;   // 图像压缩使能
     CameraKind Camera_EN;   // 相机使能
-    bool VideoShow_EN;  // 图像显示使能
     bool ImageSave_EN;  // 图像存储使能
-    bool DataPrint_EN;  // 数据显示使能
     bool AcrossIdentify_EN;    // 十字特征点识别使能
     bool CircleIdentify_EN;    // 圆环特征点识别使能
     bool IPS200_Show_EN;       // IPS200 屏幕显示使能（my_zf 80x60）
     bool UDP_Image_Upload_EN;  // UDP 图像上传使能
-    float cap_exposure;   // 摄像头曝光
-    int exposure_auto;   // 摄像头曝光
-    int imgshownum;   // 图像显示序号
 }JSON_FunctionConfigData;
-
-/*
-    JSON文件存储的PID 
-*/
-typedef struct JSON_PIDConfigData
-{
-    int speedl;
-    int speedr;
-
-}JSON_PIDConfigData;
 
 /*
     JSON文件存储的赛道识别设置参数
 */
 typedef struct JSON_TrackConfigData
 {
-    int TrackKindCountThreshold;   // 赛道类型计数阈值
     int Track_width;
-    int Forward;    // 前瞻点
-    int Forward_Distance;   // 前瞻点对应实际距离
-    int Default_Forward;    // 默认前瞻点，用于前瞻点初始化
-    double ForwardHeightCompensationPxPerRow = 0.0; // 巡线前瞻点高度补偿，单位 px/行
     int Path_Search_Start;  // 寻路径起始点
     int Path_Search_End;    // 寻路径结束点
-    int Side_Search_Start; // 寻边线起始点
     int Side_Search_End; // 寻边线结束点
-    int TrackWidth = 0; // 赛道宽度
-    int CircleOutWidth = 0; // 圆环出环补线终点与中线距离
-    int BendPointNum[2] = {0};   // 弯点数量
-    int InflectionPointIdentifyAngle[2] = {0};    // 元素拐点识别角度
-    int InflectionPointVectorDistance = 0;   // 边线元素拐点向量距离
-    int BendPointIdentifyAngle[2] = {0};    // 边线弯点识别角度
-    int BendPointVectorDistance = 0;   // 边线弯点向量距离
-    double CommonMotorSpeed[6] = {0};    // 电机速度：0.直道 1.小角度弯道 2.大角度弯道 3.十字赛道 4.圆环赛道(外) 5.圆环赛道(内)
-    int BridgeZoneMotorSpeed = 0;   // 桥梁区域电机速度
-    int CrosswalkZoneMotorSpeed = 0;    // 斑马线区域电机准备停车速度
-    int Circle_In_Prepare_Time = 0;    // 准备入环限定时间
-    int TransitionScanEnable = 0;    // 跳变扫描检测使能
-    int TransitionMinRunLength = 10; // 连续2跳变最小行数
-    int TransitionMinColorLength = 5; // 跳变前颜色最小长度
+    double CommonMotorSpeed = 0;    // 电机速度
     int TransitionMinArea = 1000; // 独立黑色区域最小面积
-    int TransitionDebounceFrames = 5; // 防抖连续帧数
-
-    int CircleJumpMax = 1;          // 圆环判定：安静侧最大跳变点数量
-    int CircleBorderQuietMax = 30;  // 圆环判定：安静侧最大边缘区域点数量
-    int CircleJumpExpected = 2;     // 圆环判定：活跃侧期望跳变点数量
-    int CircleBorderActiveMin = 90; // 圆环判定：活跃侧最小边缘区域点数量
-    int CircleJudgeInflectionMax = 1;  // 圆环判定：安静侧最大拐点数量
-    int CircleJudgePartialScore = 4;   // 圆环判定：4/5条件满足每帧得分
     int CircleMaxFrames = 300;         // 圆环最大帧数限制
-
-    int CrossJumpPrimary = 2;       // 十字判定：主侧跳变点数量
-    int CrossJumpSecondaryMin = 1;  // 十字判定：副侧最小跳变点数量
-    int CrossJumpSecondaryMax = 2;  // 十字判定：副侧最大跳变点数量
-    int CrossBorderMin = 90;        // 十字判定：两侧最小边缘区域点数量
-
-    int AcrossBorderPrepareMax = 30;   // ACROSS_PREPARE→ACROSS: 对侧边缘点数量上限
-    int AcrossBorderOutMin = 70;       // ACROSS_OUT→ACROSS_OUT_2: 对侧边缘点数量下限
-    int AcrossBorderExitMax = 20;      // ACROSS_OUT_2→退出: 任意侧边缘点数量上限
-    int AcrossMaxFrames = 100;         // 十字内最大帧数
-
-    int TrackJudgeFullScore = 8;        // 帧累积评分：4/4条件满足得分
-    int TrackJudgePartialScore = 5;     // 帧累积评分：3/4条件满足得分
-    int TrackJudgeConfirmThreshold = 40; // 帧累积评分：确认阈值
-
-    int Seed_Search_Fail_Threshold = 10; // 起始点搜索连续失败帧数阈值，超出触发出界保护
-
 }JSON_TrackConfigData;
 
 struct InversePerspectiveMap {
@@ -369,17 +295,7 @@ typedef struct Data_Path
     cv::Point leftmost_point ; // 独立黑块最左侧位置
     cv::Point rightmost_point; // 独立黑块最右侧位置
 
-    LoopKind Loop_Kind = CAMERA_CATCH_LOOP; // 赛道类型
-    TrackKind Temp_Track_Kind; // 当前帧模型赛道类型
-    TrackKind Track_Kind; // 赛道类型：1.直赛道 2.弯赛道 3.十字赛道 4.左圆环 5.右圆环
-    static constexpr int kTrackKindHistorySize = 25;
-    TrackKind TrackKindHistory[kTrackKindHistorySize] = {};
-    int TrackKindHistoryIndex = 0;
-    int TrackKindHistoryCount = 0;
-    CircleTrackStep Circle_Track_Step = INIT_CIRCLE;  // 圆环入环步骤：1.准备入环 2.入环 3.
-    AcrossTrackStep Across_Track_Step = INIT_ACROSS;  // 十字赛道步骤：1.准备进入十字 2.十字内 3.出十字
 
-    int TrackJudgeScore[6] = {0};   // 赛道类型判断分数（由TrackKind_Judge写入）
 
     // 差速控制目标量（由上层视觉控制计算，下发给 MotorControlTask）
     int SteerErrorPx = 0;                 // 带符号的横向误差（像素）

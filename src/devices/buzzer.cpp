@@ -23,7 +23,7 @@ Buzzer::Buzzer(const char* device_path)
     }
 
     ensureDeviceAccessible();
-    off();
+    setLevel(kBuzzerOffLevel);
 }
 
 Buzzer::~Buzzer() {
@@ -34,25 +34,6 @@ Buzzer::~Buzzer() {
     }
 }
 
-void Buzzer::on() {
-    std::unique_lock<std::mutex> lock(control_mutex_);
-    stopLocked(lock);
-    setLevel(true);
-}
-
-void Buzzer::off() {
-    std::unique_lock<std::mutex> lock(control_mutex_);
-    stopLocked(lock);
-    setLevel(false);
-}
-
-void Buzzer::beep(uint32_t duration_ms) {
-    if (duration_ms == 0) {
-        throw std::invalid_argument("beep duration must be greater than 0");
-    }
-    startPattern({duration_ms}, {0}, 1, false);
-}
-
 void Buzzer::shortBeep(uint32_t times) {
     if (times == 0) {
         throw std::invalid_argument("shortBeep times must be greater than 0");
@@ -60,23 +41,9 @@ void Buzzer::shortBeep(uint32_t times) {
     startPattern({short_duration_ms_}, {interval_duration_ms_}, times, false);
 }
 
-void Buzzer::longBeep(uint32_t times) {
-    if (times == 0) {
-        throw std::invalid_argument("longBeep times must be greater than 0");
-    }
-    startPattern({long_duration_ms_}, {interval_duration_ms_}, times, false);
-}
-
 void Buzzer::patternDoubleShort() {
     startPattern({short_duration_ms_, short_duration_ms_},
                  {interval_duration_ms_, interval_duration_ms_},
-                 1,
-                 false);
-}
-
-void Buzzer::patternTripleShort() {
-    startPattern({short_duration_ms_, short_duration_ms_, short_duration_ms_},
-                 {interval_duration_ms_, interval_duration_ms_, interval_duration_ms_},
                  1,
                  false);
 }

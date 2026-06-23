@@ -23,14 +23,8 @@ public:
     explicit Buzzer(const char* device_path = "/dev/zf_driver_gpio_beep");
     ~Buzzer();
 
-    void on();
-    void off();
-    void beep(uint32_t duration_ms);
-
     void shortBeep(uint32_t times = 1);
-    void longBeep(uint32_t times = 1);
     void patternDoubleShort();
-    void patternTripleShort();
     void patternLongShort();
     void patternContinuous();
     void stop();

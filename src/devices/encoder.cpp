@@ -71,22 +71,6 @@ double Encoder::conversionFactor() const noexcept {
     return conversion_factor_;
 }
 
-// 读取当前计数值（已取反）
-std::int16_t Encoder::readCount() const {
-    if (!isValid()) {
-        throw EncoderException(device_path_, "invalid");
-    }
-    
-    std::int16_t count = readFromDevice(device_path_);
-    
-    // 如果需要取反
-    if (invert_) {
-        count = -count;
-    }
-    
-    return count;
-}
-
 std::int16_t Encoder::readFromDevice(const std::string& path) {
     int fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {

@@ -11,12 +11,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-void Display::update(const std::string& data) {
-    std::cout << "\033[2J\033[1;1H";
-    std::cout << "======== 智能小车状态 ========" << std::endl;
-    std::cout << data << std::endl;
-    std::cout << "=============================" << std::endl;
-}
+
 
 namespace
 {
@@ -118,66 +113,7 @@ void LogPerfWindowTiming(uint64_t startFrame,
 
 }
 
-PerfWindowRecorder::PerfWindowRecorder(uint64_t windowSize, bool enablePerFrameLog)
-    : windowSize_(windowSize), enablePerFrameLog_(enablePerFrameLog)
-{
-    totalSamples_.reserve(windowSize_);
-    captureSamples_.reserve(windowSize_);
-    undistortSamples_.reserve(windowSize_);
-}
 
-void PerfWindowRecorder::record(const std::chrono::steady_clock::duration &frameCost,
-                                const std::chrono::steady_clock::duration &captureCost,
-                                const std::chrono::steady_clock::duration &undistortCost,
-                                bool undistortExecuted)
-{
-    const uint64_t currentFrame = frameIndex_++;
-    if (totalSamples_.empty())
-    {
-        windowStartFrame_ = currentFrame;
-    }
-
-    totalSamples_.push_back(DurationToMicroseconds(frameCost));
-    captureSamples_.push_back(DurationToMicroseconds(captureCost));
-
-    if (undistortExecuted)
-    {
-        undistortSamples_.push_back(DurationToMicroseconds(undistortCost));
-        ++undistortExecutedCount_;
-    }
-
-    if (enablePerFrameLog_)
-    {
-        LogFrameTiming(currentFrame, frameCost, captureCost, undistortCost, undistortExecuted);
-    }
-
-    if (totalSamples_.size() >= windowSize_)
-    {
-        flush();
-    }
-}
-
-void PerfWindowRecorder::flush()
-{
-    if (totalSamples_.empty())
-    {
-        return;
-    }
-
-    const uint64_t windowEndFrame = windowStartFrame_ + totalSamples_.size() - 1;
-    LogPerfWindowTiming(
-        windowStartFrame_,
-        windowEndFrame,
-        totalSamples_,
-        captureSamples_,
-        undistortSamples_,
-        undistortExecutedCount_);
-
-    totalSamples_.clear();
-    captureSamples_.clear();
-    undistortSamples_.clear();
-    undistortExecutedCount_ = 0;
-}
 
 TempCaptureSession::TempCaptureSession(bool enableTempCapture)
     : enableTempCapture_(enableTempCapture)

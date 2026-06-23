@@ -26,8 +26,6 @@
 #include "vision/libdata_process.h"
 #include "vision/libdata_store.h"
 
-class CameraCalibrationCorrector;
-
 #if defined(MAKE_MAIN_CPP)
 
 	#include "drivers/zf_common_headfile.h"
@@ -36,7 +34,6 @@ class CameraCalibrationCorrector;
 	#include "control/PID.hpp"
 	#include "vision/AAAdefine.h"
 
-	#include "vision/myacross.h"
 	#include "devices/display_show.h"
 
 	#include "devices/encoder.hpp"
@@ -99,9 +96,7 @@ class CameraCalibrationCorrector;
 	extern bool g_runtime_config_ok;
 	extern CameraKind g_camera_kind;
 	extern int g_camera_fps;
-	extern bool g_calibration_enabled;
 	extern bool g_simple_tracking_enabled;
-	extern JSON_PIDConfigData JSON_PIDConfigData_s;
 	extern JSON_DifferentialPDConfigData JSON_DifferentialPDConfigData_s;
 	extern JSON_AngularVelocityPIDConfigData JSON_AngularVelocityPIDConfigData_s;
 	extern JSON_SpeedIncrementalPIConfigData JSON_SpeedIncrementalPIConfigData_s;
@@ -111,7 +106,6 @@ class CameraCalibrationCorrector;
 	extern ImgProcess imgProcess;
 	extern Judge judge;
 	extern SYNC Sync;
-	extern CameraCalibrationCorrector g_calibration_corrector;
 
 #endif // MAKE_MAIN_CPP
 

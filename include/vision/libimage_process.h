@@ -49,33 +49,12 @@ void CameraImgGet(Img_Store *Img_Store_p);
 class ImgProcess
 {
     public:
-        string TextTrackKind[6] = {"STRIGHT","BEND","LAcross","RAcross","LCircle","RCircle"};
         string TextLoopKind[5] = {"camera_catch","judge","common","across","circle"};
         string TextCircleTrackStep[8] = {"IN_PREPARE","IN_PREPARE_2","IN","IN_CIRCLE","OUT_PREPARE","OUT_STRIGHT","OUT","INIT_CIRCLE"};
         string TextAcrossTrackStep[5] = {"ACROSS_PREPARE","ACROSS","ACROSS_OUT","ACROSS_OUT_2","INIT_ACROSS"};
         string TextGyroscope[2] = {"FALSE","TRUE"};
         string TextModelTrackKind[5] = {"BRIDGE_ZONE","CROSSWALK_ZONE","DANGER_ZONE","RESCUE_ZONE","CHASE_ZONE"};
         string TextControl[2] = {"FALSE","TRUE"};
-
-        /*
-            图像预处理
-            @参数说明
-            Img_Store_p 图像存储指针
-            Data_Path_p 路径相关数据指针
-        */
-        void ImgPrepare(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p);
-        
-        void imgPreProc(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p);
-
-        /*
-            图像压缩
-            将图像压缩至320*240大小
-            @参数说明
-            Img 引用待压缩图像
-            ImgCompress_EN 图像压缩使能
-        */
-        void ImgCompress(cv::Mat& Img,bool ImgCompress_EN);
-
 
         /*
             图像合成显示并保存
@@ -102,24 +81,6 @@ class ImgProcess
 
 
         /*
-            图像边线弯点绘制
-            @参数说明
-            Img_Store_p 图像存储指针
-            Data_Path_p 路径相关指针
-        */
-        void ImgBendPointDraw(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
-        
-
-        /*
-            通过原图像和高斯滤波图像进行融合进行图像锐化
-            @参数说明
-            Img 引用待锐化图像
-            blursize 传入高斯滤波内核大小
-        */
-        void ImgSharpen(cv::Mat &Img,int blursize);
-
-
-        /*
             赛道类型、圆环步骤显示
             @参数说明
             Img_Store_p 图像存储指针
@@ -127,17 +88,6 @@ class ImgProcess
             Function_EN_p 函数使能指针
         */
         void ImgText(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p);
-
-
-        /*
-            前瞻点画线
-            @参数说明
-            Img_Store_p 图像存储指针
-            Data_Path_p 路径相关数据指针
-            @注意
-            该函数使用前必须使用 UartSendReceiveSync() 函数同步串口接收发送协议
-        */
-        void ImgForwardLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
 
 
         /*
@@ -155,31 +105,6 @@ class ImgProcess
             Img_Store_p 图像存储指针
         */
         void ImgSave(Img_Store *Img_Store_p);
-
-
-        /*
-            Sobel算子检测边缘
-            @参数说明
-            Img 引用待检测图像
-        */
-        void ImgSobel(cv::Mat& Img);
-
-
-        /*
-            ImgScharr算子检测边缘
-            @参数说明
-            Img 引用待检测图像
-        */
-        void ImgScharr(cv::Mat& Img);
-
-
-        /*
-            逆透视
-            @参数说明
-            Img 原图像
-            Img_Unpivot 引用逆透视图像
-        */
-        void ImgUnpivot(cv::Mat Img,cv::Mat& Img_Unpivot);
 
 
         /*

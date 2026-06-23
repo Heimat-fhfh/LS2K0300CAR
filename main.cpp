@@ -3,7 +3,7 @@
 #include "common/main.hpp"
 #include "common/main_runtime.hpp"
 #include "common/AAAtools.h"
-#include "vision/image_my_zf.h"
+#include "vision/Image_Process.h"
 #include "network/seekfree_udp.h"
 
 
@@ -13,72 +13,43 @@ using namespace cv;
 int main(int argc, char** argv)
 {
     printf("选择配置(0/1/2): ");
-    if (!ParseCameraFpsArgument(argc, argv))
-    {
-        return EXIT_FAILURE;
-    }
-
-    if (IsVideoSpeedTestMode(argc, argv))
-    {
-        return RunVideoSpeedTest();
-    }
-
+    if (!ParseCameraFpsArgument(argc, argv)){return EXIT_FAILURE;}
+    if (IsVideoSpeedTestMode(argc, argv)){return RunVideoSpeedTest();}
     const bool motorDeadMode = IsMotorDeadMode(argc, argv);
 
     // 1. 配置参数初始化
     argument_config();
     if (!g_runtime_config_ok)
-    {
-        cout << "配置同步失败" << endl;
-        return EXIT_FAILURE;
-    }
+{cout << "配置同步失败" << endl;return EXIT_FAILURE;}
 
-    if (motorDeadMode)
-    {
-        return RunMotorDeadZoneMode();
-    }
+    if (motorDeadMode){return RunMotorDeadZoneMode();}
 
     // 2. 硬件设备初始化
-    if (main_init_task() == EXIT_SUCCESS)
-    {
-        
-    }
-    else
-    {
-        printf("<硬件> 初始化失败\n");
-        return EXIT_FAILURE;
-    }
+    if (main_init_task() == EXIT_SUCCESS){printf("<硬件> 初始化成功\n");}
+    else{printf("<硬件> 初始化失败\n");return EXIT_FAILURE;}
 
     // 3. 功能测试
-    if (main_test_task(test_config) != EXIT_SUCCESS)
-    {
-        cout << "功能测试失败" << endl;
-        return EXIT_FAILURE;
-    }
+    if (main_test_task(test_config) != EXIT_SUCCESS){cout << "功能测试失败" << endl;return EXIT_FAILURE;}
 
     // 4. 启动电机控制任务  26-27% --> 39-44% CPU占用率 提升了15% 左右
-    if (!StartMotorControlTask())
-    {
-        return EXIT_FAILURE;
-    }
+    if (!StartMotorControlTask()){return EXIT_FAILURE;}
 
     // 5. 初始化摄像头并启动图像采集线程
     VideoCapture Camera;
     CameraInit(Camera, g_camera_kind, 160, 120, g_camera_fps);
+    
     Img_Store Img_Store_s;
     std::thread captureThread;
     CameraCaptureThreadStart(Camera, &Img_Store_s, captureThread);
 
     TempCaptureSession tempCapture(false);
-    PerfWindowRecorder perfRecorder(30, false);
 
     Function_EN_s.Control_EN = true;
     JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_s.JSON_FunctionConfigData_v[0];
 
     // 启动状态显示
     printf("[配置] 圆环最大帧数: %d\n", Data_Path_s.JSON_TrackConfigData_v[0].CircleMaxFrames);
-    printf("[状态] IPS200显示: %s | UDP图像上传: %s\n",
-           JSON_FunctionConfigData.IPS200_Show_EN ? "开启" : "关闭",
+    printf("[状态] IPS200显示: %s | UDP图像上传: %s\n",JSON_FunctionConfigData.IPS200_Show_EN ? "开启" : "关闭",
            JSON_FunctionConfigData.UDP_Image_Upload_EN ? "开启" : "关闭");
 
     // 6. 主循环：图像处理 -> 赛道识别 -> 电机控制
@@ -111,8 +82,8 @@ int main(int argc, char** argv)
         // 十字状态蜂鸣器
         {
             static bool acrossBuzzerOn = false;
-            const bool inAcross = (Data_Path_s.Track_Kind == L_ACROSS_TRACK ||
-                                   Data_Path_s.Track_Kind == R_ACROSS_TRACK);
+            const bool inAcross = (ImageStatus.Road_type == Cross ||
+                                   ImageStatus.Road_type == Cross_ture);
             if (inAcross && !acrossBuzzerOn)
             {
                 GetBuzzer().customPattern({60}, {60}, 999);
@@ -144,8 +115,8 @@ int main(int argc, char** argv)
 
         // 出界保护：连续丢线超过指定帧数则停止电机，2声短鸣，按KEY_0恢复
         {
-            static int offline_accum = 0;
-            const int OFFLINE_FRAME_MAX = 10;
+            static int offline_accum = 0;       // 连续丢线帧数计数
+            const int OFFLINE_FRAME_MAX = 10;   // 连续丢线帧数阈值，超过则触发出界保护
             if (ImageStatus.OFFLine >= 55)
                 offline_accum++;
             else
@@ -254,7 +225,6 @@ int main(int argc, char** argv)
 
     }
 
-    perfRecorder.flush();
     tempCapture.printSummary();
 
     CameraCaptureThreadStop(&Img_Store_s, captureThread);

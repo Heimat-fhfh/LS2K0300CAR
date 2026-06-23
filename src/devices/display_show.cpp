@@ -1,5 +1,5 @@
 #include "devices/display_show.h"
-#include "vision/image_my_zf.h"
+#include "vision/Image_Process.h"
 #include <sys/socket.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -13,48 +13,7 @@
  * @param img 输入的图像（支持BGR或灰度格式）
  * @note 图像将被自动缩放以适应屏幕分辨率（假设屏幕分辨率为IPS200_WIDTH x IPS200_HEIGHT）
  */
-void displayMatOnIPS200(const cv::Mat& img) {
-    // 检查输入图像是否有效
-    if (img.empty()) {
-        return;
-    }
 
-    cv::Mat bgrImg;
-    if (img.channels() == 3) {
-        bgrImg = img;
-    } else if (img.channels() == 1) {
-        cv::cvtColor(img, bgrImg, cv::COLOR_GRAY2BGR);
-    } else if (img.channels() == 4) {
-        cv::cvtColor(img, bgrImg, cv::COLOR_BGRA2BGR);
-    } else {
-        return;
-    }
-
-    // 转换图像颜色空间（BGR -> BGR565）并缩放尺寸
-    cv::Mat resizedImg;
-    cv::resize(bgrImg, resizedImg, cv::Size(240, 180));
-
-    cv::Mat img565;
-    cv::cvtColor(resizedImg, img565, cv::COLOR_BGR2BGR565);
-
-    if (!img565.isContinuous()) {
-        img565 = img565.clone();
-    }
-
-    ips200_show_rgb565_image(0, 0, reinterpret_cast<const uint16*>(img565.data), 240, 180);
-}
-
-void display_data(int y,const char dat[],int data,int num)
-{
-    ips200_show_string(0,16*y,dat);
-    ips200_show_int(8*(strlen(dat)),16*y,int32(data),num);
-}
-
-void display_dataf(int y,const char dat[],float data,int num1,int num2)
-{
-    ips200_show_string(0,16*y,dat);
-    ips200_show_float(8*(strlen(dat)),16*y,data,num1,num2);
-}
 
 std::string get_local_ip_address() {
     struct ifaddrs *ifaddr, *ifa;

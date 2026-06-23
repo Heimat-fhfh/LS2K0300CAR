@@ -76,22 +76,9 @@
 //====================================================宏定义函数区====================================================
 
 //=====================================================常规函数区=====================================================
-uint32      func_get_greatest_common_divisor    (uint32 num1, uint32 num2);
-
-void        func_soft_delay                     (volatile long t);
-
-int32       func_str_to_int                     (char *str);
 void        func_int_to_str                     (char *str, int32 number);
-uint32      func_str_to_uint                    (char *str);
 void        func_uint_to_str                    (char *str, uint32 number);
-float       func_str_to_float                   (char *str);
-void        func_float_to_str                   (char *str, float number, uint8 point_bit);
-double      func_str_to_double                  (char *str);
 void        func_double_to_str                  (char *str, double number, uint8 point_bit);
-uint32      func_str_to_hex                     (char *str);
-void        func_hex_to_str                     (char *str, uint32 number);
-
-uint32      zf_sprintf                          (int8 *buff, const int8 *format, ...);
 //=====================================================常规函数区=====================================================
 
 #endif

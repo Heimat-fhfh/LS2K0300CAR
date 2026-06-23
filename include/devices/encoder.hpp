@@ -25,9 +25,6 @@ public:
     // 虚析构函数，支持继承
     virtual ~Encoder() noexcept = default;
     
-    // 读取当前计数值（已取反）
-    [[nodiscard]] std::int16_t readCount() const;
-    
     // 读取当前速度值(m/s)（已取反）
     [[nodiscard]] double readSpeed() const;
     

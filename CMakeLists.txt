@@ -94,13 +94,11 @@ if (NOT USE_EDGE_TOOLCHAIN)
         ${PROJECT_SOURCE_DIR}/src/vision/libimage_process.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/image_display.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/main_impl.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/image_my_zf.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/Image_Process.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/vision_rings.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/camera_calibration.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/libdata_process.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/path_side_search.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/track_element_scan.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/path_across.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/path_circle.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/path_refactor.cpp
     )
