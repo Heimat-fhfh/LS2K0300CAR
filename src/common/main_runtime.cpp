@@ -42,6 +42,26 @@ Buzzer& GetBuzzer()
     return buzzer;
 }
 
+bool BatteryVoltageCheck(double threshold_mv)
+{
+    uint16 adc_reg = adc_convert(ADC_REG_PATH);
+    float adc_scale = adc_get_scale(ADC_SCALE_PATH);
+    uint16 battery_vol = static_cast<uint16>(adc_reg * adc_scale * 11);
+
+    printf("[电池] ADC原始值=%d 比例因子=%.6f 电压=%dmV 阈值=%dmV\n",
+           adc_reg, adc_scale, battery_vol, static_cast<int>(threshold_mv));
+
+    if (battery_vol >= threshold_mv)
+    {
+        printf("[电池] 电压正常\n");
+        return true;
+    }
+
+    printf("[电池] 电压过低! 请充电或更换电池!\n");
+    GetBuzzer().customPattern({300}, {120}, 3);
+    return false;
+}
+
 namespace
 {
 constexpr int kVideoSpeedTestWidth = 320;

@@ -177,6 +177,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
         "DIFF_OUTPUT_RAMP_ENABLE", "DIFF_OUTPUT_RAMP_ACCEL_RATE", "DIFF_OUTPUT_RAMP_DECEL_RATE",
         "CURVATURE_SPEED_GAIN",
         "CURVATURE_SPEED_MIN",
+        "BATTERY_LOW_THRESHOLD",
         "STRIGHT_TRACK_MOTOR_SPEED",
         "TRANSITION_MIN_AREA",
         "CIRCLE_MAX_FRAMES"
@@ -259,6 +260,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 
     JSON_VehicleConfigData.curvatureSpeedGain = ConfigData.at("CURVATURE_SPEED_GAIN");
     JSON_VehicleConfigData.curvatureSpeedMin = ConfigData.at("CURVATURE_SPEED_MIN");
+    JSON_VehicleConfigData.batteryLowThreshold = ConfigData.at("BATTERY_LOW_THRESHOLD");
 
     JSON_FunctionConfigData.Camera_EN = CameraKind(ConfigData.at("CAMERA_EN"));
     JSON_FunctionConfigData.ImageSave_EN = ConfigData.at("IMAGE_SAVE_EN");

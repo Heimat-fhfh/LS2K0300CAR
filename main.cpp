@@ -24,6 +24,9 @@ int main(int argc, char** argv)
 
     if (motorDeadMode){return RunMotorDeadZoneMode();}
 
+    // 电池电压检测（低于阈值则蜂鸣器长响3声警告，不阻塞启动）
+    BatteryVoltageCheck(JSON_VehicleConfigData_s.batteryLowThreshold);
+
     // 2. 硬件设备初始化
     if (main_init_task() == EXIT_SUCCESS){printf("<硬件> 初始化成功\n");}
     else{printf("<硬件> 初始化失败\n");return EXIT_FAILURE;}

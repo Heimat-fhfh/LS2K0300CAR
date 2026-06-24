@@ -53,6 +53,9 @@
 	#define ENCODER_2               "/dev/zf_encoder_2"
 
 
+	#define ADC_REG_PATH   "/sys/bus/iio/devices/iio:device0/in_voltage7_raw"
+	#define ADC_SCALE_PATH "/sys/bus/iio/devices/iio:device0/in_voltage_scale"
+
 	#define KEY_0       "/dev/zf_driver_gpio_key_0"
 	#define KEY_1       "/dev/zf_driver_gpio_key_1"
 	#define KEY_2       "/dev/zf_driver_gpio_key_2"
@@ -113,4 +116,5 @@ extern std::atomic<bool> g_running;
 
 void argument_config(void);
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p);
+bool BatteryVoltageCheck(double threshold_mv);
 void FrameTaskAfterRead(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, ImgProcess *imgProcess_p, Judge *judge_p);

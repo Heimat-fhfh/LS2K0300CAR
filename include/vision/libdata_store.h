@@ -135,6 +135,7 @@ typedef struct JSON_VehicleConfigData
     double diffOutputRampDecelRate;  // 外环PD输出角减速度限幅 (rad/s²)
     double curvatureSpeedGain;       // 曲率自适应降速增益 (0=禁用, 0.3~0.5=推荐)
     double curvatureSpeedMin;        // 曲率自适应降速下限 (目标速度的最小比例, 推荐0.1)
+    double batteryLowThreshold;      // 电池低电压阈值(mV), 低于此值蜂鸣器长响3声警告
 } JSON_VehicleConfigData;
 
 

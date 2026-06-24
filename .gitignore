@@ -6,7 +6,6 @@ build_host/
 build_rt1064/
 docs/
 ls2k0300_linux_4.19/
-third_party/
 train_data/
 onnxruntime/
 yolo/upload/pictures/**
