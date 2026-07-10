@@ -28,7 +28,7 @@ namespace
     struct AppConfig
     {
         std::string dataset_dir = "/home/fhfh/Work/LS2K0300CAR/docs/img/20260602_113553";
-        std::string config_file = "config/config_0.json";
+        std::string config_file = "config/config_0.jsonc";
         std::string frontend_dir;
         std::string host = "0.0.0.0";
         int port = 3100;
@@ -112,15 +112,8 @@ namespace
         function_cfg.AcrossIdentify_EN = cfg.at("ACROSS_IDENTIFY_EN");
         function_cfg.CircleIdentify_EN = cfg.at("CIRCLE_IDENTIFY_EN");
 
-        track_cfg.Track_width = cfg.at("Track_width");
-
         track_cfg.Path_Search_Start = cfg.at("PATH_SEARCH_START");
         track_cfg.Path_Search_End = cfg.at("PATH_SEARCH_END");
-        track_cfg.Side_Search_End = cfg.at("SIDE_SEARCH_END");
-
-        track_cfg.CommonMotorSpeed = cfg.at("STRIGHT_TRACK_MOTOR_SPEED");
-
-        track_cfg.TransitionMinArea = cfg.at("TRANSITION_MIN_AREA");
 
         track_cfg.CircleMaxFrames = cfg.at("CIRCLE_MAX_FRAMES");
 
@@ -204,10 +197,12 @@ namespace
                 return false;
             }
 
+            std::string json_str((std::istreambuf_iterator<char>(ifs)),
+                                 std::istreambuf_iterator<char>());
             json cfg_json;
             try
             {
-                ifs >> cfg_json;
+                cfg_json = json::parse(json_str, nullptr, true, true);
                 fill_runtime_config_from_json(cfg_json, &function_en_, &data_path_);
             }
             catch (const std::exception &e)

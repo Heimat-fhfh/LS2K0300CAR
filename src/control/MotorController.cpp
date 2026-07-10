@@ -9,7 +9,6 @@ MotorController::MotorController(const std::string& dirPath, const std::string& 
     , currentSpeed_(0.0f)
     , maxDutyPercent_(100.0f)  // 默认最大100%占空比
     , pwmMaxValue_(10000)     // 默认PWM最大值
-    , pwmDeadZone_(0.001f)   // 默认PWM死区0.001（与原硬编码值一致）
     , isRunning_(false) {
 }
 
@@ -57,57 +56,26 @@ void MotorController::setPwmMaxValue(uint16_t maxValue) {
     }
 }
 
-void MotorController::setPwmDeadZone(float deadZone) {
-    if (deadZone < 0.0f) deadZone = 0.0f;
-    if (deadZone >= 1.0f) deadZone = 0.999f;
-    pwmDeadZone_ = deadZone;
-    
-    if (isRunning_) {
-        updateMotor(currentSpeed_);
-    }
-}
-
-float MotorController::getPwmDeadZone() const {
-    return pwmDeadZone_;
-}
-
 bool MotorController::isRunning() const {
     return isRunning_;
 }
 
-float MotorController::applyDeadZoneRemap(float speed) const {
-    float absSpeed = std::abs(speed);
-    if (absSpeed <= pwmDeadZone_) {
-        return 0.0f;
-    }
-    // 剔除死区并重映射：将 [deadZone, 1.0] → [0.0, 1.0]
-    float remapped = (absSpeed - pwmDeadZone_) / (1.0f - pwmDeadZone_);
-    return std::copysign(remapped, speed);
-}
-
 uint16_t MotorController::calculateDutyValue(float speed) const {
-    // 计算绝对速度百分比，考虑最大占空比限制
     float absSpeed = std::abs(speed);
     float dutyPercent = absSpeed * maxDutyPercent_;
-    
-    // 计算PWM占空比值
+
     return static_cast<uint16_t>(dutyPercent / 100.0f * pwmMaxValue_);
 }
 
 void MotorController::updateMotor(float speed) {
-    // 应用PWM死区重映射
-    float effectiveSpeed = applyDeadZoneRemap(speed);
-    if (effectiveSpeed == 0.0f) {
+    if (speed <= 0.0f) {
         stop();
         return;
     }
     
-    // 设置方向
-    bool direction = (effectiveSpeed >= 0);
-    gpio_set_level(dirPath_.c_str(), direction ? 1 : 0);
+    gpio_set_level(dirPath_.c_str(), 1);
     
-    // 计算并设置PWM占空比（使用重映射后的有效速度）
-    uint16_t dutyValue = calculateDutyValue(effectiveSpeed);
+    uint16_t dutyValue = calculateDutyValue(speed);
     pwm_set_duty(pwmPath_.c_str(), dutyValue);
     
     isRunning_ = true;

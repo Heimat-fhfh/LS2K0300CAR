@@ -33,16 +33,7 @@ public:
     // 获取电机状态
     bool isRunning() const;
     
-    // 设置PWM占空比死区（0.0~1.0），低于此值的PWM输出被截断并重映射
-    void setPwmDeadZone(float deadZone);
-    
-    // 获取当前PWM死区值
-    float getPwmDeadZone() const;
-
 private:
-    // 应用死区重映射：剔除[-deadZone, deadZone]并将剩余部分映射到[-1, 1]
-    float applyDeadZoneRemap(float speed) const;
-    
     // 计算实际的PWM占空比值
     uint16_t calculateDutyValue(float speed) const;
     
@@ -55,7 +46,6 @@ private:
     float currentSpeed_;       // 当前速度（-1.0到1.0）
     float maxDutyPercent_;     // 最大占空比限制（0-100%）
     uint16_t pwmMaxValue_;     // PWM设备的最大值
-    float pwmDeadZone_;        // PWM占空比死区 (0.0~1.0)
     bool isRunning_;           // 电机是否正在运行
 };
 

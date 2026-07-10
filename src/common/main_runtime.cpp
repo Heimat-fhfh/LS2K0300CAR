@@ -150,56 +150,8 @@ double FindMotorDeadZone(MotorController& motor,
     return 1.0;
 }
 
-bool UpdateConfigDeadZones(const std::string& path, double leftDeadZone, double rightDeadZone, std::string* error)
-{
-    std::ifstream ifs(path);
-    if (!ifs.is_open())
-    {
-        if (error)
-        {
-            *error = "Cannot open config file: " + path;
-        }
-        return false;
-    }
 
-    nlohmann::json cfg;
-    try
-    {
-        ifs >> cfg;
-    }
-    catch (const std::exception& e)
-    {
-        if (error)
-        {
-            *error = std::string("JSON parse failed: ") + e.what();
-        }
-        return false;
-    }
 
-    if (!cfg.is_object())
-    {
-        if (error)
-        {
-            *error = "Config JSON root is not an object";
-        }
-        return false;
-    }
-
-    cfg["MOTOR_PWM_DEAD_ZONE_LEFT"] = leftDeadZone;
-    cfg["MOTOR_PWM_DEAD_ZONE_RIGHT"] = rightDeadZone;
-
-    std::ofstream ofs(path);
-    if (!ofs.is_open())
-    {
-        if (error)
-        {
-            *error = "Cannot write config file: " + path;
-        }
-        return false;
-    }
-    ofs << cfg.dump(4);
-    return true;
-}
 }
 
 bool ParseCameraFpsArgument(int argc, char** argv)
@@ -379,7 +331,6 @@ int RunMotorDeadZoneMode()
         return EXIT_FAILURE;
     }
 
-    motors->setPwmDeadZones(0.0f, 0.0f);
     motors->setMaxDutyLimits(static_cast<float>(JSON_VehicleConfigData_s.motorMaxDuty));
 
     const double speedThreshold = 0.01;
@@ -407,19 +358,10 @@ int RunMotorDeadZoneMode()
 
     JSON_VehicleConfigData_s.motorPwmDeadZoneLeft = leftDead;
     JSON_VehicleConfigData_s.motorPwmDeadZoneRight = rightDead;
-    motors->setPwmDeadZones(static_cast<float>(leftDead), static_cast<float>(rightDead));
-
-    const std::string configPath = Sync.GetConfigFilePath();
-    std::string error;
-    if (!UpdateConfigDeadZones(configPath, leftDead, rightDead, &error))
-    {
-        std::cerr << "[MotorDead] 写入配置失败: " << error << std::endl;
-        return EXIT_FAILURE;
-    }
 
     std::cout << "[MotorDead] left=" << leftDead
               << " right=" << rightDead
-              << " -> " << configPath << std::endl;
+              << " (仅本次运行生效，未持久化到配置文件)" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -432,8 +374,8 @@ bool StartMotorControlTask()
     }
 
     motorTask->setMotorMaxDuty(JSON_VehicleConfigData_s.motorMaxDuty);
-    motors->setPwmDeadZones(static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZoneLeft),
-                            static_cast<float>(JSON_VehicleConfigData_s.motorPwmDeadZoneRight));
+    motorTask->setDeadZones(JSON_VehicleConfigData_s.motorPwmDeadZoneLeft,
+                            JSON_VehicleConfigData_s.motorPwmDeadZoneRight);
 
     motorTask->enableCollisionProtection(JSON_VehicleConfigData_s.collisionProtectEnable);
     motorTask->setCollisionImuJerkThreshold(JSON_VehicleConfigData_s.collisionImuJerkThreshold);
@@ -460,6 +402,10 @@ bool StartMotorControlTask()
 
     motorTask->setCurvatureSpeedGain(JSON_VehicleConfigData_s.curvatureSpeedGain);
     motorTask->setCurvatureSpeedMin(JSON_VehicleConfigData_s.curvatureSpeedMin);
+
+    motorTask->setDiffOuterKp2(JSON_DifferentialPDConfigData_s.Kp2);
+    motorTask->setDiffInnerGkd(JSON_AngularVelocityPIDConfigData_s.Gkd);
+    motorTask->setDiffInnerGkdLimit(JSON_AngularVelocityPIDConfigData_s.GkdLimit);
 
     motorTask->start();
     return true;
@@ -829,4 +775,14 @@ int main_test_task(const MainTestConfig& test_config)
 
     motorTask->stop();
     return EXIT_SUCCESS;
+}
+
+uint32 seekfree_assistant_transfer(const uint8 *buff, uint32 length)
+{
+    return udp_dev.send_data(buff, length);
+}
+
+uint32 seekfree_assistant_receive(uint8 *buff, uint32 length)
+{
+    return udp_dev.read_data(buff, length);
 }

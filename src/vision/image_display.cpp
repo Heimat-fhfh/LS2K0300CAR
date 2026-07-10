@@ -9,8 +9,6 @@ using namespace cv;
 
 void ImgProcess::ImgSynthesis(Img_Store *Img_Store_p,Function_EN *Function_EN_p)
 {
-	JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
-
 	int ImgAllWidth = (Img_Store_p -> Img_Color).cols;
 	int ImgAllHeight = (Img_Store_p -> Img_Color).rows;
 	Mat ImgAll = Mat(ImgAllHeight+210,ImgAllWidth*3+18,CV_8UC3,Scalar(0,0,0));
@@ -60,12 +58,11 @@ void ImgProcess::ImgShow(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_
 {
 	JSON_FunctionConfigData JSON_FunctionConfigData = Function_EN_p -> JSON_FunctionConfigData_v[0];
 
-	ImgProcess::ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
-	ImgProcess::ImgInflectionPointDraw(Img_Store_p,Data_Path_p); 
-	ImgProcess::ImgTransitionScanDraw(Img_Store_p, Data_Path_p);
-	ImgProcess::ImgReferenceLine(Img_Store_p,Data_Path_p);
-	ImgProcess::ImgText(Img_Store_p,Data_Path_p,Function_EN_p);
-	ImgProcess::ImgSynthesis(Img_Store_p,Function_EN_p);
+	// ImgProcess::ImgLabel(Img_Store_p,Data_Path_p,Function_EN_p);
+	// ImgProcess::ImgInflectionPointDraw(Img_Store_p,Data_Path_p); 
+	// ImgProcess::ImgReferenceLine(Img_Store_p,Data_Path_p);
+	// ImgProcess::ImgText(Img_Store_p,Data_Path_p,Function_EN_p);
+	// ImgProcess::ImgSynthesis(Img_Store_p,Function_EN_p);
 	if(JSON_FunctionConfigData.ImageSave_EN == true)
 	{
 		ImgProcess::ImgSave(Img_Store_p);
@@ -127,39 +124,6 @@ void ImgProcess::ImgReferenceLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p)
 
 	line(Img_Store_p->Img_Track,Point(0,image_h-JSON_TrackConfigData.Path_Search_Start),
 	Point(image_w-1,image_h-JSON_TrackConfigData.Path_Search_Start),Scalar(0,200,0),1);
-}
-
-void ImgProcess::ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_Path_p)
-{
-    if (Img_Store_p == nullptr || Data_Path_p == nullptr) return;
-    if (Img_Store_p->Img_Track.empty()) return;
-	if (!Data_Path_p->black_left_found && !Data_Path_p->black_right_found) return;
-
-    JSON_TrackConfigData cfg = Data_Path_p->JSON_TrackConfigData_v[0];
-
-	vector<vector<Point>> contours = Data_Path_p->TransitionContours;
-	vector<Vec4i> hierarchy = Data_Path_p->TransitionHierarchy;
-
-	int hole_count = 0;
-	for (size_t i = 0; i < contours.size() && i < hierarchy.size(); ++i) {
-		if (hierarchy[i][3] < 0) continue;
-		double area = contourArea(contours[i]);
-		if (area < cfg.TransitionMinArea) continue;
-
-		drawContours(Img_Store_p->Img_Track, contours, static_cast<int>(i), Scalar(0, 0, 255), 2);
-
-		Moments mu = moments(contours[i]);
-		if (mu.m00 > 0.0) {
-			int cx = static_cast<int>(mu.m10 / mu.m00);
-			int cy = static_cast<int>(mu.m01 / mu.m00);
-			circle(Img_Store_p->Img_Track, Point(cx, cy), 2, Scalar(0, 255, 255), -1);
-		}
-		++hole_count;
-	}
-
-	circle((Img_Store_p -> Img_Track),Data_Path_p -> leftmost_point, 6,Scalar(255,0,255),1);
-	circle((Img_Store_p -> Img_Track),Data_Path_p -> rightmost_point, 6,Scalar(255,0,255),1);
-
 }
 
 void ImgProcess::ImgLabel(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p)

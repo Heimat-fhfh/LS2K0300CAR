@@ -7,19 +7,6 @@
 using namespace std;
 using namespace cv;
 
-namespace
-{
-std::string FourccToText(double fourccValue)
-{
-	const int fourcc = static_cast<int>(fourccValue);
-	std::string text(4, ' ');
-	text[0] = static_cast<char>(fourcc & 0xFF);
-	text[1] = static_cast<char>((fourcc >> 8) & 0xFF);
-	text[2] = static_cast<char>((fourcc >> 16) & 0xFF);
-	text[3] = static_cast<char>((fourcc >> 24) & 0xFF);
-	return text;
-}
-} // namespace
 
 
 
@@ -101,7 +88,6 @@ void CameraInit(VideoCapture& Camera,CameraKind Camera_EN,int Width,int Height,i
 void CameraImgGetThread(VideoCapture& Camera,Img_Store *Img_Store_p)
 {
 	Mat Img;
-	double cameraFps = Camera.get(CAP_PROP_FPS);
 	uint64_t threadFrameCount = 0;
 	uint64_t threadFailedCount = 0;
 	uint64_t threadEmptyCount = 0;

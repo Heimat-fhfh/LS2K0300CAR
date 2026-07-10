@@ -4,7 +4,9 @@
 #include "common/main_runtime.hpp"
 #include "common/AAAtools.h"
 #include "vision/Image_Process.h"
-#include "network/seekfree_udp.h"
+#include "common/seekfree_assistant.hpp"
+
+#define BOUNDARY_NUM  (60 * 4 / 2)
 
 
 using namespace std;
@@ -19,8 +21,7 @@ int main(int argc, char** argv)
 
     // 1. 配置参数初始化
     argument_config();
-    if (!g_runtime_config_ok)
-{cout << "配置同步失败" << endl;return EXIT_FAILURE;}
+    if (!g_runtime_config_ok){cout << "配置同步失败" << endl;return EXIT_FAILURE;}
 
     if (motorDeadMode){return RunMotorDeadZoneMode();}
 
@@ -70,8 +71,19 @@ int main(int argc, char** argv)
         tempCapture.saveFrameIfNeeded(Img_Store_s.Img_Color);
 
         FrameTaskAfterRead(&Img_Store_s, &Data_Path_s, &Function_EN_s, &imgProcess, &judge);
-        frame_count++;
 
+        {
+            judge.MotorSpeed_Judge(&Img_Store_s, &Data_Path_s);
+
+            float errorNorm = (static_cast<float>(ImageStatus.Det_True)-40.0f) / 40.0f;
+            
+            motorTask->setSteerError(static_cast<double>(errorNorm));
+            motorTask->setTargetSpeed(Data_Path_s.TargetBaseSpeedMps);     
+        }
+
+
+        frame_count++;
+        
         // 帧率统计 (每100帧打印一次)
         if (frame_count % 100 == 0) {
             auto now = std::chrono::steady_clock::now();
@@ -149,68 +161,49 @@ int main(int argc, char** argv)
             }
         }
 
-        // // 归一化偏差并下发电机控制任务
-        {
-            float errorNorm = static_cast<float>(Data_Path_s.SteerErrorPx) / 40.0f;
-            errorNorm = std::max(-1.0f, std::min(1.0f, errorNorm));
-            motorTask->setSteerError(static_cast<double>(errorNorm));
-            motorTask->setTargetSpeed(Data_Path_s.TargetBaseSpeedMps);
-        }
-
         // IPS200 屏幕显示（my_zf 配套 80x60）
         if (JSON_FunctionConfigData.IPS200_Show_EN)
         {
             displayMyZFOnIPS200();
         }
 
-        // UDP 图像上传（INCLUDE_BOUNDARY_TYPE=3）
+        // UDP 图像上传（使用 seekfree_assistant 官方接口）
         if (JSON_FunctionConfigData.UDP_Image_Upload_EN)
         {
-            static uint8_t img_buf[80 * 60];
-            static uint8_t left_x_buf[BOUNDARY_NUM * 2];
-            static uint8_t left_y_buf[BOUNDARY_NUM * 2];
-            static uint8_t center_x_buf[BOUNDARY_NUM * 2];
-            static uint8_t center_y_buf[BOUNDARY_NUM * 2];
-            static uint8_t right_x_buf[BOUNDARY_NUM * 2];
-            static uint8_t right_y_buf[BOUNDARY_NUM * 2];
+            static uint8_t  img_buf[80 * 60];
+            static uint16_t left_x_buf[BOUNDARY_NUM];
+            static uint16_t left_y_buf[BOUNDARY_NUM];
+            static uint16_t center_x_buf[BOUNDARY_NUM];
+            static uint16_t center_y_buf[BOUNDARY_NUM];
+            static uint16_t right_x_buf[BOUNDARY_NUM];
+            static uint16_t right_y_buf[BOUNDARY_NUM];
+            static bool     assistant_configured = false;
 
-            // fill grayscale image from Image_Use
+            // 填充灰度图
             for (int i = 0; i < 60; i++)
                 for (int j = 0; j < 80; j++)
                     img_buf[i * 80 + j] = Image_Use[i][j];
 
-            // fill boundary arrays (XY, 16-bit, bottom-to-top for SEEKFREE assistant)
-            int dot = 0;
+            // 填充边界数组 (XY, 16-bit, Y轴翻转对齐上位机)
             uint8_t off = ImageStatus.OFFLine;
+            int dot = 0;
             for (int i = off; i < 60 && dot < BOUNDARY_NUM; i++, dot++) {
-                uint16_t x = ImageDeal[i].LeftBorder;
-                uint16_t y = 59 - i;  // flip Y for display
-                left_x_buf[dot * 2]     = x & 0xFF;
-                left_x_buf[dot * 2 + 1] = (x >> 8) & 0xFF;
-                left_y_buf[dot * 2]     = y & 0xFF;
-                left_y_buf[dot * 2 + 1] = (y >> 8) & 0xFF;
+                left_x_buf[dot] = ImageDeal[i].LeftBorder;
+                left_y_buf[dot] = 59 - i;
             }
             int dot_l = dot;
 
             dot = 0;
             for (int i = off; i < 60 && dot < BOUNDARY_NUM; i++, dot++) {
-                uint16_t x = ImageDeal[i].Center;
-                uint16_t y = 59 - i;
-                center_x_buf[dot * 2]     = x & 0xFF;
-                center_x_buf[dot * 2 + 1] = (x >> 8) & 0xFF;
-                center_y_buf[dot * 2]     = y & 0xFF;
-                center_y_buf[dot * 2 + 1] = (y >> 8) & 0xFF;
+                center_x_buf[dot] = ImageDeal[i].Center;
+                center_y_buf[dot] = 59 - i;
             }
             int dot_c = dot;
 
             dot = 0;
             for (int i = off; i < 60 && dot < BOUNDARY_NUM; i++, dot++) {
-                uint16_t x = ImageDeal[i].RightBorder;
-                uint16_t y = 59 - i;
-                right_x_buf[dot * 2]     = x & 0xFF;
-                right_x_buf[dot * 2 + 1] = (x >> 8) & 0xFF;
-                right_y_buf[dot * 2]     = y & 0xFF;
-                right_y_buf[dot * 2 + 1] = (y >> 8) & 0xFF;
+                right_x_buf[dot] = ImageDeal[i].RightBorder;
+                right_y_buf[dot] = 59 - i;
             }
             int dot_r = dot;
 
@@ -219,11 +212,21 @@ int main(int argc, char** argv)
             if (dot_r > max_dot) max_dot = dot_r;
             if (max_dot < 1) max_dot = 1;
 
-            seekfree_udp_send_frame(img_buf, 80, 60,
-                                    left_x_buf, left_y_buf,
-                                    center_x_buf, center_y_buf,
-                                    right_x_buf, right_y_buf,
-                                    max_dot);
+            // 一次性配置图像信息
+            if (!assistant_configured)
+            {
+                seekfree_assistant_camera_information_config(
+                    SEEKFREE_ASSISTANT_MT9V03X, img_buf, 80, 60);
+                assistant_configured = true;
+            }
+
+            // 每帧更新边线配置（点数可能变化）
+            seekfree_assistant_camera_boundary_config(
+                XY_BOUNDARY, max_dot,
+                left_x_buf, center_x_buf, right_x_buf,
+                left_y_buf, center_y_buf, right_y_buf);
+
+            seekfree_assistant_camera_send();
         }
 
     }
@@ -238,6 +241,6 @@ int main(int argc, char** argv)
         motorTask->setTargetSpeed(0.0);
         motorTask->stop();
     }
-
+;
     return 0;
 }

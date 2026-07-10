@@ -7,28 +7,7 @@
 using namespace std;
 using namespace cv;
 
-namespace {
-// 将当前左右边线拷贝为浮点点集，供角度法识别模块复用。
-std::vector<cv::Point2f> collect_side_points(const Data_Path* data_path, bool left_side) {
-    std::vector<cv::Point2f> points;
-    if (data_path == nullptr) {
-        return points;
-    }
 
-    const int num = left_side ? data_path->NumSearch[0] : data_path->NumSearch[1];
-    if (num <= 0) {
-        return points;
-    }
-
-    points.reserve(num);
-    for (int i = 0; i < num; ++i) {
-        const float x = static_cast<float>(left_side ? data_path->SideCoordinate_Eight[i][0] : data_path->SideCoordinate_Eight[i][2]);
-        const float y = static_cast<float>(left_side ? data_path->SideCoordinate_Eight[i][1] : data_path->SideCoordinate_Eight[i][3]);
-        points.emplace_back(x, y);
-    }
-    return points;
-}
-} // namespace
 
 
 
@@ -90,7 +69,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
         {
             cin.clear();
             cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cerr << "[Config] 输入不是有效数字，回退到 config_0.json" << std::endl;
+            std::cerr << "[Config] 输入不是有效数字，回退到 config_0.jsonc" << std::endl;
             JSON_FileNum = 0;
         }
         changetimes = true;
@@ -102,17 +81,17 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
 
     if (JSON_FileNum < 0 || JSON_FileNum > 2)
     {
-        std::cerr << "[Config] 非法配置编号: " << JSON_FileNum << "，回退到 config_0.json" << std::endl;
+        std::cerr << "[Config] 非法配置编号: " << JSON_FileNum << "，回退到 config_0.jsonc" << std::endl;
         JSON_FileNum = 0;
         jsonnum = 0;
     }
 
     switch(JSON_FileNum)
     {
-        case 0:{ ConfigFilePath = "config/config_0.json"; break; }
-        case 1:{ ConfigFilePath = "config/config_1.json"; break; }
-        case 2:{ ConfigFilePath = "config/config_2.json"; break; }
-        default:{ ConfigFilePath = "config/config_0.json"; break; }
+        case 0:{ ConfigFilePath = "config/config_0.jsonc"; break; }
+        case 1:{ ConfigFilePath = "config/config_1.jsonc"; break; }
+        case 2:{ ConfigFilePath = "config/config_2.jsonc"; break; }
+        default:{ ConfigFilePath = "config/config_0.jsonc"; break; }
     }
 
 
@@ -138,7 +117,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     nlohmann::json ConfigData;
     try
     {
-        ConfigData = nlohmann::json::parse(ConfigFile);
+        ConfigData = nlohmann::json::parse(ConfigFile, nullptr, true, true);
     }
     catch (const nlohmann::json::parse_error& e)
     {
@@ -158,29 +137,38 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     }
 
     const std::vector<std::string> required_keys = {
-        "CAMERA_EN", "IMAGE_SAVE_EN",
-        "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN", "IPS200_SHOW_EN", "UDP_IMAGE_UPLOAD_EN",
-        "Track_width", "PATH_SEARCH_START",
-        "PATH_SEARCH_END", "SIDE_SEARCH_END",
         "DIFF_OUTER_PD_KP", "DIFF_OUTER_PD_KD", "DIFF_OUTER_PD_LIMIT_P", "DIFF_OUTER_PD_LIMIT_D",
-        "DIFF_OUTER_PD_LIMIT_OUTPUT",
+        "DIFF_OUTER_PD_LIMIT_OUTPUT", "DIFF_OUTER_PD_KP2",
+        "DIFF_OUTPUT_RAMP_ENABLE", "DIFF_OUTPUT_RAMP_ACCEL_RATE", "DIFF_OUTPUT_RAMP_DECEL_RATE",
+
         "DIFF_INNER_PI_KP", "DIFF_INNER_PI_KI", "DIFF_INNER_PI_KD", "DIFF_INNER_PI_LIMIT_P", "DIFF_INNER_PI_LIMIT_I",
         "DIFF_INNER_PI_LIMIT_D", "DIFF_INNER_PI_LIMIT_OUTPUT", "DIFF_INNER_PI_LIMIT_I_MIN", "DIFF_INNER_PI_ANTI_WINDUP",
+        "DIFF_INNER_PI_GKD", "DIFF_INNER_PI_GKD_LIMIT",
+
         "SPEED_INCR_PI_KP", "SPEED_INCR_PI_KI", "SPEED_INCR_PI_KD", "SPEED_INCR_PI_LIMIT_OUTPUT",
+
+        "CAMERA_EN", "IMAGE_SAVE_EN",
+        "ACROSS_IDENTIFY_EN", "CIRCLE_IDENTIFY_EN", "IPS200_SHOW_EN", "UDP_IMAGE_UPLOAD_EN",
+
+        "PATH_SEARCH_START","PATH_SEARCH_END",
+        
+        "STRIGHT_TRACK_MOTOR_SPEED","CIRCLE_MAX_FRAMES"
+
         "CONTROL_PERIOD", "MOTOR_MAX_DUTY",
+
         "LPF_SPEED_TAU", "LPF_ANGULAR_TAU",
+
         "MOTOR_PWM_DEAD_ZONE_LEFT", "MOTOR_PWM_DEAD_ZONE_RIGHT",
+
         "COLLISION_PROTECT_ENABLE", "COLLISION_IMU_JERK_THRESHOLD",
         "COLLISION_STALL_DUTY_THRESHOLD", "COLLISION_STALL_SPEED_THRESHOLD",
         "COLLISION_STALL_CYCLES", "COLLISION_RESET_KEY", "COLLISION_BUMPER_KEY",
+
         "RAMP_ACCEL_RATE", "RAMP_DECEL_RATE",
-        "DIFF_OUTPUT_RAMP_ENABLE", "DIFF_OUTPUT_RAMP_ACCEL_RATE", "DIFF_OUTPUT_RAMP_DECEL_RATE",
-        "CURVATURE_SPEED_GAIN",
-        "CURVATURE_SPEED_MIN",
+        
+        "CURVATURE_SPEED_GAIN","CURVATURE_SPEED_MIN",
+        
         "BATTERY_LOW_THRESHOLD",
-        "STRIGHT_TRACK_MOTOR_SPEED",
-        "TRANSITION_MIN_AREA",
-        "CIRCLE_MAX_FRAMES"
     };
 
     std::vector<std::string> missing_keys;
@@ -210,6 +198,7 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     JSON_DifferentialPDConfigData.limitP = ConfigData.at("DIFF_OUTER_PD_LIMIT_P");
     JSON_DifferentialPDConfigData.limitD = ConfigData.at("DIFF_OUTER_PD_LIMIT_D");
     JSON_DifferentialPDConfigData.limitOutput = ConfigData.at("DIFF_OUTER_PD_LIMIT_OUTPUT");
+    JSON_DifferentialPDConfigData.Kp2 = ConfigData.at("DIFF_OUTER_PD_KP2");
 
     // 内环角速度PI参数
     JSON_AngularVelocityPIDConfigData.Kp = ConfigData.at("DIFF_INNER_PI_KP");
@@ -221,6 +210,8 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     JSON_AngularVelocityPIDConfigData.limitOutput = ConfigData.at("DIFF_INNER_PI_LIMIT_OUTPUT");
     JSON_AngularVelocityPIDConfigData.limitIMin = ConfigData.at("DIFF_INNER_PI_LIMIT_I_MIN");
     JSON_AngularVelocityPIDConfigData.enableAntiWindup = ConfigData.at("DIFF_INNER_PI_ANTI_WINDUP");
+    JSON_AngularVelocityPIDConfigData.Gkd = ConfigData.at("DIFF_INNER_PI_GKD");
+    JSON_AngularVelocityPIDConfigData.GkdLimit = ConfigData.at("DIFF_INNER_PI_GKD_LIMIT");
 
     // 速度环增量式PID参数
     JSON_SpeedIncrementalPIConfigData.Kp = ConfigData.at("SPEED_INCR_PI_KP");
@@ -269,15 +260,10 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     JSON_FunctionConfigData.IPS200_Show_EN = ConfigData.at("IPS200_SHOW_EN");
     JSON_FunctionConfigData.UDP_Image_Upload_EN = ConfigData.at("UDP_IMAGE_UPLOAD_EN");
 
-    JSON_TrackConfigData.Track_width = ConfigData.at("Track_width");
-
     JSON_TrackConfigData.Path_Search_Start = ConfigData.at("PATH_SEARCH_START");
     JSON_TrackConfigData.Path_Search_End = ConfigData.at("PATH_SEARCH_END");
-    JSON_TrackConfigData.Side_Search_End = ConfigData.at("SIDE_SEARCH_END");
 
     JSON_TrackConfigData.CommonMotorSpeed = ConfigData.at("STRIGHT_TRACK_MOTOR_SPEED");
-
-    JSON_TrackConfigData.TransitionMinArea = ConfigData.at("TRANSITION_MIN_AREA");
 
     JSON_TrackConfigData.CircleMaxFrames = ConfigData.at("CIRCLE_MAX_FRAMES");
 
@@ -310,10 +296,10 @@ std::string SYNC::GetConfigFilePath() const
 
     switch (JSON_FileNum)
     {
-        case 0: return "config/config_0.json";
-        case 1: return "config/config_1.json";
-        case 2: return "config/config_2.json";
-        default: return "config/config_0.json";
+        case 0: return "config/config_0.jsonc";
+        case 1: return "config/config_1.jsonc";
+        case 2: return "config/config_2.jsonc";
+        default: return "config/config_0.jsonc";
     }
 }
 

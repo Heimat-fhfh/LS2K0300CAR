@@ -1,14 +1,14 @@
 
 // #include "zf_common_debug.h"
 
-#include "seekfree_assistant.hpp"
+#include "common/seekfree_assistant.hpp"
 
 
 extern uint32 seekfree_assistant_transfer       (const uint8 *buff, uint32 length);
 extern uint32 seekfree_assistant_receive        (uint8 *buff, uint32 length);
 
 #if (1 == SEEKFREE_ASSISTANT_SET_PARAMETR_ENABLE)
-#include "zf_common_fifo.hpp"
+#include "common/zf_common_fifo.hpp"
 static uint8        seekfree_assistant_buffer[SEEKFREE_ASSISTANT_BUFFER_SIZE];                                      // FIFO缓冲区
 static fifo_struct  seekfree_assistant_fifo =                                                                       // FIFO结构体
 {   

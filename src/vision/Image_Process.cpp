@@ -1253,7 +1253,6 @@ void GetDet()
 {
   float DetTemp = 0;      // 加权平均累加值（分子）
   int TowPoint = 0;       // 前瞻点行号（动态选择）
-  float SpeedGain = 0;    // [预留] 速度增益系数
   float UnitAll = 0;      // 权重累加值（分母）
 
   // ---- 根据赛道类型动态选择前瞻点 ----

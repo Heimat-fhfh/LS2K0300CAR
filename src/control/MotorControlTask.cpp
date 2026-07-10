@@ -47,6 +47,8 @@ MotorControlTask::MotorControlTask(
     , rightRampLimiter(50.0, 100.0, controlPeriod)
     , diffOutputRampEnabled(true)
     , diffOutputRampLimiter(15.0, 30.0, controlPeriod)
+    , pwmDeadZoneLeft_(0.001)
+    , pwmDeadZoneRight_(0.001)
     , controlPeriod(controlPeriod)
     , running(false)
     , taskError(false)
@@ -190,6 +192,48 @@ void MotorControlTask::setCurvatureSpeedMin(double minSpeed) {
 
 double MotorControlTask::getCurvatureSpeedMin() const {
     return curvatureSpeedMin.load();
+}
+
+void MotorControlTask::setDiffOuterKp2(double kp2) {
+    if (kp2 < 0.0) {
+        printf("Warning: Invalid diff outer KP2: %.3f, clamped to 0\n", kp2);
+        kp2 = 0.0;
+    }
+    diffOuterKp2_.store(kp2);
+    printf("Diff outer KP2 set: %.3f\n", kp2);
+}
+
+void MotorControlTask::setDiffInnerGkd(double gkd) {
+    diffInnerGkd_.store(gkd);
+    printf("Diff inner GKD set: %.3f\n", gkd);
+}
+
+void MotorControlTask::setDiffInnerGkdLimit(double limit) {
+    if (limit < 0.0) {
+        printf("Warning: Invalid GKD limit: %.3f, clamped to 0\n", limit);
+        limit = 0.0;
+    }
+    diffInnerGkdLimit_.store(limit);
+    printf("Diff inner GKD limit set: %.3f\n", limit);
+}
+
+void MotorControlTask::setDeadZones(double leftDeadZone, double rightDeadZone) {
+    if (leftDeadZone < 0.0) leftDeadZone = 0.0;
+    if (leftDeadZone >= 1.0) leftDeadZone = 0.999;
+    if (rightDeadZone < 0.0) rightDeadZone = 0.0;
+    if (rightDeadZone >= 1.0) rightDeadZone = 0.999;
+    pwmDeadZoneLeft_.store(leftDeadZone);
+    pwmDeadZoneRight_.store(rightDeadZone);
+    printf("Dead zones set: left=%.4f right=%.4f\n", leftDeadZone, rightDeadZone);
+}
+
+double MotorControlTask::applyDeadZoneRemap(double speed, double deadZone) {
+    double absSpeed = std::abs(speed);
+    if (absSpeed <= deadZone) {
+        return 0.0;
+    }
+    double remapped = (absSpeed - deadZone) / (1.0 - deadZone);
+    return std::copysign(remapped, speed);
 }
 
 // ==================== 主控制循环 ====================
@@ -355,7 +399,7 @@ void MotorControlTask::run() {
             // ============================================================
             if (collisionProtectEnabled.load()) {
                 if (imuValid && detectImuCollision(imuData)) {
-                    printf("COLLISION: IMU jerk detected (acc_x=%.2fg acc_y=%.2fg acc_z=%.2fg)\n",
+                    printf("碰撞: 检测到IMU抖动 (acc_x=%.2fg acc_y=%.2fg acc_z=%.2fg)\n",
                            imuData.acc_x, imuData.acc_y, imuData.acc_z);
                     handleCollision();
                     state = ControlState::COLLISION;
@@ -426,6 +470,16 @@ void MotorControlTask::run() {
             // ============================================================
             double desiredDiffSpeed = diffOuterPID.calculate(0.0, currentError, controlPeriod);
 
+            {
+                double kp2 = diffOuterKp2_.load();
+                if (kp2 != 0.0) {
+                    double outerError = -currentError;
+                    desiredDiffSpeed += outerError * std::abs(outerError) * kp2;
+                    desiredDiffSpeed = std::max(-diffOuterParams.limitOutput,
+                                                 std::min(diffOuterParams.limitOutput, desiredDiffSpeed));
+                }
+            }
+
             if (diffOutputRampEnabled.load()) {
                 desiredDiffSpeed = diffOutputRampLimiter.apply(desiredDiffSpeed);
             }
@@ -436,7 +490,15 @@ void MotorControlTask::run() {
             // ============================================================
             double diffOutput;
             if (imuValid) {
-                diffOutput = diffInnerPID.calculate(desiredDiffSpeed, gyroZ, controlPeriod)/2.0;
+                diffOutput = diffInnerPID.calculate(desiredDiffSpeed, gyroZ, controlPeriod);
+
+                double gkd = diffInnerGkd_.load();
+                if (gkd != 0.0) {
+                    double gkdTerm = gyroZ * gkd;
+                    double gkdLimit = diffInnerGkdLimit_.load();
+                    gkdTerm = std::max(-gkdLimit, std::min(gkdLimit, gkdTerm));
+                    diffOutput += gkdTerm;
+                }
             } else {
                 diffOutput = desiredDiffSpeed;
             }
@@ -467,6 +529,9 @@ void MotorControlTask::run() {
                 leftCmd = leftRampLimiter.apply(leftCmd);
                 rightCmd = rightRampLimiter.apply(rightCmd);
             }
+
+            leftCmd = applyDeadZoneRemap(leftCmd, pwmDeadZoneLeft_.load());
+            rightCmd = applyDeadZoneRemap(rightCmd, pwmDeadZoneRight_.load());
 
             // UDP遥测
             std::array<float, 10> data = {

@@ -37,16 +37,6 @@ void DualMotorController::setMaxDutyLimits(float maxDutyPercent) {
     rightMotor_->setMaxDutyLimit(maxDutyPercent);
 }
 
-void DualMotorController::setPwmDeadZone(float deadZone) {
-    leftMotor_->setPwmDeadZone(deadZone);
-    rightMotor_->setPwmDeadZone(deadZone);
-}
-
-void DualMotorController::setPwmDeadZones(float leftDeadZone, float rightDeadZone) {
-    leftMotor_->setPwmDeadZone(leftDeadZone);
-    rightMotor_->setPwmDeadZone(rightDeadZone);
-}
-
 void DualMotorController::setPwmMaxValues(uint16_t maxValue) {
     leftMotor_->setPwmMaxValue(maxValue);
     rightMotor_->setPwmMaxValue(maxValue);

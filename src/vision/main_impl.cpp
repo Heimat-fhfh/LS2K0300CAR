@@ -5,10 +5,12 @@ using namespace std;
 using namespace std::chrono;
 using namespace std::this_thread;
 
-void RunCameraCatchTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
-{
+
+
+void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
+{   
     if (Img_Store_p->Img_Color.empty()) {cerr << "Error: Img_Color is empty!" << endl;return;}
-	
+    
 	Img_Store_p->Img_Track = Img_Store_p->Img_Color.clone();
 	cvtColor(Img_Store_p->Img_Track, Img_Store_p->Img_Gray, cv::COLOR_BGR2GRAY);
 
@@ -17,17 +19,9 @@ void RunCameraCatchTask(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
 	resize(gray_cropped, gray_80x60, Size(80, 60), 0, 0, INTER_AREA);
 	ImageProcess(gray_80x60);
 
-}
-
-void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
-{
-    static int ring_frame_count = 0;        // 圆环状态计数
-
+    static int ring_frame_count = 0;
     JSON_TrackConfigData cfg = Data_Path_p->JSON_TrackConfigData_v[0];
-
-    RunCameraCatchTask(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
-
-    // 检测到圆环元素时，计数器增加
+    
     if (ImageFlag.image_element_rings_flag != 0) {
         ring_frame_count++;
         if (ring_frame_count > cfg.CircleMaxFrames) {
@@ -40,21 +34,17 @@ void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Func
     } else {
         ring_frame_count = 0;
     }
-
 }
 
-void ApplyDifferentialControl(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,Judge *judge_p)
+void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, ImgProcess *imgProcess_p, Judge *judge_p)
 {
-    Data_Path_p->SteerErrorPx = static_cast<int>(ImageStatus.Det_True) - 40;
-    judge_p->MotorSpeed_Judge(Img_Store_p,Data_Path_p);
+    FrameTaskAfterRead(Img_Store_p, Data_Path_p, Function_EN_p, imgProcess_p, judge_p);
 }
 
-void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
+void ApplyDifferentialControl(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, Judge *judge_p)
 {
-    if (!Function_EN_p->Game_EN)
-    {
-        return;
-    }
-    ProcessTrackTaskPerFrame(Img_Store_p,Data_Path_p,Function_EN_p,imgProcess_p,judge_p);
-    ApplyDifferentialControl(Img_Store_p,Data_Path_p,Function_EN_p,judge_p);
+    (void)Img_Store_p;
+    (void)Data_Path_p;
+    (void)Function_EN_p;
+    (void)judge_p;
 }

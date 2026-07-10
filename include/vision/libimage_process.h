@@ -117,15 +117,6 @@ class ImgProcess
             Data_Path_p 路径相关数据指针
         */
         void ImgReferenceLine(Img_Store *Img_Store_p,Data_Path *Data_Path_p);
-
-        /*
-            跳变扫描检测结果绘制
-            绘制每个跳变点、2跳变行标记、隔离块区域、检测结果文字
-            @参数说明
-            Img_Store_p 图像存储指针
-            Data_Path_p 路径相关数据指针
-        */
-        void ImgTransitionScanDraw(Img_Store *Img_Store_p, Data_Path *Data_Path_p);
 };
 
 #endif

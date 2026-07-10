@@ -91,16 +91,11 @@ target_link_libraries(main PUBLIC
 # 上位机图像处理离线测试（WebUI展示），仅非边缘构建时生成
 if (NOT USE_EDGE_TOOLCHAIN)
     set(IMAGE_WEB_TEST_SRC
-        ${PROJECT_SOURCE_DIR}/src/vision/libimage_process.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/image_display.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/main_impl.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/Image_Process.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/vision_rings.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/libdata_process.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/path_side_search.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/track_element_scan.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/path_circle.cpp
-        ${PROJECT_SOURCE_DIR}/src/vision/path_refactor.cpp
     )
 
     add_executable(image_web_test

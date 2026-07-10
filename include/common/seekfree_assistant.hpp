@@ -2,8 +2,7 @@
 #ifndef _seekfree_assistant_h_
 #define _seekfree_assistant_h_
 
-
-#include "zf_common_typedef.hpp"
+#include "common/base.h"
 
 
 // 1：使能参数调节的功能  0：关闭参数调节的功能

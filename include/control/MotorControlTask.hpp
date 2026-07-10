@@ -55,6 +55,11 @@ public:
     double getCurvatureSpeedGain() const;
     void setCurvatureSpeedMin(double minSpeed);
     double getCurvatureSpeedMin() const;
+    void setDiffOuterKp2(double kp2);
+    void setDiffInnerGkd(double gkd);
+    void setDiffInnerGkdLimit(double limit);
+
+    void setDeadZones(double leftDeadZone, double rightDeadZone);
 
     // ==================== 碰撞保护 API ====================
 
@@ -100,6 +105,8 @@ private:
 
     bool isValidSpeed(double speed) const;
     bool isValidAngularVelocity(double angularVelocity) const;
+
+    static double applyDeadZoneRemap(double speed, double deadZone);
 
     // ==================== 碰撞检测方法 ====================
 
@@ -198,9 +205,18 @@ private:
     std::atomic<double> curvatureSpeedGain{0.0};
     std::atomic<double> curvatureSpeedMin{0.1};
 
+    // 外环非线性KP2 + 内环陀螺仪前馈
+    std::atomic<double> diffOuterKp2_{0.0};
+    std::atomic<double> diffInnerGkd_{0.0};
+    std::atomic<double> diffInnerGkdLimit_{3.0};
+
     // 紧急停机/出界保护
     std::atomic<bool> emergencyStopActive{false};
     std::atomic<bool> pidResetRequested{false};
+
+    // 死区
+    std::atomic<double> pwmDeadZoneLeft_{0.001};
+    std::atomic<double> pwmDeadZoneRight_{0.001};
 
     // 控制周期
     const double controlPeriod;
