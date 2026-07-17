@@ -232,7 +232,7 @@ double MotorControlTask::applyDeadZoneRemap(double speed, double deadZone) {
     if (absSpeed <= deadZone) {
         return 0.0;
     }
-    double remapped = (absSpeed - deadZone) / (1.0 - deadZone);
+    double remapped = (absSpeed) / (1.0 - deadZone);
     return std::copysign(remapped, speed);
 }
 

@@ -169,6 +169,16 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
         "CURVATURE_SPEED_GAIN","CURVATURE_SPEED_MIN",
         
         "BATTERY_LOW_THRESHOLD",
+
+        "TARGET_BOARD_EN",
+        "RED_BLOB_B_MIN", "RED_BLOB_B_MAX",
+        "RED_BLOB_G_MIN", "RED_BLOB_G_MAX",
+        "RED_BLOB_R_MIN", "RED_BLOB_R_MAX",
+        "RED_BLOB_MIN_AREA", "RED_BLOB_Y_GATE",
+        "TARGET_CONFIRM_FRAMES",
+        "TARGET_ROI_OFFSET_X", "TARGET_ROI_OFFSET_Y",
+        "TARGET_ROI_W", "TARGET_ROI_H",
+        "TARGET_OVERRIDE_TIMEOUT_FRAMES",
     };
 
     std::vector<std::string> missing_keys;
@@ -260,6 +270,23 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     JSON_FunctionConfigData.IPS200_Show_EN = ConfigData.at("IPS200_SHOW_EN");
     JSON_FunctionConfigData.UDP_Image_Upload_EN = ConfigData.at("UDP_IMAGE_UPLOAD_EN");
 
+    JSON_TargetBoardConfigData JSON_TargetBoardConfigData;
+    JSON_TargetBoardConfigData.enable = ConfigData.at("TARGET_BOARD_EN");
+    JSON_TargetBoardConfigData.bMin = ConfigData.at("RED_BLOB_B_MIN");
+    JSON_TargetBoardConfigData.bMax = ConfigData.at("RED_BLOB_B_MAX");
+    JSON_TargetBoardConfigData.gMin = ConfigData.at("RED_BLOB_G_MIN");
+    JSON_TargetBoardConfigData.gMax = ConfigData.at("RED_BLOB_G_MAX");
+    JSON_TargetBoardConfigData.rMin = ConfigData.at("RED_BLOB_R_MIN");
+    JSON_TargetBoardConfigData.rMax = ConfigData.at("RED_BLOB_R_MAX");
+    JSON_TargetBoardConfigData.minArea = ConfigData.at("RED_BLOB_MIN_AREA");
+    JSON_TargetBoardConfigData.yGate = ConfigData.at("RED_BLOB_Y_GATE");
+    JSON_TargetBoardConfigData.confirmFrames = ConfigData.at("TARGET_CONFIRM_FRAMES");
+    JSON_TargetBoardConfigData.roiOffsetX = ConfigData.at("TARGET_ROI_OFFSET_X");
+    JSON_TargetBoardConfigData.roiOffsetY = ConfigData.at("TARGET_ROI_OFFSET_Y");
+    JSON_TargetBoardConfigData.roiW = ConfigData.at("TARGET_ROI_W");
+    JSON_TargetBoardConfigData.roiH = ConfigData.at("TARGET_ROI_H");
+    JSON_TargetBoardConfigData.overrideTimeoutFrames = ConfigData.at("TARGET_OVERRIDE_TIMEOUT_FRAMES");
+
     JSON_TrackConfigData.Path_Search_Start = ConfigData.at("PATH_SEARCH_START");
     JSON_TrackConfigData.Path_Search_End = ConfigData.at("PATH_SEARCH_END");
 
@@ -274,12 +301,14 @@ void SYNC::ConfigData_SYNC(Data_Path *Data_Path_p,Function_EN *Function_EN_p)
     Data_Path_p->JSON_AngularVelocityPIDConfigData_v.clear();
     Data_Path_p->JSON_SpeedIncrementalPIConfigData_v.clear();
     Data_Path_p->JSON_VehicleConfigData_v.clear();
+    Data_Path_p->JSON_TargetBoardConfigData_v.clear();
     Function_EN_p->JSON_FunctionConfigData_v.push_back(JSON_FunctionConfigData);
     Data_Path_p->JSON_TrackConfigData_v.push_back(JSON_TrackConfigData);
     Data_Path_p->JSON_DifferentialPDConfigData_v.push_back(JSON_DifferentialPDConfigData);
     Data_Path_p->JSON_AngularVelocityPIDConfigData_v.push_back(JSON_AngularVelocityPIDConfigData);
     Data_Path_p->JSON_SpeedIncrementalPIConfigData_v.push_back(JSON_SpeedIncrementalPIConfigData);
     Data_Path_p->JSON_VehicleConfigData_v.push_back(JSON_VehicleConfigData);
+    Data_Path_p->JSON_TargetBoardConfigData_v.push_back(JSON_TargetBoardConfigData);
 
     std::cout << "[配置] 加载 " << ConfigFilePath
               << " | 摄像头: VIDEO" << static_cast<int>(JSON_FunctionConfigData.Camera_EN)

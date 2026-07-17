@@ -88,6 +88,26 @@ target_link_libraries(main PUBLIC
     stdc++fs   # C++17 filesystem
 )
 
+# 边缘端: 启用 TFLite Micro (目标板分类)
+if (USE_EDGE_TOOLCHAIN)
+    target_compile_definitions(main PRIVATE TARGET_BOARD_USE_TFLM)
+    target_include_directories(main PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/tflm
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/third_party/flatbuffers/include
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/third_party/gemmlowp
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/third_party/gemmlowp/fixedpoint
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/third_party/ruy
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/third_party/ruy/ruy
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/tensorflow/lite/micro
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/tensorflow/lite/micro/kernels
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/tensorflow/lite/kernels/internal
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/tensorflow/lite/core/api
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/tensorflow/lite/core/c
+        ${PROJECT_SOURCE_DIR}/third_party/tflm/tensorflow/lite/schema
+    )
+    target_link_libraries(main PUBLIC ${PROJECT_SOURCE_DIR}/third_party/tflm/lib/libtflm.a)
+endif()
+
 # 上位机图像处理离线测试（WebUI展示），仅非边缘构建时生成
 if (NOT USE_EDGE_TOOLCHAIN)
     set(IMAGE_WEB_TEST_SRC
@@ -96,6 +116,7 @@ if (NOT USE_EDGE_TOOLCHAIN)
         ${PROJECT_SOURCE_DIR}/src/vision/Image_Process.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/vision_rings.cpp
         ${PROJECT_SOURCE_DIR}/src/vision/libdata_process.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/target_board.cpp
     )
 
     add_executable(image_web_test
@@ -119,4 +140,18 @@ if (NOT USE_EDGE_TOOLCHAIN)
     )
 else()
     message(STATUS "Skip image_web_test: edge-device build enabled")
+endif()
+
+# 上位机目标板检测单测 (host only, TFLM 用桩跳过)
+if (NOT USE_EDGE_TOOLCHAIN)
+    add_executable(test_target_board
+        ${PROJECT_SOURCE_DIR}/tests/vision/test_target_board.cpp
+        ${PROJECT_SOURCE_DIR}/src/vision/target_board.cpp
+    )
+    target_include_directories(test_target_board PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
+    )
+    target_compile_definitions(test_target_board PRIVATE TARGET_BOARD_TEST_HOOKS)
+    target_link_libraries(test_target_board PUBLIC ${OpenCV_LIBS} pthread)
 endif()

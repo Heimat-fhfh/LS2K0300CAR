@@ -8,7 +8,6 @@
 
 #define BOUNDARY_NUM  (60 * 4 / 2)
 
-
 using namespace std;
 using namespace cv;
 

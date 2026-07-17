@@ -187,6 +187,26 @@ typedef struct JSON_TrackConfigData
     int CircleMaxFrames;            ///< 圆环最大帧数限制。进入环岛后最多处理此帧数再退出，防止无限循环，默认 300
 }JSON_TrackConfigData;
 
+/*
+    JSON 文件存储的目标板识别参数
+    红色矩形 BGR 阈值检测 + TFLite 分类 + 连续帧确认 + 循迹线 override
+*/
+typedef struct JSON_TargetBoardConfigData
+{
+    bool enable;            ///< 总使能。true=启用目标板检测
+    int  bMin, bMax;       ///< BGR-B 通道阈值区间 [bMin,bMax]
+    int  gMin, gMax;       ///< BGR-G 通道阈值区间 [gMin,gMax]
+    int  rMin, rMax;       ///< BGR-R 通道阈值区间 [rMin,rMax]
+    int  minArea;          ///< 红色色块最小像素面积 (160x120 原图域)
+    int  yGate;            ///< y>此值才开启分类 (160x120 原图行)
+    int  confirmFrames;    ///< 连续同类别确认帧数
+    int  roiOffsetX;       ///< ROI 中心相对色块几何中心的 X 偏移像素 (160x120 原图域)
+    int  roiOffsetY;       ///< ROI 中心相对色块几何中心的 Y 偏移像素
+    int  roiW;             ///< 分类输入矩形宽度 (像素)
+    int  roiH;             ///< 分类输入矩形高度 (像素)
+    int  overrideTimeoutFrames; ///< 确认后循迹线 override 持续帧数
+} JSON_TargetBoardConfigData;
+
 struct InversePerspectiveMap {
     int local_x;
     int local_y;
@@ -270,6 +290,7 @@ typedef struct Data_Path
     std::vector<JSON_AngularVelocityPIDConfigData> JSON_AngularVelocityPIDConfigData_v; // JSON文件存储的内环角速度PI参数
     std::vector<JSON_SpeedIncrementalPIConfigData> JSON_SpeedIncrementalPIConfigData_v; // JSON文件存储的速度环增量式PI参数
     std::vector<JSON_VehicleConfigData> JSON_VehicleConfigData_v; // JSON文件存储的车辆控制参数
+    std::vector<JSON_TargetBoardConfigData> JSON_TargetBoardConfigData_v; // JSON目标板识别参数
     
     
     int NumSearch[2] = {0}; // 左右八邻域寻线坐标数量

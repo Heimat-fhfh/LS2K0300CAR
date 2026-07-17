@@ -1,5 +1,6 @@
 #include "common/main.hpp"
 #include "vision/Image_Process.h"
+#include "vision/target_board.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -7,7 +8,7 @@ using namespace std::this_thread;
 
 
 
-void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
+void  FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_EN *Function_EN_p,ImgProcess *imgProcess_p,Judge *judge_p)
 {   
     if (Img_Store_p->Img_Color.empty()) {cerr << "Error: Img_Color is empty!" << endl;return;}
     
@@ -34,6 +35,10 @@ void FrameTaskAfterRead(Img_Store *Img_Store_p,Data_Path *Data_Path_p,Function_E
     } else {
         ring_frame_count = 0;
     }
+
+    // 目标板检测: 在 160x120 原图上做红色色块 + 分类, 在 ImageProcess 之后调用
+    // (需要 ImageDeal 边界已写好), override 状态供 GetDet 读取
+    TargetBoardProcess(Img_Store_p->Img_Color, Data_Path_p);
 }
 
 void ProcessTrackTaskPerFrame(Img_Store *Img_Store_p, Data_Path *Data_Path_p, Function_EN *Function_EN_p, ImgProcess *imgProcess_p, Judge *judge_p)

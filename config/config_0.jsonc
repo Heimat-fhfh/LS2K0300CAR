@@ -115,5 +115,23 @@
     "CURVATURE_SPEED_GAIN": 0.0,      // 曲率降速增益 0=禁用 0.3~0.5=推荐，弯越大速度越低
     "CURVATURE_SPEED_MIN": 0.1,       // 降速下限比例，最快速度不低于 baseSpeed 的此倍数
 
-    "BATTERY_LOW_THRESHOLD": 10000    // 电池低电压阈值 (mV)，低于此值蜂鸣器告警
+    "BATTERY_LOW_THRESHOLD": 10000,   // 电池低电压阈值 (mV)，低于此值蜂鸣器告警
+
+    // ============================================================
+    //  目标板识别 (红色矩形 + TFLite 分类模型)
+    //  红色色块 BGR 阈值: inRange(img, Scalar(B_min,G_min,R_min), Scalar(B_max,G_max,R_max))
+    //  色块按面积 + 中心在赛道边界内筛选; y>Y_GATE 才送分类确认
+    // ============================================================
+    "TARGET_BOARD_EN": true,            // 总使能
+    "RED_BLOB_B_MIN": 0,    "RED_BLOB_B_MAX": 100,    // BGR-B 阈值
+    "RED_BLOB_G_MIN": 0,    "RED_BLOB_G_MAX": 100,    // BGR-G 阈值
+    "RED_BLOB_R_MIN": 150,  "RED_BLOB_R_MAX": 255,    // BGR-R 阈值
+    "RED_BLOB_MIN_AREA": 50,            // 色块最小像素面积 (160x120 原图域)
+    "RED_BLOB_Y_GATE":  30,             // y>此值才开启分类 (160x120 原图行)
+    "TARGET_CONFIRM_FRAMES": 3,         // 连续同类别确认帧数
+    "TARGET_ROI_OFFSET_X": 0,           // ROI 中心相对色块几何中心的 X 偏移 (160x120 原图像素)
+    "TARGET_ROI_OFFSET_Y": 0,           // ROI 中心相对色块几何中心的 Y 偏移 (160x120 原图像素)
+    "TARGET_ROI_W": 40,                 // 分类输入矩形宽度 (像素, 适配 40x40 模型输入)
+    "TARGET_ROI_H": 40,                 // 分类输入矩形高度 (像素)
+    "TARGET_OVERRIDE_TIMEOUT_FRAMES": 60 // 确认后循迹线 override 持续帧数
 }

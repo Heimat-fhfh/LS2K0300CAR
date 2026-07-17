@@ -1,4 +1,5 @@
 #include "vision/Image_Process.h"
+#include "vision/target_board.h"  // g_target_override (目标板循迹线 override)
 
 void Element_Judgment_Left_Rings();
 void Element_Judgment_Right_Rings();
@@ -1251,6 +1252,25 @@ static void RouteFilter(void)
  */
 void GetDet()
 {
+  // ============================================================
+  //  目标板 override: 已确认 WEAPON -> 用左边界作为循迹中线
+  //                  已确认 MATERIALS -> 用右边界作为循迹中线
+  //                  TRAFFIC -> 保持原中线 (直行压过)
+  //  直接改写 ImageDeal[].Center, 供后续加权 + UDP 显示使用
+  // ============================================================
+  if (g_target_override.active &&
+      (g_target_override.kind == TargetKind::WEAPON ||
+       g_target_override.kind == TargetKind::MATERIALS))
+  {
+    for (int r = ImageStatus.OFFLine; r < 60; ++r)
+    {
+      if (g_target_override.kind == TargetKind::WEAPON)
+        ImageDeal[r].Center = ImageDeal[r].LeftBorder;
+      else
+        ImageDeal[r].Center = ImageDeal[r].RightBorder;
+    }
+  }
+
   float DetTemp = 0;      // 加权平均累加值（分子）
   int TowPoint = 0;       // 前瞻点行号（动态选择）
   float UnitAll = 0;      // 权重累加值（分母）
